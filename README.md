@@ -2,6 +2,24 @@
 
 This repo contains stuff that I use to release and collect manga from a certain cat website.
 
+## Released Stuff
+- 5 Seconds Before a Witch Falls in Love (Finished)
+- Accomplishments of the Duke's Daughter (Ongoing)
+- BAKEMONOGATARI (On Hold)
+- Chainsaw Man (Dropped)
+- Chillin' in Another World with Level 2 Super Cheat Powers
+- Chronicles of an Aristocrat Reborn in Another World (Ongoing)
+- Drugstore in Another World: The Slow Life of a Cheat Pharmacist (Ongoing)
+- Kuma Kuma Kuma Bear (Ongoing)
+- Medaka Kuroiwa is Impervious to My Charms (Dropped?)
+- My Deer Friend Nekotan (On Hold/Dropped?)
+- My Next Life as a Villainess: All Routes Lead to Doom! (Ongoing)
+- New Game! (Ongoing)
+- The Invicible Shovel (Ongoing)
+- Yuri is My Job! (Ongoing)
+
+You can find it on a certain cat website.
+
 ## Requirements
 - Python 3.6+
 - imagemagick (for [`multi-merge-spreads.py`](multi-merge-spreads.py))
