@@ -68,3 +68,8 @@ Current mapping follows the `manual-split` formatting, while special naming is f
 The key is the page number, the value is the extra.
 
 And target_fmt is the filename format, you should only change `Manga Title` and `Publisher`.
+
+There is regex, it will try to match using this format:
+- Manga Title - v01 - p000
+
+The reason it's like that is because the download format from comix.
