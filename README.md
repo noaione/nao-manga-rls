@@ -2,12 +2,14 @@
 
 This repo contains stuff that I use to release and collect manga from a certain cat website.
 
+All my release use the `[nao]` tag.
+
 ## Released Stuff
 - 5 Seconds Before a Witch Falls in Love (Finished)
 - Accomplishments of the Duke's Daughter (Ongoing)
 - BAKEMONOGATARI (On Hold)
 - Chainsaw Man (Dropped)
-- Chillin' in Another World with Level 2 Super Cheat Powers
+- Chillin' in Another World with Level 2 Super Cheat Powers (Ongoing)
 - Chronicles of an Aristocrat Reborn in Another World (Ongoing)
 - Drugstore in Another World: The Slow Life of a Cheat Pharmacist (Ongoing)
 - Kuma Kuma Kuma Bear (Ongoing)
@@ -17,6 +19,14 @@ This repo contains stuff that I use to release and collect manga from a certain 
 - New Game! (Ongoing)
 - The Invicible Shovel (Ongoing)
 - Yuri is My Job! (Ongoing)
+
+**Planned**
+- Fushi no Kami
+- I've Been Killing Slimes for 300 Years and Maxed Out My Level (v08+)
+- I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)
+- Magic Artisan Dahlia Wilts No More
+- The Apothecary Diaries (v05+)
+- Welcome to Japan, Ms. Elf! (v04+)
 
 You can find it on a certain cat website.
 
