@@ -26,7 +26,7 @@ All my release use the `[nao]` tag.
 - I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)
 - Magic Artisan Dahlia Wilts No More
 - The Apothecary Diaries (v05+)
-- Welcome to Japan, Ms. Elf! (v04+)
+- ~~Welcome to Japan, Ms. Elf! (v04+)~~
 
 You can find it on a certain cat website.
 
