@@ -114,7 +114,9 @@ for volume, file_path in valid_cbz_files.items():
             else:
                 chapter_data += f" - Extra {chapter_extra} - {chapter_title}"
         else:
-            chapter_data = f"{chapter_num} - {chapter_title}"
+            chapter_data = chapter_num
+            if chapter_title:
+                chapter_data += f" - {chapter_title}"
         if chapter_data not in collected_chapters:
             collected_chapters[chapter_data] = []
         collected_chapters[chapter_data].append(zip_info)
