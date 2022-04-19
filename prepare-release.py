@@ -28,7 +28,11 @@ class SimpleRange:
         if isinstance(self.number, int):
             return f"{self.number:03d}"
         base, floating = str(self.number).split(".")
-        return f"{int(base):03d}x{int(floating) - 4}"
+        floating = int(floating)
+        if floating - 4 >= 1:
+            # Handle split chapter (.1, .2, etc)
+            floating -= 4
+        return f"{int(base):03d}x{floating}"
 
 
 img_regex = re.compile(r".*\- (?P<vol>v[\d]{1,2}) - p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?")
