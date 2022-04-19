@@ -7,15 +7,13 @@ All my release use the `[nao]` tag.
 ## Released Stuff
 - 5 Seconds Before a Witch Falls in Love (Finished)
 - Accomplishments of the Duke's Daughter (Ongoing)
-- BAKEMONOGATARI (On Hold)
-- Chainsaw Man (Dropped)
 - Chillin' in Another World with Level 2 Super Cheat Powers (Ongoing)
 - Chronicles of an Aristocrat Reborn in Another World (Ongoing)
 - Drugstore in Another World: The Slow Life of a Cheat Pharmacist (Ongoing)
 - Kuma Kuma Kuma Bear (Ongoing)
-- Medaka Kuroiwa is Impervious to My Charms (Dropped?)
-- My Deer Friend Nekotan (On Hold/Dropped?)
+- Magic Artisan Dahlia Wilts No More (Ongoing)
 - My Next Life as a Villainess: All Routes Lead to Doom! (Ongoing)
+- Necromance (v02+) (Ongoing)
 - New Game! (Ongoing)
 - The Invicible Shovel (Ongoing)
 - Yuri is My Job! (Ongoing)
@@ -24,10 +22,14 @@ All my release use the `[nao]` tag.
 - Fushi no Kami
 - I've Been Killing Slimes for 300 Years and Maxed Out My Level (v08+)
 - I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)
-- Magic Artisan Dahlia Wilts No More
-- Necromance (v02+)
 - The Apothecary Diaries (v05+)
 - ~~Welcome to Japan, Ms. Elf! (v04+)~~
+
+**Dropped**
+- BAKEMONOGATARI (v13)
+- Chainsaw Man (v09)
+- Medaka Kuroiwa is Impervious to My Charms (v01)
+- My Deer Friend Nekotan (v01)
 
 You can find it on a certain cat website.
 
