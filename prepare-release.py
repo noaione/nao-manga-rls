@@ -35,7 +35,7 @@ img_regex = re.compile(r".*\- (?P<vol>v[\d]{1,2}) - p(?P<a>[\d]{1,3})\-?(?P<b>[\
 valid_images = [".jpeg", ".jpg", ".png", ".gif", ".jiff", ".webp"]
 
 all_images: List[Path] = []
-for file in target_dir.rglob("*"):
+for file in target_dir.glob("*"):
     if file.is_file() and file.suffix.lower() in valid_images:
         all_images.append(file)
 
