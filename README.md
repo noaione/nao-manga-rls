@@ -67,6 +67,20 @@ In the `manual-split` version, you can set the key name into the chapter title.
 ### `manual-split-regex` and `manual-split-regex-no-title`
 Same as `manual-split` this version utilize regex to match the filename and capture the page number.
 
+### `merge-chapters`
+Used to merge a split chapter of cbz file into a single one.
+It accept many input with the first one will be used as the target
+save file.
+
+For example:
+```sh
+$ python3 merge-chapters.py 01.005.cbz 01.005.5.cbz 01.005.6.cbz
+```
+
+Will merge `01.005.cbz`, `01.005.5.cbz`, and `01.005.6.cbz` into `01.005.cbz`.
+
+The first parameter will be used as the target, so be careful!
+
 ### `multi-merge-spreads`
 Used to merge splitted page into a proper spreads, you need to modify this part to make the proper spreads:
 ```py
