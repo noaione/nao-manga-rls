@@ -104,7 +104,7 @@ for image in all_images:
                 selected_range = generated
                 break
     extra_name = " "
-    for name, ch_num in special_naming.items():
+    for ch_num, name in special_naming.items():
         if ch_num == p01_copy:
             extra_name = f" [{name}] "
 
