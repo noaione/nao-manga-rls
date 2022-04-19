@@ -25,6 +25,7 @@ All my release use the `[nao]` tag.
 - I've Been Killing Slimes for 300 Years and Maxed Out My Level (v08+)
 - I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)
 - Magic Artisan Dahlia Wilts No More
+- Necromance (v02+)
 - The Apothecary Diaries (v05+)
 - ~~Welcome to Japan, Ms. Elf! (v04+)~~
 
