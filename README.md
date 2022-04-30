@@ -9,19 +9,26 @@ All my release use the `[nao]` tag.
 - Accomplishments of the Duke's Daughter (Ongoing)
 - Chillin' in Another World with Level 2 Super Cheat Powers (Ongoing)
 - Chronicles of an Aristocrat Reborn in Another World (Ongoing)
+- DNA Doesn't Tell Us (Finished)
 - Drugstore in Another World: The Slow Life of a Cheat Pharmacist (Ongoing)
+- I've Been Killing Slimes for 300 Years and Maxed Out My Level (v08+) (Ongoing)
 - Kuma Kuma Kuma Bear (Ongoing)
 - Magic Artisan Dahlia Wilts No More (Ongoing)
 - My Next Life as a Villainess: All Routes Lead to Doom! (Ongoing)
 - Necromance (v02+) (Ongoing)
 - New Game! (Ongoing)
+- The Dangers in My Heart (v04+) (Ongoing)
 - The Invicible Shovel (Ongoing)
 - Yuri is My Job! (Ongoing)
 
+**Weekly-ish Release**
+- The Ice-Guy and His Cool Female Colleague
+- The Necromancer Maid
+- The Villainess Who Became Nightingale
+
 **Planned**
 - Fushi no Kami
-- I've Been Killing Slimes for 300 Years and Maxed Out My Level (v08+)
-- I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)
+- ~~I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)~~
 - The Apothecary Diaries (v05+)
 - ~~Welcome to Japan, Ms. Elf! (v04+)~~
 
