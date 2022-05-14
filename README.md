@@ -6,8 +6,8 @@ All my release use the `[nao]` tag.
 
 ## Released Stuff
 - 5 Seconds Before a Witch Falls in Love (Finished)
-- Accomplishments of the Duke's Daughter (Ongoing)
-- Chillin' in Another World with Level 2 Super Cheat Powers (Ongoing)
+- Accomplishments of the Duke's Daughter (v06+) (Ongoing)
+- Chillin' in Another World with Level 2 Super Cheat Powers (v02+) (Ongoing)
 - Chronicles of an Aristocrat Reborn in Another World (Ongoing)
 - DNA Doesn't Tell Us (Finished)
 - Drugstore in Another World: The Slow Life of a Cheat Pharmacist (Ongoing)
@@ -15,14 +15,15 @@ All my release use the `[nao]` tag.
 - Kuma Kuma Kuma Bear (Ongoing)
 - Magic Artisan Dahlia Wilts No More (Ongoing)
 - My Next Life as a Villainess: All Routes Lead to Doom! (Ongoing)
+- Nameless Asterism (Finished)
 - Necromance (v02+) (Ongoing)
 - New Game! (Ongoing)
 - The Dangers in My Heart (v04+) (Ongoing)
 - The Invicible Shovel (Ongoing)
+- The Savior's Book Café Story in Another World (Ongoing)
 - Yuri is My Job! (Ongoing)
 
 **Weekly-ish Release**
-- The Ice-Guy and His Cool Female Colleague
 - The Necromancer Maid
 - The Villainess Who Became Nightingale
 
@@ -37,6 +38,9 @@ All my release use the `[nao]` tag.
 - Chainsaw Man (v09)
 - Medaka Kuroiwa is Impervious to My Charms (v01)
 - My Deer Friend Nekotan (v01)
+- The Ice-Guy and His Cool Female Colleague (Taken over by someone else)
+
+Anything in Dropped means I already ripped it once, but I dropped it.
 
 You can find it on a certain cat website.
 
