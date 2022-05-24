@@ -1,5 +1,6 @@
 #!/media/sdac/mizore/py36env/bin/python
 import re
+import subprocess as sp
 import sys
 from pathlib import Path
 from typing import Dict, List
@@ -33,6 +34,30 @@ class SimpleRange:
             # Handle split chapter (.1, .2, etc)
             floating -= 4
         return f"{int(base):03d}x{floating}"
+
+
+def test_exiftool():
+    # Test exiftool
+    try:
+        sp.run(["exiftool", "-ver"], check=True)
+    except sp.CalledProcessError:
+        print("Unable to find exiftool")
+        exit(1)
+
+
+def inject_metadata(im_path: Path):
+    test_exiftool()
+    base_cmd = ["exiftool"]
+    update_tags = {
+        "XPComment": "noaione@protonmail.com",
+        "Artist": "noaione@protonmail.com",
+        "XPAuthor": "noaione@protonmail.com",
+    }
+    for tag, value in update_tags.items():
+        base_cmd.append(f'-{tag}="{value}"')
+    base_cmd.append(str(im_path))
+    proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    proc.wait()
 
 
 img_regex = re.compile(r".*\- (?P<vol>v[\d]{1,2}) - p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?")
@@ -114,4 +139,9 @@ for image in all_images:
     ) + extension
 
     new_name = target_dir / final_name
+    # Before rename, inject metadata
+    try:
+        inject_metadata(image)
+    except Exception:
+        pass
     image.rename(new_name)
