@@ -24,7 +24,7 @@ volume_re = re.compile(r"CHANGETHIS v(\d+) .*")
 # CHANGETHIS is the manga title or anything before the chapter number
 # CHANGEPUBLISHER will be the publisher name, it should be ended with `.*` so it will match everything elses.
 chapter_re = re.compile(
-    r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \(v[\d]+\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]? "
+    r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \(v(?P<vol>[\d]+)\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]? "
     r".*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
 )
 cbz_files = list(current_dir.glob("*.cbz"))
@@ -106,6 +106,7 @@ for volume, file_path in valid_cbz_files.items():
         chapter_num = match_re.group("ch")
         chapter_title = clean_title(match_re.group("title"))
         chapter_extra = match_re.group("ex")
+        chapter_vol = int(match_re.group("vol"))
         if chapter_extra:
             chapter_extra = int(chapter_extra[1:])
             chapter_data = f"{chapter_num}.{4 + chapter_extra}"
@@ -117,13 +118,14 @@ for volume, file_path in valid_cbz_files.items():
             chapter_data = chapter_num
             if chapter_title:
                 chapter_data += f" - {chapter_title}"
+        chapter_data = f"{chapter_vol:02d}.{chapter_data}"
         if chapter_data not in collected_chapters:
             collected_chapters[chapter_data] = []
         collected_chapters[chapter_data].append(zip_info)
 
     for chapter_info, chapters_file in collected_chapters.items():
         chapter_secure_target = secure_filename(chapter_info)
-        zip_target = target_path / f"{volume}.{chapter_secure_target}.cbz"
+        zip_target = target_path / f"{chapter_secure_target}.cbz"
         zip_target.parent.mkdir(parents=True, exist_ok=True)
         if zip_target.exists():
             print(f"[?][!] Skipping: {zip_target.name}")

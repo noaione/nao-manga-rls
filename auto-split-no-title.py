@@ -23,7 +23,7 @@ current_dir = Path(__file__).absolute().parent
 volume_re = re.compile(r"CHANGETHIS v(\d+) .*")
 # CHANGETHIS is the manga title or anything before the chapter number
 chapter_re = re.compile(
-    r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \(v[\d]+\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
+    r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \(v(?P<vol>[\d]+)\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
 )
 cbz_files = list(current_dir.glob("*.cbz"))
 
@@ -103,15 +103,17 @@ for volume, file_path in valid_cbz_files.items():
             print(zip_info)
         chapter_data = match_re.group("ch")
         chapter_extra = match_re.group("ex")
+        chapter_vol = int(match_re.group("vol"))
         if chapter_extra:
             chapter_data += f".{int(chapter_extra[1:]) + 4}"
+        chapter_data = f"{chapter_vol:02d}.{chapter_data}"
         if chapter_data not in collected_chapters:
             collected_chapters[chapter_data] = []
         collected_chapters[chapter_data].append(zip_info)
 
     for chapter_info, chapters_file in collected_chapters.items():
         chapter_secure_target = secure_filename(chapter_info)
-        zip_target = target_path / f"{volume}.{chapter_secure_target}.cbz"
+        zip_target = target_path / f"{chapter_secure_target}.cbz"
         zip_target.parent.mkdir(parents=True, exist_ok=True)
         if zip_target.exists():
             print(f"[?][!] Skipping: {zip_target.name}")
