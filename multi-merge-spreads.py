@@ -63,7 +63,6 @@ for spread in spreads_mappings:
         if b_part:
             continue
         a_part = int(image_re.group("a"))
-        print(a_part, spread)
         if a_part in spread:
             image_collect[image] = image_re
     images_collections.append(image_collect)
