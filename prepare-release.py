@@ -2,6 +2,7 @@
 import re
 import subprocess as sp
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -10,6 +11,12 @@ try:
 except IndexError:
     print(f"Usage: {sys.argv[0]} <target_dir>")
     exit(1)
+
+current_pst = datetime.now(timezone(timedelta(hours=-8)))
+# current_year = current_pst.year
+current_year = 2017
+target_fmt = "Manga Title - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [Publisher] [nao] {HQ}"  # noqa
+target_title = "Manga Title {vol} ({year}) (Digital) [nao]"
 
 
 class SimpleRange:
@@ -39,22 +46,26 @@ class SimpleRange:
 def test_exiftool():
     # Test exiftool
     try:
-        sp.run(["exiftool", "-ver"], check=True)
+        sp.run(["exiftool", "-ver"], check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     except sp.CalledProcessError:
         print("Unable to find exiftool")
         exit(1)
 
 
-def inject_metadata(im_path: Path):
-    test_exiftool()
+def inject_metadata(im_path: Path, the_title: str):
     base_cmd = ["exiftool"]
     update_tags = {
         "XPComment": "noaione@protonmail.com",
         "Artist": "noaione@protonmail.com",
         "XPAuthor": "noaione@protonmail.com",
+        "XPTitle": the_title,
+        "ImageDescription": the_title,
+        "Title": the_title,
+        "Description": the_title,
     }
     for tag, value in update_tags.items():
-        base_cmd.append(f'-{tag}="{value}"')
+        base_cmd.append(f'-{tag}={value}')
+    base_cmd.append("-overwrite_original_in_place")
     base_cmd.append(str(im_path))
     proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
@@ -70,14 +81,13 @@ for file in target_dir.glob("*"):
         all_images.append(file)
 
 current_mapping = {
-    "That Jerk Won't Fall for Me": [[0, 41], 1],
-    "P.E. with That Jerk": [[42, 67], 2],
-    "Sketching with That Jerk": [[68, 85], 3],
-    "That Fiendish Jerk": [[86, 99], 4],
-    "In the Library with That Jerk": [[100, 113], 5],
-    "Love and That Jerk": [[114, 129], 6],
-    "That Girl's Wallpaper": [[130, 145], 7],
-    "Cosplaying with That Jerk": [[146], 8],
+    "King's Game": [[0, 39], 6],
+    "What Being a Lily Entails": [[40, 69], 7],
+    "Magic Class": [[70, 101], 8],
+    "Monster": [[102, 135], 9],
+    "Academy Knights": [[136, 168], 10],
+    "One Rainy Day": [[169, 174], 10.5],
+    "Claire and Relaire": [[175], 10.6],
 }
 special_naming: Dict[int, str] = {
     0: "Cover",
@@ -85,7 +95,6 @@ special_naming: Dict[int, str] = {
     # 3: "ToC",
     # 159: "Afterword",
 }
-target_fmt = "Manga Title - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [Publisher] [nao] {HQ}"  # noqa
 
 
 generate_ranges: List[SimpleRange] = []
@@ -107,6 +116,7 @@ for chapter_name, chapter_ranges in current_mapping.items():
     else:
         generate_ranges.append(SimpleRange(ch_num, chapter_name, range_excerpt))
 
+total_img = len(all_images)
 for image in all_images:
     extension = image.suffix.lower()
     title_match = re.match(img_regex, image.name)
@@ -141,9 +151,13 @@ for image in all_images:
     ) + extension
 
     new_name = target_dir / final_name
+    title_select = target_title.format(vol=vol, year=current_year)
     # Before rename, inject metadata
     try:
-        inject_metadata(image)
+        inject_metadata(image, title_select)
     except Exception:
         pass
     image.rename(new_name)
+    # print on same line
+    print(f"Processed page: {p01}/{total_img:03d}\r", end="")
+print()
