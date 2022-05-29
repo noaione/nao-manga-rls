@@ -16,7 +16,7 @@ except IndexError:
 current_pst = datetime.now(timezone(timedelta(hours=-8)))
 # current_year = current_pst.year
 current_year = 2017
-target_fmt = "Manga Title - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [Publisher] [nao] {HQ}"  # noqa
+target_fmt = "Manga Title - c{ch} ({vol}) - p{pg}{ex}[dig] [Publisher] [nao] {HQ}"  # noqa
 target_title = "Manga Title {vol} ({year}) (Digital) [nao]"
 
 
