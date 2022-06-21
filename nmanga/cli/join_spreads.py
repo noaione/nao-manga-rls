@@ -22,8 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Color level for nmanga
-# This file is part of nmanga.
+# Join spreads from a directory of images.
 
 import re
 import subprocess as sp
@@ -135,9 +134,11 @@ def spreads_join(
         return 1
     console.info("Using magick executable: {}".format(magick_exe))
 
-    if path_or_archive.is_file():
-        console.error("This command only support folder type currently!")
-        return 1
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
 
     # Validate spreads data
     spreads_data = [x.strip() for x in spreads_data]
