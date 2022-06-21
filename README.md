@@ -47,6 +47,7 @@ You can find it on a certain cat website.
 ## Requirements
 - Python 3.7+
 - imagemagick (for `level` and `spreads` command)
+- exiftool (for `releases`, optional)
 
 ## Scripts
 This repo also have a module or script to release and split stuff up.

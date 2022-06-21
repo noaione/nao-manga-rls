@@ -30,5 +30,14 @@ magick_path = click.option(
     "--magick-exec",
     "magick_path",
     default="magick",
-    help="Path to the magick executable [default: magick]",
+    help="Path to the magick executable",
+    show_default=True,
+)
+exiftool_path = click.option(
+    "-ee",
+    "--exiftool-exec",
+    "exiftool_path",
+    default="exiftool",
+    help="Path to the exiftool executable",
+    show_default=True,
 )

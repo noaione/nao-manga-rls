@@ -3,7 +3,7 @@ import re
 import subprocess as sp
 import sys
 import traceback
-from typing import Optional, Pattern, overload
+from typing import List, Optional, Pattern, Union, overload
 
 import click
 
@@ -18,9 +18,9 @@ __all__ = (
 )
 
 
-def _test_magick(magick_path: str):
+def _test_exec(arguments: list):
     try:
-        exc = sp.check_call([magick_path, "-version"], stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+        exc = sp.check_call(arguments, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
         if exc != 0:
             return False
         return True
@@ -28,32 +28,45 @@ def _test_magick(magick_path: str):
         return False
 
 
-def _find_magick_path():
+def _find_exec_path(exec_name: Union[str, List[str]], test_cmd: Optional[str] = None) -> str:
+    if isinstance(exec_name, str):
+        exec_name = [exec_name]
     path_env = os.environ.get("PATH", "")
-    console.status("Falling back to finding magick in PATH")
+    console.status("Falling back to finding in PATH")
     # find magick in PATH
     for path in path_env.split(os.pathsep):
         path = path.strip('"')
-        magick_path = os.path.join(path, "magick")
-        convert_path = os.path.join(path, "convert")
-        if _test_magick(magick_path):
-            console.stop_status()
-            return magick_path
-        if _test_magick(convert_path):
-            console.stop_status()
-            return convert_path
+        for exec in exec_name:
+            exec_path = os.path.join(path, exec)
+            exec_cmd = [exec_path]
+            if test_cmd is not None:
+                exec_cmd.append(test_cmd)
+            if _test_exec(exec_cmd):
+                console.stop_status()
+                return exec_path
     console.stop_status()
-    return None
 
 
 def test_or_find_magick(magick_path: str, force_search: bool = True) -> Optional[str]:
     try:
-        success = _test_magick(magick_path)
+        success = _test_exec([magick_path, "-version"])
         if not success:
-            return None if not force_search else _find_magick_path()
-        return magick_path or (None if not force_search else _find_magick_path())
+            return None if not force_search else _find_exec_path(["magick", "convert"], "-version")
+        return magick_path or (
+            None if not force_search else _find_exec_path(["magick", "convert"], "-version")
+        )
     except OSError:
-        return None if not force_search else _find_magick_path()
+        return None if not force_search else _find_exec_path(["magick", "convert"], "-version")
+
+
+def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Optional[str]:
+    try:
+        success = _test_exec([exiftool_path])
+        if not success:
+            return None if not force_search else _find_exec_path("exiftool")
+        return exiftool_path or (None if not force_search else _find_exec_path("exiftool"))
+    except OSError:
+        return None if not force_search else _find_exec_path("exiftool")
 
 
 class CatchAllExceptionsCommand(click.Command):
