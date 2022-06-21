@@ -1,0 +1,206 @@
+"""
+MIT License
+
+Copyright (c) 2022-present noaione
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+# Color level for nmanga
+# This file is part of nmanga.
+
+import re
+import subprocess as sp
+from os import path
+from pathlib import Path
+from shutil import move as mv
+from typing import Dict, List, Optional, TypedDict
+
+import click
+
+from .. import file_handler, term
+from . import options
+from .base import (CatchAllExceptionsCommand, RegexCollection,
+                   test_or_find_magick)
+
+console = term.get_console()
+_SpreadsRe = re.compile(r"[\d]{1,3}(-[\d]{1,3}){1,}")
+
+
+def _is_default_path(path: str) -> bool:
+    path = path.lower()
+    if path == "magick":
+        return True
+    if path == "./magick":
+        return True
+    if path == ".\\magick":
+        return True
+    return False
+
+
+def make_prefix_convert(magick_exe: str):
+    name = path.splitext(path.basename(magick_exe))[0]
+    if name.lower() == "convert":
+        return ["convert"]
+    return ["magick", "convert"]
+
+
+def execute_spreads_join(magick_dir: str, quality: float, input_imgs: List[Path], out_dir: Path):
+    extensions = [x.suffix for x in input_imgs]
+    select_ext = ".jpg"
+    if ".png" in extensions:
+        select_ext = ".png"
+    output_name = file_handler.random_name() + select_ext
+    execute_this = make_prefix_convert(magick_dir)
+    input_imgs = input_imgs.sort(key=lambda x: x.name)
+    input_imgs.reverse()
+    execute_this += input_imgs
+    execute_this += ["-quality", quality, "+append", f"{out_dir / output_name}"]
+    try:
+        sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    except sp.CalledProcessError as e:
+        console.error(f"Error: {e.output.decode('utf-8')}")
+        raise e
+    return output_name
+
+
+class _ExportedImages(TypedDict):
+    imgs: List[Path]
+    pattern: List[int]
+
+
+@click.command(
+    name="spreads",
+    help="Join multiple spreads into a single image",
+    cls=CatchAllExceptionsCommand
+)
+@options.path_or_archive
+@click.option(
+    "-q", "--quality",
+    "quality",
+    default=100.0,
+    show_default=True,
+    type=click.FloatRange(1.0, 100.0),
+    help="The quality of the output image",
+)
+@click.option(
+    "-s",
+    "--spreads",
+    "spreads_data",
+    required=True,
+    multiple=True,
+)
+@options.magick_path
+def spreads_join(
+    path_or_archive: Path,
+    quality: float,
+    spreads_data: List[str],
+    magick_path: str,
+):
+    """
+    Join multiple spreads into a single image
+    """
+    force_search = not _is_default_path(magick_path)
+    magick_exe = test_or_find_magick(magick_path, force_search)
+    if magick_exe is None:
+        console.error("Could not find the magick executable")
+        return 1
+    console.info("Using magick executable: {}".format(magick_exe))
+
+    if path_or_archive.is_file():
+        console.error("This command only support folder type currently!")
+        return 1
+
+    # Validate spreads data
+    spreads_data = [x.strip() for x in spreads_data]
+    valid_spreads_data: Dict[str, List[int]] = {}
+    for idx, spread in enumerate(spreads_data):
+        matched_data = _SpreadsRe.match(spread)
+        if not matched_data:
+            console.error(f"Invalid spread data: {spread}")
+            return 1
+        matched_data = matched_data.group(0)
+        matched_data = matched_data.split("-")
+        matched_data = [int(x) for x in matched_data]
+        valid_spreads_data[f"spread_{idx}"] = matched_data
+
+    cmx_re = RegexCollection.cmx_re()
+
+    exported_imgs: Dict[str, _ExportedImages] = {
+        x: {
+            "imgs": [],
+            "pattern": y
+        } for x, y in valid_spreads_data.items()
+    }
+    title_get: Optional[str] = None
+    volume_get: Optional[str] = None
+    console.info("Collecting image for spreads...")
+    for image, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
+        title_match = cmx_re.match(image.name)
+        if title_match is None:
+            console.error("Unmatching file name: {}".format(image.name))
+            return 1
+        
+        a_part = title_match.group("a")
+        b_part = title_match.group("b")
+        if not title_get:
+            title_get = title_match.group("t")
+        if not volume_get:
+            volume_get = title_match.group("vol")
+        if b_part:
+            continue
+        a_part = int(a_part)
+        for spd, spreads in valid_spreads_data.items():
+            if a_part in spreads:
+                exported_imgs[spd]["imgs"].append(image)
+
+    if title_get is None:
+        console.error("Could not find the title")
+        return 1
+    if volume_get is None:
+        console.error("Could not find the volume")
+        return 1
+
+    total_match_spread = len(list(exported_imgs.keys()))
+    current = 1
+    for spread, imgs in exported_imgs.items():
+        console.status(f"Joining spreads: {current}/{total_match_spread}")
+        temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive)
+        # Rename back
+        pattern = imgs["pattern"]
+        pattern.sort()
+        first_val = pattern[0]
+        last_val = pattern[-1]
+
+        extension = path.splitext(temp_output)[1]
+        final_filename = f"{title_get} - {volume_get} - p{first_val:03d}-{last_val:03d}"
+        final_filename += extension
+        final_path = path_or_archive / final_filename
+        temp_output_path = path_or_archive / temp_output
+        temp_output_path.rename(final_path)
+        current += 1
+    console.stop_status()
+
+    BACKUP_DIR = path_or_archive / "backup"
+    BACKUP_DIR.mkdir(exist_ok=True)
+    console.info("Backing up old files to: {}".format(BACKUP_DIR))
+    for img_data in exported_imgs.values():
+        for image in img_data["imgs"]:
+            mv(image, BACKUP_DIR / path.basename(image.name))
+    console.info("Done")

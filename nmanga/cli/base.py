@@ -1,15 +1,21 @@
-import sys
 import os
+import re
 import subprocess as sp
+import sys
 import traceback
-from typing import Optional
+from typing import Optional, Pattern, overload
 
 import click
 
 from .. import term
 
 console = term.get_console()
-__all__ = ("CatchAllExceptionsCommand", "UnrecoverableNMangaError", "test_or_find_magick",)
+__all__ = (
+    "CatchAllExceptionsCommand",
+    "RegexCollection",
+    "UnrecoverableNMangaError",
+    "test_or_find_magick",
+)
 
 
 def _test_magick(magick_path: str):
@@ -71,3 +77,36 @@ class UnrecoverableNMangaError(click.ClickException):
         console.error(self.message)
         # Make traceback
         traceback.print_exception(*self.exc_info)
+
+
+class RegexCollection:
+    _VolumeRegex = r"CHANGETHIS v(\d+).*"
+    _OneShotRegex = r"CHANGETHIS .*"
+    # fmt: off
+    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) " \
+                      r"- p[\d]+x?[\d]?\-?[\d]+x?[\d]? .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
+    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) " \
+                      r"- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
+    # fmt: on
+
+    @classmethod
+    def volume_re(cls, title: str) -> Pattern[str]:
+        return re.compile(cls._VolumeRegex.replace("CHANGETHIS", title))
+
+    @overload
+    def chapter_re(self, title: str) -> Pattern[str]:
+        ...
+
+    @overload
+    def chapter_re(self, title: str, publisher: str) -> Pattern[str]:
+        ...
+    
+    @classmethod
+    def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
+        if publisher is None:
+            return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", title))
+        return re.compile(cls._ChapterTitleRe.replace("CHANGETHIS", title).replace("CHANGEPUBLISHER", publisher))
+
+    @classmethod
+    def cmx_re(cls) -> Pattern[str]:
+        return re.compile(r"(?P<t>.*)\- \(?(?P<vol>v[\d]{1,2})\)? - p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?")
