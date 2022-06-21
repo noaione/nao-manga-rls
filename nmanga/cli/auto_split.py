@@ -28,48 +28,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import re
 from os import path
 from pathlib import Path
-from typing import Dict, Match, Optional, Pattern, overload
+from typing import Dict, Match, Optional
 
 import click
 from py7zr import FileInfo, SevenZipFile
 
 from .. import exporter, file_handler, term, utils
 from . import options
-from .base import CatchAllExceptionsCommand
+from .base import CatchAllExceptionsCommand, RegexCollection
 
 console = term.get_console()
-
-class RegexCollection:
-    _VolumeRegex = r"CHANGETHIS v(\d+).*"
-    _OneShotRegex = r"CHANGETHIS .*"
-    # fmt: off
-    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) " \
-                      r"- p[\d]+x?[\d]?\-?[\d]+x?[\d]? .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
-    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) " \
-                      r"- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
-    # fmt: on
-
-    @classmethod
-    def volume_re(cls, title: str) -> Pattern[str]:
-        return re.compile(cls._VolumeRegex.replace("CHANGETHIS", title))
-
-    @overload
-    def chapter_re(self, title: str) -> Pattern[str]:
-        ...
-
-    @overload
-    def chapter_re(self, title: str, publisher: str) -> Pattern[str]:
-        ...
-    
-    @classmethod
-    def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
-        if publisher is None:
-            return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", title))
-        return re.compile(cls._ChapterTitleRe.replace("CHANGETHIS", title).replace("CHANGEPUBLISHER", publisher))
-
 
 
 def create_chapter(match: Match[str], has_publisher: bool = False):
