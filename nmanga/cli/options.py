@@ -19,14 +19,16 @@ output_dir = click.option(
     "-o",
     "--output",
     "output_dirpath",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True, writable=True, path_type=Path),
+    type=click.Path(
+        exists=True, resolve_path=True, file_okay=False, dir_okay=True, writable=True, path_type=Path
+    ),
     default=os.getcwd(),
-    help="Existing folder to write the output [default: The current directory]"
+    help="Existing folder to write the output [default: The current directory]",
 )
 magick_path = click.option(
     "-me",
     "--magick-exec",
     "magick_path",
     default="magick",
-    help="Path to the magick executable [default: magick]"
+    help="Path to the magick executable [default: magick]",
 )

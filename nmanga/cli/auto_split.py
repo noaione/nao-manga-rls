@@ -174,9 +174,7 @@ def auto_split(
             if isinstance(handler, SevenZipFile):
                 handler.reset()
                 image_bita = list(image_bita.values())[0].read()
-            collected_chapters[chapter_data].add_image(
-                path.basename(filename), image_bita
-            )
+            collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
 
         for chapter, cbz_export in collected_chapters.items():
             console.info(f"[{volume}][+] Finishing chapter: {chapter}")

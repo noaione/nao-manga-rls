@@ -36,8 +36,7 @@ import click
 
 from .. import file_handler, term
 from . import options
-from .base import (CatchAllExceptionsCommand, RegexCollection,
-                   test_or_find_magick)
+from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_magick
 
 console = term.get_console()
 _SpreadsRe = re.compile(r"[\d]{1,3}(-[\d]{1,3}){1,}")
@@ -61,7 +60,9 @@ def make_prefix_convert(magick_exe: str):
     return ["magick", "convert"]
 
 
-def execute_spreads_join(magick_dir: str, quality: float, input_imgs: List[Path], out_dir: Path, reverse_mode: bool):
+def execute_spreads_join(
+    magick_dir: str, quality: float, input_imgs: List[Path], out_dir: Path, reverse_mode: bool
+):
     extensions = [x.suffix for x in input_imgs]
     select_ext = ".jpg"
     if ".png" in extensions:
@@ -87,13 +88,12 @@ class _ExportedImages(TypedDict):
 
 
 @click.command(
-    name="spreads",
-    help="Join multiple spreads into a single image",
-    cls=CatchAllExceptionsCommand
+    name="spreads", help="Join multiple spreads into a single image", cls=CatchAllExceptionsCommand
 )
 @options.path_or_archive
 @click.option(
-    "-q", "--quality",
+    "-q",
+    "--quality",
     "quality",
     default=100.0,
     show_default=True,
@@ -155,10 +155,7 @@ def spreads_join(
     cmx_re = RegexCollection.cmx_re()
 
     exported_imgs: Dict[str, _ExportedImages] = {
-        x: {
-            "imgs": [],
-            "pattern": y
-        } for x, y in valid_spreads_data.items()
+        x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()
     }
     title_get: Optional[str] = None
     volume_get: Optional[str] = None
@@ -168,7 +165,7 @@ def spreads_join(
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
             return 1
-        
+
         a_part = title_match.group("a")
         b_part = title_match.group("b")
         if not title_get:

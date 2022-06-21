@@ -40,9 +40,7 @@ class YieldType(Enum):
 class UnknownArchiveType(Exception):
     def __init__(self, file: Path) -> None:
         self.file = file
-        super().__init__(
-            f"An unknown archive format found: {file}"
-        )
+        super().__init__(f"An unknown archive format found: {file}")
 
 
 def is_image(file_name: str) -> bool:

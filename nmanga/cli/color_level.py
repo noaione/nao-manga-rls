@@ -71,11 +71,7 @@ def execute_level(magick_dir: str, min: float, max: float, input_file: Path, out
     return output_name
 
 
-@click.command(
-    name="level",
-    help="Batch color level a cbz file or folder",
-    cls=CatchAllExceptionsCommand
-)
+@click.command(name="level", help="Batch color level a cbz file or folder", cls=CatchAllExceptionsCommand)
 @options.path_or_archive
 @click.option(
     "-l",
@@ -83,7 +79,7 @@ def execute_level(magick_dir: str, min: float, max: float, input_file: Path, out
     default=12.0,
     show_default=True,
     type=click.FloatRange(0.0, 100.0),
-    help="The minimum value of the color level"
+    help="The minimum value of the color level",
 )
 @click.option(
     "-h",
@@ -91,7 +87,7 @@ def execute_level(magick_dir: str, min: float, max: float, input_file: Path, out
     default=100.0,
     show_default=True,
     type=click.FloatRange(1.0, 100.0),
-    help="The maximum value of the color level"
+    help="The maximum value of the color level",
 )
 @click.option(
     "-skip",
@@ -99,7 +95,7 @@ def execute_level(magick_dir: str, min: float, max: float, input_file: Path, out
     "skip_first",
     default=False,
     is_flag=True,
-    help="Skip the first image of the file/folder"
+    help="Skip the first image of the file/folder",
 )
 @options.magick_path
 @options.output_dir

@@ -101,9 +101,7 @@ class Console:
         ...
 
     def choice(
-        self,
-        message: Optional[str] = None,
-        choices: Union[List[AnyType], List[ConsoleChoice]] = []
+        self, message: Optional[str] = None, choices: Union[List[AnyType], List[ConsoleChoice]] = []
     ) -> Union[AnyType, ConsoleChoice]:
         if not choices:
             raise ValueError("No choices provided")
@@ -149,10 +147,7 @@ class Console:
         ...
 
     def inquire(
-        self,
-        prompt: str,
-        validation: Optional[ValidationType] = None,
-        default: Optional[AnyType] = None
+        self, prompt: str, validation: Optional[ValidationType] = None, default: Optional[AnyType] = None
     ) -> AnyType:
         return inquirer.text(prompt, default=default, validate=validation)
 

@@ -83,10 +83,10 @@ class RegexCollection:
     _VolumeRegex = r"CHANGETHIS v(\d+).*"
     _OneShotRegex = r"CHANGETHIS .*"
     # fmt: off
-    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) " \
-                      r"- p[\d]+x?[\d]?\-?[\d]+x?[\d]? .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
-    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) " \
-                      r"- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
+    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot" \
+                      r"|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]? .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
+    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]" \
+                      r"hot|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
     # fmt: on
 
     @classmethod
@@ -100,12 +100,14 @@ class RegexCollection:
     @overload
     def chapter_re(self, title: str, publisher: str) -> Pattern[str]:
         ...
-    
+
     @classmethod
     def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
         if publisher is None:
             return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", title))
-        return re.compile(cls._ChapterTitleRe.replace("CHANGETHIS", title).replace("CHANGEPUBLISHER", publisher))
+        return re.compile(
+            cls._ChapterTitleRe.replace("CHANGETHIS", title).replace("CHANGEPUBLISHER", publisher)
+        )
 
     @classmethod
     def cmx_re(cls) -> Pattern[str]:
