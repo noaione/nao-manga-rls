@@ -61,17 +61,18 @@ def make_prefix_convert(magick_exe: str):
     return ["magick", "convert"]
 
 
-def execute_spreads_join(magick_dir: str, quality: float, input_imgs: List[Path], out_dir: Path):
+def execute_spreads_join(magick_dir: str, quality: float, input_imgs: List[Path], out_dir: Path, reverse_mode: bool):
     extensions = [x.suffix for x in input_imgs]
     select_ext = ".jpg"
     if ".png" in extensions:
         select_ext = ".png"
     output_name = file_handler.random_name() + select_ext
     execute_this = make_prefix_convert(magick_dir)
-    input_imgs = input_imgs.sort(key=lambda x: x.name)
-    input_imgs.reverse()
-    execute_this += input_imgs
-    execute_this += ["-quality", quality, "+append", f"{out_dir / output_name}"]
+    input_imgs.sort(key=lambda x: x.name)
+    if reverse_mode:
+        input_imgs.reverse()
+    execute_this += list(map(str, input_imgs))
+    execute_this += ["-quality", f"{quality:.2f}%", "+append", f"{out_dir / output_name}"]
     try:
         sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     except sp.CalledProcessError as e:
@@ -105,12 +106,23 @@ class _ExportedImages(TypedDict):
     "spreads_data",
     required=True,
     multiple=True,
+    help="The spread information, can be repeated and must contain something like: 1-2",
+    metavar="A-B",
+)
+@click.option(
+    "-r",
+    "--reverse",
+    "reverse",
+    is_flag=True,
+    default=False,
+    help="Reverse the order of the spreads (manga mode)",
 )
 @options.magick_path
 def spreads_join(
     path_or_archive: Path,
     quality: float,
     spreads_data: List[str],
+    reverse: bool,
     magick_path: str,
 ):
     """
@@ -181,7 +193,7 @@ def spreads_join(
     current = 1
     for spread, imgs in exported_imgs.items():
         console.status(f"Joining spreads: {current}/{total_match_spread}")
-        temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive)
+        temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive, reverse)
         # Rename back
         pattern = imgs["pattern"]
         pattern.sort()
@@ -202,5 +214,8 @@ def spreads_join(
     console.info("Backing up old files to: {}".format(BACKUP_DIR))
     for img_data in exported_imgs.values():
         for image in img_data["imgs"]:
-            mv(image, BACKUP_DIR / path.basename(image.name))
+            try:
+                mv(image, BACKUP_DIR / path.basename(image.name))
+            except FileNotFoundError:
+                pass
     console.info("Done")
