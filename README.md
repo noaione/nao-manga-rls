@@ -56,7 +56,7 @@ To install, you need git since I'm not publishing this to PyPi.
 After that you can run this:
 
 ```sh
-pip install -U https://github.com/noaione/nao-manga-rls.git@module-rewrite#egg=nmanga
+pip install -U git+https://github.com/noaione/nao-manga-rls.git@module-rewrite#egg=nmanga
 ```
 
 This will install this project which then you can use the command `nmanga` to execute everything.
