@@ -23,6 +23,7 @@ __all__ = (
     "is_archive",
     "collect_image",
     "collect_image_archive",
+    "collect_all_comics",
     "create_temp_dir",
     "remove_folder_and_contents",
     "random_name",
@@ -123,7 +124,8 @@ def collect_image_archive(file: Path):
     elif is_7zarchive(file):
         with py7zr.SevenZipFile(str(file)) as archive:
             yield from collect_image_from_7z(archive)
-    raise UnknownArchiveType(file)
+    else:
+        raise UnknownArchiveType(file)
 
 
 def collect_image(path_or_archive: Path):
@@ -131,6 +133,12 @@ def collect_image(path_or_archive: Path):
         yield from collect_image_archive(path_or_archive)
     else:
         yield from collect_image_from_folder(path_or_archive)
+
+
+def collect_all_comics(folder: Path):
+    for file in folder.glob("*.cb[z|r|7]"):
+        if is_archive(file):
+            yield file
 
 
 def create_temp_dir() -> Path:
