@@ -123,15 +123,27 @@ def auto_split(
 
     all_comic_files: Dict[str, Path] = {}
     parent_dir = path_or_archive
+    volume_re = RegexCollection.volume_re(title)
     if file_handler.is_archive(path_or_archive):
-        all_comic_files["00"] = path_or_archive
+        match_re = volume_re.match(path_or_archive.name)
+        if not match_re:
+            console.warning("Unable to match volume regex, falling back to v00...")
+            volume_num = "00"
+        else:
+            volume_num = match_re.group(1)
+        all_comic_files[volume_num] = path_or_archive
         parent_dir = path_or_archive.parent
     else:
         # Valid cbz/cbr/cb7 files
-        volume_re = RegexCollection.volume_re(title)
         for comic_file in file_handler.collect_all_comics(path_or_archive):
             if is_oneshot:
-                all_comic_files.append(comic_file)
+                if not all_comic_files:
+                    next_key_data = "00"
+                else:
+                    next_keys = int(list(all_comic_files.keys())[-1]) + 1
+                    next_key_data = f"{next_keys:02d}"
+                console.info(f"Marking as oneshot (v{next_key_data}): {comic_file}")
+                all_comic_files[next_key_data] = comic_file
                 continue
 
             match_re = volume_re.match(comic_file.name)
