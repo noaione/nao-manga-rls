@@ -45,87 +45,36 @@ Anything in Dropped means I already ripped it once, but I dropped it.
 You can find it on a certain cat website.
 
 ## Requirements
-- Python 3.6+
-- imagemagick (for [`multi-merge-spreads.py`](multi-merge-spreads.py))
+- Python 3.7+
+- imagemagick (for `level` and `spreads` command)
 
 ## Scripts
-### `auto-split` and `auto-split-no-title`
-This script should help you to split automatically via regex a manga volume into chapters.
+This repo also have a module or script to release and split stuff up.
 
-The first one should be used if the filename contains the chapter title, while the second one used if there is no chapter title in the filename.
+To install, you need git since I'm not publishing this to PyPi.
+After that you can run this:
 
-You need to modify the regex to match the filename.
-
-### `manual-split` and `manual-split-no-title`
-This script works the same as `auto-split` but the differences that you need to manually map the pages into chapters.
-
-This should be used if the filename is only a page number.
-
-You need to modify mainly this part:
-```py
-[[0, 19], 1],
-[[20, 47], 2],
-[[48, 73], 3],
-[[74, 97], 4],
-[[98, 135], 5],
-[[136], 6]
-```
-
-The first list contains another list that will match the start-end of the pages, if there's no second number defined it will assume match everything starting from the first number.
-
-The second part of the list is the chapter number.
-
-In the `manual-split` version, you can set the key name into the chapter title.
-
-### `manual-split-regex` and `manual-split-regex-no-title`
-Same as `manual-split` this version utilize regex to match the filename and capture the page number.
-
-### `merge-chapters`
-Used to merge a split chapter of cbz file into a single one.
-It accept many input with the first one will be used as the target
-save file.
-
-For example:
 ```sh
-$ python3 merge-chapters.py 01.005.cbz 01.005.5.cbz 01.005.6.cbz
+pip install -U https://github.com/noaione/nao-manga-rls.git@module-rewrite#egg=nmanga
 ```
 
-Will merge `01.005.cbz`, `01.005.5.cbz`, and `01.005.6.cbz` into `01.005.cbz`.
+This will install this project which then you can use the command `nmanga` to execute everything.
 
-The first parameter will be used as the target, so be careful!
+### Commands
 
-### `multi-merge-spreads`
-Used to merge splitted page into a proper spreads, you need to modify this part to make the proper spreads:
-```py
-spreads_mappings = [
-    [3, 4],
-    [31, 32],
-    [3, 4, 31],
-]
-```
+#### `autosplit`
+Same as the old auto split script, this will ask a series of question where you can automatically split the content of a volume archive into a chapters archives (cbz format).
 
-The list contains a list that contains the page that should be merged.<br />
-In the example, we merge this page:
-- Page 3 and 4
-- Page 31 and 32
-- Page 3, Page 4, and Page 31
+It will ask for the file `Manga Title` then the `Publisher` (if there is chapter title).
 
-### `prepare-release` and `prepare-release-no-title`
-Both of this script is a renamer for my release, my release use this following format on the filename:
-- Manga Title - c001 (v01) - p000 [Cover] [dig] [Chapter 1] [Publisher] [nao] {HQ}
-- Manga Title - c001 (v01) - p000 [dig] [Chapter 1] [Publisher] [nao] {HQ}
+The regex should match something like this:
+- `Manga Title - c001 (v01) - p001 [dig] [Chapter Title] [Publisher Name?] [Group] {HQ}.jpg`
+- `Manga Title - c001 (v01) - p000 [Cover] [dig] [Chapter Title] [Publisher Name?] [Group] {HQ}.jpg`
+- `Manga Title - c001 (v01) - p000 [Cover] [dig] [Publisher Name?] [Group] {HQ}.jpg`
+- `Manga Title - c001 (v01) - p001 [dig] [Publisher Name?] [Group] {HQ}.jpg`
 
-If you use the no title version, the `[Chapter 1]` part will be removed.
+This should match most of the release from a certain cat website (`danke`, `LuCaZ`, `1r0n`, etc.)
 
-You need to modify `current_mapping`, `special_naming` and `target_fmt`.
-
-Current mapping follows the `manual-split` formatting, while special naming is for adding that extra thing before `[dig]`.
-
-The key is the page number, the value is the extra.
-
-And target_fmt is the filename format, you should only change `Manga Title` and `Publisher`.
-
-There is regex, it will try to match using this format:
-- Manga Title - v01 - p000
-
-The reason it's like that is because the download format from comix.
+#### `level`
+Automatically batch color level an archive or folder containing images.<br />
+This can be useful to some VIZ release since sometimes the "black" color is not really that "black" (ex. `#202020` instead of `#000000`)
