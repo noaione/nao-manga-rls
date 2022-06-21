@@ -1,0 +1,15 @@
+{
+    "python.linting.flake8Enabled": true,
+    "python.linting.flake8Args": [
+        "--config=.flake8"
+    ],
+    "[python]": {
+        "editor.formatOnSave": true,
+    },
+    "python.formatting.provider": "black",
+    "python.analysis.diagnosticMode": "workspace",
+    "python.languageServer": "Pylance",
+    "autoDocstring.docstringFormat": "sphinx",
+    "python.linting.enabled": true,
+    "python.analysis.typeCheckingMode": "off"
+}

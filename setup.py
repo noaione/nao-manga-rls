@@ -1,5 +1,19 @@
-import re
+from typing import List
+
 from setuptools import setup
+
+
+def clean_requirements(requirements: List[str]) -> List[str]:
+    valid_requirements = []
+    for requirement in requirements:
+        requirement = requirement.rstrip()
+        if not requirement:
+            continue
+        if requirement.startswith("#"):
+            continue
+        valid_requirements.append(requirement)
+    return valid_requirements
+
 
 version = None
 author = None
@@ -30,23 +44,15 @@ with open("README.md") as f:
     readme = f.read()
 
 with open("requirements.txt") as f:
-    requirements = f.readlines()
+    requirements = clean_requirements(f.readlines())
+with open("requirements-dev.txt") as f:
+    dev_requirements = clean_requirements(f.readlines())
 
-valid_requirements = []
-for requirement in requirements:
-    requirement = requirement.rstrip()
-    if not requirement:
-        continue
-    if requirement.startswith("#"):
-        continue
-    valid_requirements.append(requirement)
 
 setup_args = dict(
     name="nmanga",
     version=version,
-    description=(
-        "A collection of CLI function to process a pirated manga."
-    ),
+    description=("A collection of CLI function to process a pirated manga."),
     long_description=readme,
     long_description_content_type="text/markdown",
     url="https://github.com/noaione/nao-manga-rls",
@@ -66,9 +72,10 @@ setup_args = dict(
         "Operating System :: OS Independent",
         "Topic :: Utilities",
     ],
-    keywords="manga colorlevel processing cbz comic",
+    keywords="manga colorlevel spreads auto-splitting processing cbz comic",
     packages=["nmanga", "nmanga.cli"],
-    install_requires=valid_requirements,
+    install_requires=requirements,
+    extras_require={"dev": dev_requirements},
     project_urls={
         "Bug Reports": "https://github.com/noaione/nao-manga-rls/issues",
         "Source": "https://github.com/noaione/nao-manga-rls",
