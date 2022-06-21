@@ -28,6 +28,7 @@ from pathlib import Path
 
 import click
 
+from .cli.auto_split import auto_split
 from .cli.color_level import color_level
 from .constants import __author__, __name__, __version__
 from .term import get_console
@@ -55,6 +56,7 @@ def main(ctx: click.Context):
     pass
 
 
+main.add_command(auto_split)
 main.add_command(color_level)
 
 
