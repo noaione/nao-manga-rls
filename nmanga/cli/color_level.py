@@ -25,6 +25,7 @@ SOFTWARE.
 # Color level for nmanga
 # This file is part of nmanga.
 
+import functools
 import subprocess as sp
 from os import path
 from pathlib import Path
@@ -58,11 +59,19 @@ def make_prefix_convert(magick_exe: str):
     return ["magick", "convert"]
 
 
-def execute_level(magick_dir: str, min: float, max: float, input_file: Path, out_dir: Path):
+def execute_level(
+    magick_dir: str, min: float, max: float, input_file: Path, out_dir: Path, convert_gray: bool
+):
     output_name = file_handler.random_name() + ".png"
-    execute_this = make_prefix_convert(magick_dir)
-    level_data = f"{min:.2f}%,{max:.2f}%"
-    execute_this += [str(input_file), "-level", level_data, "-depth", "8", f"PNG8:{out_dir / output_name}"]
+    execute_this = make_prefix_convert(magick_dir) + [str(input_file)]
+    if min > 0.0 and max < 100.0:
+        level_data = f"{min:.2f}%,{max:.2f}%"
+        execute_this += ["-level", level_data]
+    execute_this += ["-depth", "8"]
+    if convert_gray:
+        execute_this += ["-colorspace", "Gray", f"{out_dir / output_name}"]
+    else:
+        execute_this.append(f"PNG8:{out_dir / output_name}")
     try:
         sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     except sp.CalledProcessError as e:
@@ -97,6 +106,13 @@ def execute_level(magick_dir: str, min: float, max: float, input_file: Path, out
     is_flag=True,
     help="Skip the first image of the file/folder",
 )
+@click.option(
+    "--gray/--no-gray",
+    "gray_mode",
+    default=True,
+    show_default=True,
+    help="Convert image colorspaces to Gray8/Y",
+)
 @options.magick_path
 @options.output_dir
 def color_level(
@@ -104,6 +120,7 @@ def color_level(
     low: float,
     high: float,
     skip_first: bool,
+    gray_mode: bool,
     magick_path: str,
     output_dirpath: Path,
 ):
@@ -131,6 +148,10 @@ def color_level(
         output_dir.mkdir(parents=True, exist_ok=True)
         export_hdl = exporter.MangaExporter(output_dir)
 
+    wrapped_func = functools.partial(
+        execute_level, magick_dir=magick_exe, min=low, max=high, out_dir=temp_dir, convert_gray=gray_mode
+    )
+
     is_first_time = True
     console.status("Processing: 1/???")
     counter = 1
@@ -156,7 +177,7 @@ def color_level(
                 counter += 1
                 continue
         if isinstance(image, Path) and isinstance(handler, Path):
-            temp_output = execute_level(magick_exe, low, high, image, temp_dir)
+            temp_output = wrapped_func(input_file=image)
             temp_output_file = temp_dir / temp_output
             export_hdl.add_image(image.stem + ".png", temp_output_file)
             temp_output_file.unlink(missing_ok=True)
@@ -164,7 +185,7 @@ def color_level(
             temp_file = temp_dir / image.filename
             for bio in handler.read([image.filename]).values():
                 temp_file.write_bytes(bio.read())
-            temp_output = execute_level(magick_exe, low, high, temp_file, temp_dir)
+            temp_output = wrapped_func(input_file=temp_file)
             temp_output_file = temp_dir / temp_output
             export_hdl.add_image(path.splitext(path.basename(image.filename))[0] + ".png", temp_output_file)
             temp_output_file.unlink(missing_ok=True)
@@ -175,7 +196,7 @@ def color_level(
             # handler = cast(ZipFile, handler)
             temp_file = temp_dir / image.filename
             temp_file.write_bytes(handler.read(image))
-            temp_output = execute_level(magick_exe, low, high, temp_file, temp_dir)
+            temp_output = wrapped_func(input_file=temp_file)
             temp_output_file = temp_dir / temp_output
             export_hdl.add_image(path.splitext(path.basename(image.filename))[0] + ".png", temp_output_file)
             temp_output_file.unlink(missing_ok=True)
