@@ -187,6 +187,7 @@ def spreads_join(
         console.error("Could not find the volume")
         return 1
 
+    title_get = title_get.rstrip()
     total_match_spread = len(list(exported_imgs.keys()))
     current = 1
     for spread, imgs in exported_imgs.items():
