@@ -42,10 +42,30 @@ from .base import CatchAllExceptionsCommand, RegexCollection
 console = term.get_console()
 
 
+def actual_or_fallback(actual_ch: Optional[str], chapter_num: int) -> str:
+    proper_ch = f"{chapter_num:03d}"
+    if not actual_ch:
+        return proper_ch
+    if "." in actual_ch:
+        try:
+            base, floating = str(float(actual_ch)).split(".", 1)
+        except ValueError:
+            return proper_ch
+        try:
+            return f"{int(base):03d}.{floating}"
+        except ValueError:
+            return proper_ch
+    try:
+        return f"{int(actual_ch):03d}"
+    except ValueError:
+        return proper_ch
+
+
 def create_chapter(match: Match[str], has_publisher: bool = False):
     chapter_num = int(match.group("ch"))
     chapter_extra = match.group("ex")
     chapter_vol = match.group("vol")
+    chapter_actual = match.group("actual")
     if utils.is_oneshot(chapter_vol):
         chapter_vol = 0
     else:
@@ -59,13 +79,20 @@ def create_chapter(match: Match[str], has_publisher: bool = False):
     except IndexError:
         pass
 
-    chapter_data = f"{chapter_vol:02d}.{chapter_num:03d}"
+    act_ch_num = actual_or_fallback(chapter_actual, chapter_num)
+
+    chapter_data = f"{chapter_vol:02d}.{act_ch_num}"
     if chapter_extra is not None:
-        chapter_data += f".{int(chapter_extra[1:]) + 4}"
+        add_num = int(chapter_extra[1:])
+        if "." not in chapter_extra:
+            add_num += 4
+        chapter_data += f".{add_num}"
     if chapter_title is not None:
         chapter_data += f" - {chapter_title}"
     if chapter_title is None and has_publisher and chapter_extra is not None:
         ch_ex = int(chapter_extra[1:])
+        if "." in chapter_extra:
+            ch_ex -= 4
         chapter_data += f" - Extra {ch_ex}"
 
     return chapter_data

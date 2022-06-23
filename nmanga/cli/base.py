@@ -96,10 +96,11 @@ class RegexCollection:
     _VolumeRegex = r"CHANGETHIS v(\d+).*"
     _OneShotRegex = r"CHANGETHIS .*"
     # fmt: off
-    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>x[\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot" \
-                      r"|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]? .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
-    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x][\d]{1,2})? \((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]" \
-                      r"hot|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
+    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
+                      r" ?\((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?" \
+                      r" .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
+    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
+                      r" ?\((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
     # fmt: on
 
     @classmethod
