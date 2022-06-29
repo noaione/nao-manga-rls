@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from os import path
 from pathlib import Path
-from typing import Dict, Match, Optional
+from typing import Dict, List, Match, Optional
 
 import click
 from py7zr import FileInfo, SevenZipFile
@@ -98,6 +98,11 @@ def create_chapter(match: Match[str], has_publisher: bool = False):
     return chapter_data
 
 
+def check_cbz_exist(base_path: Path, filename: str):
+    full_path = base_path / f"{filename}.cbz"
+    return full_path.exists() and full_path.is_file()
+
+
 @click.command(
     name="autosplit",
     help="Automatically split volumes into chapters using regex",
@@ -128,6 +133,14 @@ def create_chapter(match: Match[str], has_publisher: bool = False):
     help="The title of the series (used on inner filename, will override --title)",
 )
 @click.option(
+    "-lt",
+    "--limit-to",
+    "limit_to_credit",
+    required=False,
+    default=None,
+    help="Limit the volume regex to certain ripper only.",
+)
+@click.option(
     "-oshot",
     "--is-oneshot",
     "is_oneshot",
@@ -140,6 +153,7 @@ def auto_split(
     title: str,
     publisher: Optional[str] = None,
     inner_title: Optional[str] = None,
+    limit_to_credit: Optional[str] = None,
     is_oneshot: bool = False,
 ):
     """
@@ -150,7 +164,7 @@ def auto_split(
 
     all_comic_files: Dict[str, Path] = {}
     parent_dir = path_or_archive
-    volume_re = RegexCollection.volume_re(title)
+    volume_re = RegexCollection.volume_re(title, limit_to_credit)
     if file_handler.is_archive(path_or_archive):
         match_re = volume_re.match(path_or_archive.name)
         if not match_re:
@@ -192,6 +206,7 @@ def auto_split(
         # Just need to mirror automatically.
         # Read to memory, then dump to disk
         collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
+        skipped_chapters: List[str] = []
         for image, handler, _, _ in file_handler.collect_image_archive(file_path):
             filename = image.filename
             match_re = chapter_re.match(path.basename(filename))
@@ -200,6 +215,12 @@ def auto_split(
                 console.error(f"[{volume}][!] Exiting...")
                 return 1
             chapter_data = create_chapter(match_re, publisher is not None)
+            if chapter_data in skipped_chapters:
+                continue
+            if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
+                console.warning(f"[{volume}][?] Skipping chapter: {chapter_data}")
+                skipped_chapters.append(chapter_data)
+                continue
             if chapter_data not in collected_chapters:
                 console.info(f"[{volume}][+] Creating chapter: {chapter_data}")
                 collected_chapters[chapter_data] = exporter.CBZMangaExporter(

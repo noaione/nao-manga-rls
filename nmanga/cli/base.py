@@ -104,8 +104,11 @@ class RegexCollection:
     # fmt: on
 
     @classmethod
-    def volume_re(cls, title: str) -> Pattern[str]:
-        return re.compile(cls._VolumeRegex.replace("CHANGETHIS", title))
+    def volume_re(cls, title: str, limit_credit: Optional[str] = None) -> Pattern[str]:
+        re_fmt = cls._VolumeRegex.replace("CHANGETHIS", title)
+        if limit_credit is not None:
+            re_fmt += r"[\[\(]" + limit_credit + r".*"
+        return re.compile(re_fmt)
 
     @overload
     def chapter_re(self, title: str) -> Pattern[str]:
