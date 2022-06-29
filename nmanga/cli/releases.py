@@ -195,6 +195,13 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
     help="Whether this is a high quality release",
     default=False,
 )
+@click.option(
+    "--tag/--no-tag",
+    "do_exif_tagging",
+    default=True,
+    show_default=True,
+    help="Do exif metadata tagging on the files.",
+)
 @options.exiftool_path
 def prepare_releases(
     path_or_archive: Path,
@@ -204,6 +211,7 @@ def prepare_releases(
     rls_credit: str,
     rls_email: str,
     is_high_quality: bool,
+    do_exif_tagging: bool,
     exiftool_path: str,
 ):
     """
@@ -221,7 +229,7 @@ def prepare_releases(
 
     force_search = not _is_default_path(exiftool_path)
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
-    if exiftool_exe is None:
+    if exiftool_exe is None and do_exif_tagging:
         console.warning("Exiftool not found, will skip tagging image with exif metadata!")
 
     has_ch_title = console.confirm("Does this release have chapter titles?")
@@ -338,7 +346,7 @@ def prepare_releases(
         current += 1
     console.stop_status()
 
-    if exiftool_exe is not None:
+    if exiftool_exe is not None and do_exif_tagging:
         console.info("Tagging images with exif metadata...")
         inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)
     console.info("Done!")
