@@ -217,11 +217,12 @@ def auto_split(
             chapter_data = create_chapter(match_re, publisher is not None)
             if chapter_data in skipped_chapters:
                 continue
-            if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
-                console.warning(f"[{volume}][?] Skipping chapter: {chapter_data}")
-                skipped_chapters.append(chapter_data)
-                continue
+
             if chapter_data not in collected_chapters:
+                if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
+                    console.warning(f"[{volume}][?] Skipping chapter: {chapter_data}")
+                    skipped_chapters.append(chapter_data)
+                    continue
                 console.info(f"[{volume}][+] Creating chapter: {chapter_data}")
                 collected_chapters[chapter_data] = exporter.CBZMangaExporter(
                     utils.secure_filename(chapter_data), target_path
