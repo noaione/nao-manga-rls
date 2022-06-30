@@ -66,10 +66,11 @@ def create_chapter(match: Match[str], has_publisher: bool = False):
     chapter_extra = match.group("ex")
     chapter_vol = match.group("vol")
     chapter_actual = match.group("actual")
-    if utils.is_oneshot(chapter_vol):
-        chapter_vol = 0
-    else:
-        chapter_vol = int(chapter_vol[1:])
+    if chapter_vol is not None:
+        if utils.is_oneshot(chapter_vol):
+            chapter_vol = 0
+        else:
+            chapter_vol = int(chapter_vol[1:])
 
     chapter_title: Optional[str] = None
     try:
@@ -81,7 +82,10 @@ def create_chapter(match: Match[str], has_publisher: bool = False):
 
     act_ch_num = actual_or_fallback(chapter_actual, chapter_num)
 
-    chapter_data = f"{chapter_vol:02d}.{act_ch_num}"
+    if chapter_vol is not None:
+        chapter_data = f"{chapter_vol:02d}.{act_ch_num}"
+    else:
+        chapter_data = act_ch_num
     if chapter_extra is not None:
         add_num = int(chapter_extra[1:])
         if "." not in chapter_extra:

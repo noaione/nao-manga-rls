@@ -97,15 +97,16 @@ class RegexCollection:
     _OneShotRegex = r"CHANGETHIS .*"
     # fmt: off
     _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?" \
-                      r" .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
+                      r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
+                      r"[\d]? .*\[dig] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
     _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\((?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])\) - p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
+                      r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
+                      r"[\d]?.*"
     # fmt: on
 
     @classmethod
     def volume_re(cls, title: str, limit_credit: Optional[str] = None) -> Pattern[str]:
-        re_fmt = cls._VolumeRegex.replace("CHANGETHIS", title)
+        re_fmt = cls._VolumeRegex.replace("CHANGETHIS", re.escape(title))
         if limit_credit is not None:
             re_fmt += r"[\[\(]" + limit_credit + r".*"
         return re.compile(re_fmt)
@@ -121,9 +122,11 @@ class RegexCollection:
     @classmethod
     def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
         if publisher is None:
-            return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", title))
+            return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", re.escape(title)))
         return re.compile(
-            cls._ChapterTitleRe.replace("CHANGETHIS", title).replace("CHANGEPUBLISHER", publisher)
+            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title)).replace(
+                "CHANGEPUBLISHER", re.escape(publisher)
+            )
         )
 
     @classmethod
