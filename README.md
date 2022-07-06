@@ -110,6 +110,31 @@ After that, you should be asked on what mode you will be using:
 Custom page number mapping will ask you some custom page mapping, for example if you have `cover.jpg` you can use this mode then map that to page 0.<br />
 After that you will be asked a series of question regarding the chapter mapping.
 
+#### `merge`
+Merge two or more archives file into a single archive file.
+
+```py
+Usage: nmanga merge [OPTIONS] ARCHIVE_FILES
+
+  Merge chapters together into a single chapter
+
+Options:
+  -o, --output TEXT  Override the output file, will default to first input if
+                     not provided!
+  -h, --help         Show this message and exit.
+```
+
+`-output` the output filename, if not provided will use the name of the first archive.
+
+Example:
+- `nmanga merge a.cbz b.cbz` will merge into `a.cbz`
+- `nmanga merge -o test.cbz a.cbz b.cbz` will merge into `test.cbz`
+
+The `ARCHIVE_FILES` input can be repeated as many times as you want!
+
+**Note**<br />
+The archive file will be deleted in favor of the new one!
+
 #### `releases`
 Create a release from `comix` formatted filename.
 
