@@ -27,7 +27,7 @@ jobs:
       - name: Install requirements
         if: steps.lint-venv-cache.outputs.cache-hit != 'true'
         run: |
-          pip install -r requirements-dev.txt
+          pip install -U -r requirements-dev.txt
       - name: Execute multilint scripts
         run: |
           python3 ci/multilint.py -si -sv
