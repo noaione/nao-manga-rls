@@ -31,6 +31,7 @@ import click
 from .cli.auto_split import auto_split
 from .cli.color_level import color_level
 from .cli.join_spreads import spreads_join
+from .cli.manual_split import manual_split
 from .cli.releases import prepare_releases
 from .constants import __author__, __name__, __version__
 from .term import get_console
@@ -60,6 +61,7 @@ def main(ctx: click.Context):
 
 main.add_command(auto_split)
 main.add_command(color_level)
+main.add_command(manual_split)
 main.add_command(prepare_releases)
 main.add_command(spreads_join)
 

@@ -184,6 +184,7 @@ class Console:
                         error_text,
                     )
                     continue
+            inquired_text = input_temp or ""
             break
 
         return inquired_text

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from os import path
 from pathlib import Path
-from typing import Dict, List, Match, Optional
+from typing import Dict, List, Optional
 
 import click
 from py7zr import FileInfo, SevenZipFile
@@ -38,73 +38,9 @@ from py7zr import FileInfo, SevenZipFile
 from .. import exporter, file_handler, term, utils
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection
+from .common import check_cbz_exist, create_chapter
 
 console = term.get_console()
-
-
-def actual_or_fallback(actual_ch: Optional[str], chapter_num: int) -> str:
-    proper_ch = f"{chapter_num:03d}"
-    if not actual_ch:
-        return proper_ch
-    if "." in actual_ch:
-        try:
-            base, floating = str(float(actual_ch)).split(".", 1)
-        except ValueError:
-            return proper_ch
-        try:
-            return f"{int(base):03d}.{floating}"
-        except ValueError:
-            return proper_ch
-    try:
-        return f"{int(actual_ch):03d}"
-    except ValueError:
-        return proper_ch
-
-
-def create_chapter(match: Match[str], has_publisher: bool = False):
-    chapter_num = int(match.group("ch"))
-    chapter_extra = match.group("ex")
-    chapter_vol = match.group("vol")
-    chapter_actual = match.group("actual")
-    if chapter_vol is not None:
-        if utils.is_oneshot(chapter_vol):
-            chapter_vol = 0
-        else:
-            chapter_vol = int(chapter_vol[1:])
-
-    chapter_title: Optional[str] = None
-    try:
-        chapter_title = match.group("title")
-        if chapter_title is not None:
-            chapter_title = utils.clean_title(chapter_title)
-    except IndexError:
-        pass
-
-    act_ch_num = actual_or_fallback(chapter_actual, chapter_num)
-
-    if chapter_vol is not None:
-        chapter_data = f"{chapter_vol:02d}.{act_ch_num}"
-    else:
-        chapter_data = act_ch_num
-    if chapter_extra is not None:
-        add_num = int(chapter_extra[1:])
-        if "." not in chapter_extra:
-            add_num += 4
-        chapter_data += f".{add_num}"
-    if chapter_title is not None:
-        chapter_data += f" - {chapter_title}"
-    if chapter_title is None and has_publisher and chapter_extra is not None:
-        ch_ex = int(chapter_extra[1:])
-        if "." in chapter_extra:
-            ch_ex -= 4
-        chapter_data += f" - Extra {ch_ex}"
-
-    return chapter_data
-
-
-def check_cbz_exist(base_path: Path, filename: str):
-    full_path = base_path / f"{filename}.cbz"
-    return full_path.exists() and full_path.is_file()
 
 
 @click.command(

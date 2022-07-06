@@ -27,13 +27,14 @@ SOFTWARE.
 import subprocess as sp
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Optional
 
 import click
 
 from .. import file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_exiftool
+from .common import ChapterRange, inquire_chapter_ranges, safe_int
 
 console = term.get_console()
 TARGET_FORMAT = "{mt} - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
@@ -50,71 +51,6 @@ def _is_default_path(path: str) -> bool:
     if path == ".\\exiftool":
         return True
     return False
-
-
-def safe_int(value: str) -> Optional[int]:
-    try:
-        return int(value)
-    except ValueError:
-        return None
-
-
-def int_or_float(value: str) -> Optional[Union[int, float]]:
-    if "." in value:
-        try:
-            return float(value)
-        except ValueError:
-            pass
-    return safe_int(value)
-
-
-def parse_ch_ranges(data: str) -> Tuple[List[int], bool]:
-    split_range = data.split("-")
-    if len(split_range) < 2:
-        return [int(data)], True
-
-    first, second = split_range
-    return list(range(int(first), int(second) + 1)), False
-
-
-def validate_ch_ranges(current: str):
-    split_range = current.strip().split("-")
-    if len(split_range) < 2:
-        return safe_int(current) is not None
-
-    first, second = split_range
-    if not isinstance(second, str):
-        return False
-
-    first = safe_int(first)
-    second = safe_int(second)
-    if first is None or second is None:
-        return False
-    return True
-
-
-class SimpleRange:
-    def __init__(self, number: int, name: Optional[str], range: List[int], is_single: bool = False):
-        self.number = number
-        self.name = name
-        self.range = range
-        self.is_single = is_single
-
-    def __repr__(self):
-        if isinstance(self.number, float):
-            return f"<SimpleRange c{self.number} - {self.name}>"
-        return f"<SimpleRange c{self.number:03d} - {self.name}>"
-
-    @property
-    def bnum(self):
-        if isinstance(self.number, int):
-            return f"{self.number:03d}"
-        base, floating = str(self.number).split(".")
-        floating = int(floating)
-        if floating - 4 >= 1:
-            # Handle split chapter (.1, .2, etc)
-            floating -= 4
-        return f"{int(base):03d}x{floating}"
 
 
 class SpecialNaming:
@@ -233,24 +169,11 @@ def prepare_releases(
         console.warning("Exiftool not found, will skip tagging image with exif metadata!")
 
     has_ch_title = console.confirm("Does this release have chapter titles?")
-    rls_information: List[SimpleRange] = []
-    while True:
-        console.info("Please input information regarding this release...")
-        ch_title: Optional[str] = None
-        if has_ch_title:
-            ch_title = console.inquire("Chapter title", lambda y: len(y.strip()) > 0)
-
-        ch_number = console.inquire("Chapter number", lambda y: int_or_float(y) is not None)
-        ch_number = int_or_float(ch_number)
-
-        ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
-        actual_ranges, is_single = parse_ch_ranges(ch_ranges)
-        simple_range = SimpleRange(ch_number, ch_title, actual_ranges, is_single)
-        rls_information.append(simple_range)
-
-        do_more = console.confirm("Do you want to add another release?")
-        if not do_more:
-            break
+    rls_information = inquire_chapter_ranges(
+        "Please input information regarding this release...",
+        "Do you want to add another release?",
+        has_ch_title,
+    )
 
     special_naming: Dict[int, SpecialNaming] = {}
     do_special_get = console.confirm("Do you want to add some special naming?")
@@ -287,7 +210,7 @@ def prepare_releases(
             p01 = f"{p01}-{p02}"
 
         # print(p01_copy)
-        selected_range: SimpleRange = None
+        selected_range: ChapterRange = None
         for rls_info in rls_information:
             if rls_info.is_single:
                 if p01_copy >= rls_info.range[0]:
