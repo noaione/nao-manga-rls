@@ -77,7 +77,7 @@ def parse_ch_ranges(data: str) -> Tuple[List[int], bool]:
     return list(range(int(first), int(second) + 1)), False
 
 
-def validate_ch_ranges(_, current: str):
+def validate_ch_ranges(current: str):
     split_range = current.strip().split("-")
     if len(split_range) < 2:
         return safe_int(current) is not None
@@ -238,9 +238,9 @@ def prepare_releases(
         console.info("Please input information regarding this release...")
         ch_title: Optional[str] = None
         if has_ch_title:
-            ch_title = console.inquire("Chapter title", lambda _, y: len(y.strip()) > 0)
+            ch_title = console.inquire("Chapter title", lambda y: len(y.strip()) > 0)
 
-        ch_number = console.inquire("Chapter number", lambda _, y: int_or_float(y) is not None)
+        ch_number = console.inquire("Chapter number", lambda y: int_or_float(y) is not None)
         ch_number = int_or_float(ch_number)
 
         ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
@@ -256,10 +256,10 @@ def prepare_releases(
     do_special_get = console.confirm("Do you want to add some special naming?")
     if do_special_get:
         while True:
-            page = console.inquire("Page number", lambda _, y: safe_int(y) is not None)
+            page = console.inquire("Page number", lambda y: safe_int(y) is not None)
             page_number = int(page)
 
-            data = console.inquire("Page type", lambda _, y: len(y.strip()) > 0)
+            data = console.inquire("Page type", lambda y: len(y.strip()) > 0)
             special_naming[page_number] = SpecialNaming(page_number, data)
 
             do_more = console.confirm("Do you want to add another naming?")

@@ -23,26 +23,29 @@ SOFTWARE.
 """
 
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Union, overload
+from typing import TYPE_CHECKING, Callable, List, Optional, Union, overload
 
 import inquirer
 from rich.console import Console as RichConsole
 from rich.theme import Theme as RichTheme
 
+if TYPE_CHECKING:
+    from rich.status import Status as RichStatus
+
 __all__ = ("get_console", "ConsoleChoice")
 
 rich_theme = RichTheme(
     {
-        "success": "green",
-        "warning": "yellow",
-        "error": "red",
-        "highlight": "magenta",
+        "success": "green bold",
+        "warning": "yellow bold",
+        "error": "red bold",
+        "highlight": "magenta bold",
+        "info": "cyan bold",
     }
 )
 AnyType = Union[str, bytes, int, float]
-ValidateA = Callable[[dict, str], bool]
-ValidateB = Callable[[dict], bool]
-ValidationType = Union[ValidateA, ValidateB, str]
+ValidateFunc = Callable[[str], bool]
+ValidationType = Union[ValidateFunc, str]
 
 
 @dataclass
@@ -57,16 +60,16 @@ class ConsoleChoice:
 class Console:
     def __init__(self):
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True)
-        self._status = None
+        self._status: Optional["RichStatus"] = None
 
     def info(self, *args, **kwargs):
-        self.console.print("[INFO]", *args, **kwargs)
+        self.console.print("[[info]INFO[/info]]", *args, **kwargs)
 
     def warning(self, *args, **kwargs):
-        self.console.print("[WARN]", *args, **{"style": "warning", **kwargs})
+        self.console.print("[[warning]WARN[/warning]]", *args, **kwargs)
 
     def error(self, *args, **kwargs):
-        self.console.print("[ERROR]", *args, **{"style": "error", **kwargs})
+        self.console.print("[[error]ERROR][/error]", *args, **kwargs)
 
     def status(self, message: str, **kwargs_spinner_style):
         if not self._status:
@@ -82,12 +85,23 @@ class Console:
         else:
             self._status.update(message, **kwargs_spinner_style)
 
-    def stop_status(self):
+    @overload
+    def stop_status(self) -> None:
+        ...
+
+    @overload
+    def stop_status(self, final_text: str) -> None:
+        ...
+
+    def stop_status(self, final_text: Optional[str] = None) -> None:
         if self._status:
+            if final_text is not None:
+                self._status.update(final_text)
             self._status.stop()
+            self._status = None
 
     def log(self, *args, **kwargs):
-        self.console.log("[LOG]", *args, **kwargs)
+        self.console.log("[[highlight]LOG[/highlight]]", *args, **kwargs)
 
     def is_advanced(self):
         return not self.console.legacy_windows
@@ -123,16 +137,7 @@ class Console:
     def inquire(
         self,
         prompt: str,
-        validation: ValidateA = ...,
-        default: Optional[AnyType] = ...,
-    ) -> AnyType:
-        ...
-
-    @overload
-    def inquire(
-        self,
-        prompt: str,
-        validation: ValidateB = ...,
+        validation: ValidateFunc = ...,
         default: Optional[AnyType] = ...,
     ) -> AnyType:
         ...
@@ -146,10 +151,42 @@ class Console:
     ) -> AnyType:
         ...
 
+    def _internal_validation(self, text_input: str, validation: ValidateFunc):
+        try:
+            is_valid = validation(text_input)
+            return bool(is_valid)  # Coerce None to bool to avoid error
+        except Exception:
+            return False
+
     def inquire(
-        self, prompt: str, validation: Optional[ValidationType] = None, default: Optional[AnyType] = None
+        self, prompt: str, validation: Optional[ValidateFunc] = None, default: Optional[AnyType] = None
     ) -> AnyType:
-        return inquirer.text(prompt, default=default, validate=validation)
+        # Custom inquirer
+        inquired_text = default
+        while True:
+            print_this = f"[[warning]?[/warning]] {prompt}"
+            if default is not None:
+                print_this += f" [default: {default}]"
+            input_temp = self.console.input(print_this + ": ")
+            if not input_temp and default is not None:
+                # Ignore validation
+                break
+
+            if validation is not None:
+                if self._internal_validation(input_temp, validation):
+                    inquired_text = input_temp
+                    break
+                else:
+                    # Show error temporary and ask again
+                    error_text = input_temp or "[No Input]"
+                    self.console.print(
+                        "[[error]Error[/error]] Failed to validate input:",
+                        error_text,
+                    )
+                    continue
+            break
+
+        return inquired_text
 
     def confirm(self, prompt: Optional[str] = None) -> bool:
         prompt = prompt or "Are you sure?"
