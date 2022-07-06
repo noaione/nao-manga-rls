@@ -5,33 +5,7 @@ This repo contains stuff that I use to release and collect manga from a certain 
 All my release use the `[nao]` tag.
 
 ## Released Stuff
-- 5 Seconds Before a Witch Falls in Love (Finished)
-- Accomplishments of the Duke's Daughter (v06+) (Ongoing)
-- Chillin' in Another World with Level 2 Super Cheat Powers (v02+) (Ongoing)
-- Chronicles of an Aristocrat Reborn in Another World (Ongoing)
-- DNA Doesn't Tell Us (Finished)
-- Drugstore in Another World: The Slow Life of a Cheat Pharmacist (Ongoing)
-- I've Been Killing Slimes for 300 Years and Maxed Out My Level (v08+) (Ongoing)
-- Kuma Kuma Kuma Bear (Ongoing)
-- Magic Artisan Dahlia Wilts No More (Ongoing)
-- My Next Life as a Villainess: All Routes Lead to Doom! (Ongoing)
-- Nameless Asterism (Finished)
-- Necromance (v02+) (Ongoing)
-- New Game! (Ongoing)
-- The Dangers in My Heart (v04+) (Ongoing)
-- The Invicible Shovel (Ongoing)
-- The Savior's Book Café Story in Another World (Ongoing)
-- Yuri is My Job! (Ongoing)
-
-**Weekly-ish Release**
-- The Necromancer Maid
-- The Villainess Who Became Nightingale
-
-**Planned**
-- Fushi no Kami
-- ~~I Was a Bottom-Tier Bureaucrat for 1,500 Years, and the Demon King Made Me a Minister (Final Volume)~~
-- The Apothecary Diaries (v05+)
-- ~~Welcome to Japan, Ms. Elf! (v04+)~~
+See here: https://shigoto.n4o.xyz/manga
 
 **Dropped**
 - BAKEMONOGATARI (v13)
