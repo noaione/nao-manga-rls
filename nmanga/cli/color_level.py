@@ -64,12 +64,13 @@ def execute_level(
 ):
     output_name = file_handler.random_name() + ".png"
     execute_this = make_prefix_convert(magick_dir) + [str(input_file)]
+    if convert_gray:
+        execute_this += ["-colorspace", "Gray"]
     if min > 0.0:
         level_data = f"{min:.2f}%,{max:.2f}%"
         execute_this += ["-level", level_data]
-    execute_this += ["-depth", "8"]
     if convert_gray:
-        execute_this += ["-set", "colorspace", "Y", f"{out_dir / output_name}"]
+        execute_this.append(f"{out_dir / output_name}")
     else:
         execute_this.append(f"PNG8:{out_dir / output_name}")
     try:
