@@ -129,7 +129,7 @@ def _collect_archive_to_chapters(
         if len(as_bnum) > 1:
             chapter_info.set("ex", "x" + as_bnum[1])
         if volume_num is not None:
-            chapter_info.set("vol", str(volume_num))
+            chapter_info.set("vol", f"v{volume_num:02d}")
         if selected_chapter.name is not None:
             chapter_info.set("title", selected_chapter.name)
 
@@ -155,7 +155,7 @@ def _collect_archive_to_chapters(
             handler.reset()
             image_bita = list(image_bita.values())[0].read()
 
-        collected_chapters[chapter_data].add_image(path.base(filename), image_bita)
+        collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
 
     for chapter, cbz_export in collected_chapters.items():
         console.info(f"[+] Finishing chapter: {chapter}")
