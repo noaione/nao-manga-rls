@@ -69,7 +69,7 @@ class Console:
         self.console.print("[[warning]WARN[/warning]]", *args, **kwargs)
 
     def error(self, *args, **kwargs):
-        self.console.print("[[error]ERROR][/error]", *args, **kwargs)
+        self.console.print("[[error]ERROR[/error]]", *args, **kwargs)
 
     def status(self, message: str, **kwargs_spinner_style):
         if not self._status:
