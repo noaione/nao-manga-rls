@@ -80,7 +80,7 @@ Recommended parameters:
 - Darkest color at `#202020`: `-l 13 -h 100 --gray -skip`
 - Darkest color page at `#000`: `-l 0 -h 100 --gray` (Set as grayscale)
 
-### `manualsplit`
+#### `manualsplit`
 Same as the old manual split script, this command accept some parameter and will then ask a series of question.
 
 ```py
