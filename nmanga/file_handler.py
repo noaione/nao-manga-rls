@@ -67,6 +67,17 @@ class UnknownArchiveType(Exception):
         super().__init__(f"An unknown archive format found: {file}")
 
 
+class WrappedRarFile(rarfile.RarFile):
+    def __init__(self, filename):
+        super().__init__(filename)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
 def is_image(file_name: str) -> bool:
     return types_map.get(path.splitext(file_name)[-1], "").startswith("image/")
 
@@ -141,7 +152,7 @@ def collect_image_archive(file: Path):
         with zipfile.ZipFile(str(file)) as cbz_file:
             yield from collect_image_from_cbz(cbz_file)
     elif is_rar(file):
-        with rarfile.RarFile(str(file)) as rar_file:
+        with WrappedRarFile(str(file)) as rar_file:
             yield from collect_image_from_rar(rar_file)
     elif is_7zarchive(file):
         with py7zr.SevenZipFile(str(file)) as archive:
