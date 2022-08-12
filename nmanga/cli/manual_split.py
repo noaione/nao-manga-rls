@@ -33,7 +33,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Pattern, Union
 
 import click
-from py7zr import FileInfo, SevenZipFile
 
 from .. import exporter, file_handler, term, utils
 from . import options
@@ -103,59 +102,52 @@ def _collect_archive_to_chapters(
 
     collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
     skipped_chapters: List[str] = []
-    for image, handler, _, _ in file_handler.collect_image_archive(archive_file):
-        filename = image.filename
-        page_numbers = extract_page_num(path.basename(filename), custom_data, regex_data)
+    with file_handler.MangaArchive(archive_file) as archive:
+        for image, _ in archive:
+            filename = image.filename
+            page_numbers = extract_page_num(path.basename(filename), custom_data, regex_data)
 
-        first_page = page_numbers[0]
-        selected_chapter: ChapterRange = None
-        for chapter in chapters_mapping:
-            if chapter.is_single:
-                if first_page >= chapter.range[0]:
-                    selected_chapter = chapter
-                    break
-            else:
-                if first_page in chapter.range:
-                    selected_chapter = chapter
-                    break
+            first_page = page_numbers[0]
+            selected_chapter: ChapterRange = None
+            for chapter in chapters_mapping:
+                if chapter.is_single:
+                    if first_page >= chapter.range[0]:
+                        selected_chapter = chapter
+                        break
+                else:
+                    if first_page in chapter.range:
+                        selected_chapter = chapter
+                        break
 
-        if selected_chapter is None:
-            console.warning(f"Page {first_page} is not in any chapter ranges, skipping!")
-            continue
-
-        chapter_info = PseudoChapterMatch()
-        as_bnum = selected_chapter.bnum.split("x", 1)
-        chapter_info.set("ch", as_bnum[0])
-        if len(as_bnum) > 1:
-            chapter_info.set("ex", "x" + as_bnum[1])
-        if volume_num is not None:
-            chapter_info.set("vol", f"v{volume_num:02d}")
-        if selected_chapter.name is not None:
-            chapter_info.set("title", selected_chapter.name)
-
-        chapter_data = create_chapter(chapter_info)
-        if chapter_data in skipped_chapters:
-            continue
-
-        if chapter_data not in collected_chapters:
-            if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
-                console.warning(f"[?] Skipping chapter: {chapter_data}")
-                skipped_chapters.append(chapter_data)
+            if selected_chapter is None:
+                console.warning(f"Page {first_page} is not in any chapter ranges, skipping!")
                 continue
-            console.info(f"[+] Creating chapter: {chapter_data}")
-            collected_chapters[chapter_data] = exporter.CBZMangaExporter(
-                utils.secure_filename(chapter_data), target_path
-            )
 
-        in_img = image
-        if isinstance(image, FileInfo):
-            in_img = [image.filename]
-        image_bita = handler.read(in_img)
-        if isinstance(handler, SevenZipFile):
-            handler.reset()
-            image_bita = list(image_bita.values())[0].read()
+            chapter_info = PseudoChapterMatch()
+            as_bnum = selected_chapter.bnum.split("x", 1)
+            chapter_info.set("ch", as_bnum[0])
+            if len(as_bnum) > 1:
+                chapter_info.set("ex", "x" + as_bnum[1])
+            if volume_num is not None:
+                chapter_info.set("vol", f"v{volume_num:02d}")
+            if selected_chapter.name is not None:
+                chapter_info.set("title", selected_chapter.name)
 
-        collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
+            chapter_data = create_chapter(chapter_info)
+            if chapter_data in skipped_chapters:
+                continue
+
+            if chapter_data not in collected_chapters:
+                if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
+                    console.warning(f"[?] Skipping chapter: {chapter_data}")
+                    skipped_chapters.append(chapter_data)
+                    continue
+                console.info(f"[+] Creating chapter: {chapter_data}")
+                collected_chapters[chapter_data] = exporter.CBZMangaExporter(
+                    utils.secure_filename(chapter_data), target_path
+                )
+
+            collected_chapters[chapter_data].add_image(path.basename(filename), archive.read(image))
 
     for chapter, cbz_export in collected_chapters.items():
         console.info(f"[+] Finishing chapter: {chapter}")

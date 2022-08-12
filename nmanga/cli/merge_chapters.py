@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import List, Optional
 
 import click
-from py7zr import FileInfo, SevenZipFile
 
 from .. import exporter, file_handler, term
 from .base import CatchAllExceptionsCommand
@@ -84,15 +83,10 @@ def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
             return 1
 
         console.info(f"[+] Merging: {archive.stem}")
-        for image, handler, _, _ in file_handler.collect_image(archive):
-            in_img = image
-            if isinstance(image, FileInfo):
-                in_img = [image.filename]
-            image_bita = handler.read(in_img)
-            if isinstance(handler, SevenZipFile):
-                handler.reset()
-                image_bita = list(image_bita.values())[0].read()
-            target_cbz.add_image(path.basename(image.filename), image_bita)
+        with file_handler.MangaArchive(archive) as archive_file:
+            for image, _ in archive_file:
+                image_name = path.basename(getattr(image, "name", getattr(image, "filename")))
+                target_cbz.add_image(image_name, archive_file.read(image))
         console.info(f"[+] Merged: {archive.stem}")
         archive.unlink(missing_ok=True)
 
