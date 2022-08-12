@@ -47,7 +47,7 @@ console = term.get_console()
     help="Automatically split volumes into chapters using regex",
     cls=CatchAllExceptionsCommand,
 )
-@options.path_or_archive
+@options.path_or_archive()
 @click.option(
     "-t",
     "--title",
@@ -174,6 +174,6 @@ def auto_split(
         for chapter, cbz_export in collected_chapters.items():
             console.info(f"[{volume}][+] Finishing chapter: {chapter}")
             cbz_export.close()
-        print()
+        console.enter()
     console.info("Done!")
     return 0

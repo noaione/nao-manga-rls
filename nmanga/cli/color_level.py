@@ -80,7 +80,7 @@ def execute_level(
 
 
 @click.command(name="level", help="Batch color level a cbz file or folder", cls=CatchAllExceptionsCommand)
-@options.path_or_archive
+@options.path_or_archive()
 @click.option(
     "-l",
     "--low",

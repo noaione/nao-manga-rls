@@ -77,6 +77,8 @@ def coerce_number_page(number: Union[int, float]) -> str:
 
 def _collect_custom_page():
     custom_data: Dict[str, int] = {}
+    console.enter()
+    console.info("Please input the custom page mapping:")
     while True:
         page = console.inquire("Page number", lambda y: safe_int(y) is not None)
         page_number = int(page)
@@ -87,6 +89,7 @@ def _collect_custom_page():
         do_more = console.confirm("Do you want to add another naming?")
         if not do_more:
             break
+    console.enter()
     return custom_data
 
 
@@ -152,7 +155,7 @@ def _collect_archive_to_chapters(
     for chapter, cbz_export in collected_chapters.items():
         console.info(f"[+] Finishing chapter: {chapter}")
         cbz_export.close()
-    print()
+    console.enter()
 
 
 def _handle_page_number_mode(
@@ -214,7 +217,7 @@ def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mod
     help="Manually split volumes into chapters using multiple modes",
     cls=CatchAllExceptionsCommand,
 )
-@options.path_or_archive
+@options.path_or_archive(disable_folder=True)
 @click.option(
     "-vol",
     "--volume",

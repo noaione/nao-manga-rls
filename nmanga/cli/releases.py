@@ -84,7 +84,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
     help="Prepare a release of a manga series.",
     cls=CatchAllExceptionsCommand,
 )
-@options.path_or_archive
+@options.path_or_archive(disable_archive=True)
 @click.option(
     "-t",
     "--title",

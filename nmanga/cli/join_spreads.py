@@ -89,7 +89,7 @@ class _ExportedImages(TypedDict):
 @click.command(
     name="spreads", help="Join multiple spreads into a single image", cls=CatchAllExceptionsCommand
 )
-@options.path_or_archive
+@options.path_or_archive(disable_archive=True)
 @click.option(
     "-q",
     "--quality",

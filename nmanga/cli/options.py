@@ -27,12 +27,31 @@ from pathlib import Path
 
 import click
 
-path_or_archive = click.argument(
-    "path_or_archive",
-    metavar="FOLDER_OR_ARCHIVE_FILE",
-    required=True,
-    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=True, path_type=Path),
-)
+
+def path_or_archive(disable_archive: bool = False, disable_folder: bool = False):
+    if disable_archive and disable_folder:
+        raise click.UsageError("You can't disable both archive and folder")
+
+    metavar = "path_or_archive_file"
+    if disable_archive:
+        metavar = "folder_path"
+    elif disable_folder:
+        metavar = "archive_file"
+
+    return click.argument(
+        "path_or_archive",
+        metavar=metavar.upper(),
+        required=True,
+        type=click.Path(
+            exists=True,
+            resolve_path=True,
+            file_okay=not disable_archive,
+            dir_okay=not disable_folder,
+            path_type=Path,
+        ),
+    )
+
+
 archive_file = click.argument(
     "archive_file",
     metavar="ARCHIVE_FILE",
