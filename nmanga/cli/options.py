@@ -84,3 +84,11 @@ exiftool_path = click.option(
     help="Path to the exiftool executable",
     show_default=True,
 )
+debug_mode = click.option(
+    "-v",
+    "--verbose",
+    "debug_mode",
+    is_flag=True,
+    default=False,
+    help="Enable debug mode",
+)

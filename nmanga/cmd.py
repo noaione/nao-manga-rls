@@ -52,12 +52,26 @@ WORKING_DIR = Path.cwd().absolute()
     prog_name=__name__,
     message="%(prog)s v%(version)s - Created by {}".format(__author__),
 )
+@click.option(
+    "-v",
+    "--verbose",
+    "verbose",
+    is_flag=True,
+    required=False,
+    help="Enable debug/verbose mode",
+    default=False,
+)
 @click.pass_context
-def main(ctx: click.Context):
+def main(ctx: click.Context, verbose: bool):
     """
     nmanga is a CLI tool for Processing pirated manga.
     """
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj["VERBOSE_MODE"] = verbose
+    if verbose:
+        console.enable_debug()
+    else:
+        console.disable_debug()
 
 
 main.add_command(auto_split)
