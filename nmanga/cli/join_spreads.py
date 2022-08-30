@@ -36,6 +36,7 @@ import click
 from .. import file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_magick
+from .common import time_program
 
 console = term.get_console()
 _SpreadsRe = re.compile(r"[\d]{1,3}(-[\d]{1,3}){1,}")
@@ -117,6 +118,7 @@ class _ExportedImages(TypedDict):
     help="Reverse the order of the spreads (manga mode)",
 )
 @options.magick_path
+@time_program
 def spreads_join(
     path_or_archive: Path,
     quality: float,
@@ -219,4 +221,3 @@ def spreads_join(
                 mv(image, BACKUP_DIR / path.basename(image.name))
             except FileNotFoundError:
                 pass
-    console.info("Done")

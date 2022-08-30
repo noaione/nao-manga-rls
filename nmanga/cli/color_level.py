@@ -35,6 +35,7 @@ import click
 from .. import exporter, file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, test_or_find_magick
+from .common import time_program
 
 console = term.get_console()
 
@@ -114,6 +115,7 @@ def execute_level(
 )
 @options.magick_path
 @options.output_dir
+@time_program
 def color_level(
     path_or_archive: Path,
     low: float,
@@ -184,4 +186,3 @@ def color_level(
     export_hdl.close()
     console.info("Removing temp folder: {}".format(temp_dir))
     file_handler.remove_folder_and_contents(temp_dir)
-    console.info("Done!")

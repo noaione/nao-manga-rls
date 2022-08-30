@@ -36,6 +36,7 @@ __all__ = (
     "create_chapter",
     "inquire_chapter_ranges",
     "safe_int",
+    "time_program",
 )
 
 
@@ -224,7 +225,10 @@ def time_program(func):
         result = func(*args, **kwargs)
         end = time.time()
         delta = end - start
-        console.info(f"Done! (Took {delta:.2f}s)")
+        if isinstance(result, int) and result > 0:
+            console.error(f"Failure! (Took {delta:.2f}s) [exit code {result}]")
+        else:
+            console.info(f"Done! (Took {delta:.2f}s)")
         return result
 
     return wrapper

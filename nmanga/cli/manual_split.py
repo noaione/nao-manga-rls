@@ -44,6 +44,7 @@ from .common import (
     create_chapter,
     inquire_chapter_ranges,
     safe_int,
+    time_program,
 )
 
 console = term.get_console()
@@ -227,6 +228,7 @@ def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mod
     help="The volume number for the archive",
     default=None,
 )
+@time_program
 def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
     """
     Manually split volumes into chapters using multiple modes
@@ -260,4 +262,3 @@ def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
     else:
         console.error("Unknown mode selected!")
         return 1
-    console.info("Done!")

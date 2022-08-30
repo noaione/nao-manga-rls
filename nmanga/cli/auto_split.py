@@ -37,7 +37,7 @@ import click
 from .. import exporter, file_handler, term, utils
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection
-from .common import check_cbz_exist, create_chapter
+from .common import check_cbz_exist, create_chapter, time_program
 
 console = term.get_console()
 
@@ -87,6 +87,7 @@ console = term.get_console()
     default=False,
     help="Mark the series as oneshot",
 )
+@time_program
 def auto_split(
     path_or_archive: Path,
     title: str,
@@ -175,5 +176,4 @@ def auto_split(
             console.info(f"[{volume}][+] Finishing chapter: {chapter}")
             cbz_export.close()
         console.enter()
-    console.info("Done!")
     return 0

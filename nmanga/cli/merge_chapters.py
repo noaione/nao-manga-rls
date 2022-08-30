@@ -34,6 +34,7 @@ import click
 
 from .. import exporter, file_handler, term
 from .base import CatchAllExceptionsCommand
+from .common import time_program
 
 console = term.get_console()
 
@@ -67,6 +68,7 @@ def _clean_filename(output_name: Optional[str]) -> Optional[str]:
     default=None,
     help="Override the output file, will default to first input if not provided!",
 )
+@time_program
 def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
     if len(archives) < 2:
         console.error("You must provide at least two archives to merge!")
@@ -99,4 +101,4 @@ def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
         actual_name = first_name
         output_path.rename(target_name)
 
-    console.info(f"[+] Done! Output file: {actual_name}")
+    console.info(f"[+] Output file: {actual_name}")

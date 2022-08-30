@@ -161,6 +161,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
 )
 @options.exiftool_path
 @use_bracket_type
+@time_program
 def prepare_releases(
     path_or_archive: Path,
     manga_title: str,
@@ -221,7 +222,6 @@ def prepare_releases(
     console.info("Processing: 1/???")
     image_titling: Optional[str] = None
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
-        console.status(f"Processing: {current}/{total_img}")
         title_match = cmx_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
@@ -293,13 +293,13 @@ def prepare_releases(
         final_filename += extension
         new_name = image.parent / final_filename
         image.rename(new_name)
+        console.status(f"Processing: {current}/{total_img}")
         current += 1
     console.stop_status()
 
     if exiftool_exe is not None and do_exif_tagging:
         console.info("Tagging images with exif metadata...")
         inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)
-    console.info("Done!")
 
 
 @click.command(
