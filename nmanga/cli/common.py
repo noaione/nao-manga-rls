@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import time
 from pathlib import Path
 from typing import Dict, List, Match, Optional, Tuple, Union
 
@@ -215,3 +216,15 @@ def inquire_chapter_ranges(
             break
 
     return chapter_ranges
+
+
+def time_program(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        delta = end - start
+        console.info(f"Done! (Took {delta:.2f}s)")
+        return result
+
+    return wrapper
