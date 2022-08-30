@@ -33,7 +33,7 @@ from .cli.color_level import color_level
 from .cli.join_spreads import spreads_join
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
-from .cli.releases import prepare_releases
+from .cli.releases import prepare_releases, pack_releases
 from .constants import __author__, __name__, __version__
 from .term import get_console
 
@@ -78,6 +78,7 @@ main.add_command(auto_split)
 main.add_command(color_level)
 main.add_command(manual_split)
 main.add_command(merge_chapters)
+main.add_command(pack_releases)
 main.add_command(prepare_releases)
 main.add_command(spreads_join)
 

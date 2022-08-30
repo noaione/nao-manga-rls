@@ -27,19 +27,40 @@ SOFTWARE.
 import subprocess as sp
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 import click
 
-from .. import file_handler, term
+from .. import exporter, file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_exiftool
-from .common import ChapterRange, inquire_chapter_ranges, safe_int
+from .common import ChapterRange, inquire_chapter_ranges, safe_int, time_program
 
 console = term.get_console()
 TARGET_FORMAT = "{mt} - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
 TARGET_FORMAT_ALT = "{mt} - c{ch} ({vol}) - p{pg}{ex}[dig] [{pb}] [{c}]"  # noqa
-TARGET_TITLE = "{mt} {vol} ({year}) (Digital) [{c}]"
+TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
+
+__all__ = (
+    "prepare_releases",
+    "pack_releases",
+)
+
+use_bracket_type = click.option(
+    "-br",
+    "--bracket-type",
+    "bracket_type",
+    default="square",
+    help="Bracket to use to surround the ripper name",
+    show_default=True,
+    type=click.Choice(["square", "round", "curly"]),
+)
+
+BRACKET_MAPPINGS = {
+    "square": ["[", "]"],
+    "round": ["(", ")"],
+    "curly": ["{", "}"],
+}
 
 
 def _is_default_path(path: str) -> bool:
@@ -139,6 +160,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
     help="Do exif metadata tagging on the files.",
 )
 @options.exiftool_path
+@use_bracket_type
 def prepare_releases(
     path_or_archive: Path,
     manga_title: str,
@@ -149,6 +171,7 @@ def prepare_releases(
     is_high_quality: bool,
     do_exif_tagging: bool,
     exiftool_path: str,
+    bracket_type: Literal["square", "round", "curly"],
 ):
     """
     Prepare a release of a manga series.
@@ -162,6 +185,8 @@ def prepare_releases(
 
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
+
+    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
 
     force_search = not _is_default_path(exiftool_path)
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
@@ -261,6 +286,8 @@ def prepare_releases(
                 vol=vol,
                 year=current_year,
                 c=rls_credit,
+                cpa=pair_left,
+                cpb=pair_right,
             )
 
         final_filename += extension
@@ -273,3 +300,97 @@ def prepare_releases(
         console.info("Tagging images with exif metadata...")
         inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)
     console.info("Done!")
+
+
+@click.command(
+    name="pack",
+    help="Pack a release to a cbz archive.",
+    cls=CatchAllExceptionsCommand,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-t",
+    "--title",
+    "manga_title",
+    required=True,
+    help="The title of the series",
+)
+@click.option(
+    "-y",
+    "--year",
+    "manga_year",
+    default=None,
+    type=int,
+    help="The year of the series release",
+)
+@click.option(
+    "-vol",
+    "--volume",
+    "manga_volume",
+    type=int,
+    help="The volume of the series release",
+)
+@click.option(
+    "-c",
+    "--credit",
+    "rls_credit",
+    help="The ripper credit for this series",
+    show_default=True,
+    default="nao",
+)
+@click.option(
+    "-e",
+    "--email",
+    "rls_email",
+    help="The ripper email for this series",
+    show_default=True,
+    default="noaione@protonmail.com",
+)
+@use_bracket_type
+@time_program
+def pack_releases(
+    path_or_archive: Path,
+    manga_title: str,
+    manga_year: Optional[int],
+    manga_volume: int,
+    rls_credit: str,
+    rls_email: str,
+    bracket_type: Literal["square", "round", "curly"],
+):
+    """
+    Pack a release to a cbz/cbr/cb7 archive.
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    current_pst = datetime.now(timezone(timedelta(hours=-8)))
+    current_year = manga_year or current_pst.year
+
+    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
+    console.info("Trying to pack release...")
+    actual_filename = TARGET_TITLE.format(
+        mt=manga_title,
+        vol=f"v{manga_volume:02d}",
+        year=current_year,
+        c=rls_credit,
+        cpa=pair_left,
+        cpb=pair_right,
+    )
+
+    parent_dir = path_or_archive.parent
+    cbz_target = exporter.CBZMangaExporter(actual_filename, parent_dir)
+
+    cbz_target.set_comment(rls_email)
+    console.status("Packing... (0/???)")
+    idx = 1
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        for image, total_count in archive:
+            cbz_target.add_image(image.name, image.access())
+            console.status(f"Packing... ({idx}/{total_count})")
+            idx += 1
+    console.stop_status()
+    cbz_target.close()
