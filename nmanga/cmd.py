@@ -33,7 +33,7 @@ from .cli.color_level import color_level
 from .cli.join_spreads import spreads_join
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
-from .cli.releases import prepare_releases, pack_releases
+from .cli.releases import pack_releases, prepare_releases
 from .constants import __author__, __name__, __version__
 from .term import get_console
 
