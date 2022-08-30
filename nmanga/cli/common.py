@@ -197,15 +197,16 @@ def inquire_chapter_ranges(
     chapter_ranges: List[ChapterRange] = []
     while True:
         console.info(initial_prompt)
-        ch_title: Optional[str] = None
-        if ask_title:
-            ch_title = console.inquire("Chapter title", lambda y: len(y.strip()) > 0)
 
         ch_number = console.inquire("Chapter number", lambda y: int_or_float(y) is not None)
         ch_number = int_or_float(ch_number)
 
         ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
         actual_ranges, is_single = parse_ch_ranges(ch_ranges)
+
+        ch_title: Optional[str] = None
+        if ask_title:
+            ch_title = console.inquire("Chapter title", lambda y: len(y.strip()) > 0)
         simple_range = ChapterRange(ch_number, ch_title, actual_ranges, is_single)
         chapter_ranges.append(simple_range)
 
