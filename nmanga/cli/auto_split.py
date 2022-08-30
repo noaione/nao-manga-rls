@@ -33,12 +33,11 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import click
-from py7zr import FileInfo, SevenZipFile
 
 from .. import exporter, file_handler, term, utils
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection
-from .common import check_cbz_exist, create_chapter
+from .common import check_cbz_exist, create_chapter, time_program
 
 console = term.get_console()
 
@@ -48,7 +47,7 @@ console = term.get_console()
     help="Automatically split volumes into chapters using regex",
     cls=CatchAllExceptionsCommand,
 )
-@options.path_or_archive
+@options.path_or_archive()
 @click.option(
     "-t",
     "--title",
@@ -88,6 +87,7 @@ console = term.get_console()
     default=False,
     help="Mark the series as oneshot",
 )
+@time_program
 def auto_split(
     path_or_archive: Path,
     title: str,
@@ -147,39 +147,33 @@ def auto_split(
         # Read to memory, then dump to disk
         collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
         skipped_chapters: List[str] = []
-        for image, handler, _, _ in file_handler.collect_image_archive(file_path):
-            filename = image.filename
-            match_re = chapter_re.match(path.basename(filename))
-            if not match_re:
-                console.error(f"[{volume}][!] Unable to match chapter: {filename}")
-                console.error(f"[{volume}][!] Exiting...")
-                return 1
-            chapter_data = create_chapter(match_re, publisher is not None)
-            if chapter_data in skipped_chapters:
-                continue
-
-            if chapter_data not in collected_chapters:
-                if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
-                    console.warning(f"[{volume}][?] Skipping chapter: {chapter_data}")
-                    skipped_chapters.append(chapter_data)
+        with file_handler.MangaArchive(file_path) as archive:
+            for image, _ in archive:
+                filename = image.filename
+                match_re = chapter_re.match(path.basename(filename))
+                if not match_re:
+                    console.error(f"[{volume}][!] Unable to match chapter: {filename}")
+                    console.error(f"[{volume}][!] Exiting...")
+                    return 1
+                chapter_data = create_chapter(match_re, publisher is not None)
+                if chapter_data in skipped_chapters:
                     continue
-                console.info(f"[{volume}][+] Creating chapter: {chapter_data}")
-                collected_chapters[chapter_data] = exporter.CBZMangaExporter(
-                    utils.secure_filename(chapter_data), target_path
-                )
 
-            in_img = image
-            if isinstance(image, FileInfo):
-                in_img = [image.filename]
-            image_bita = handler.read(in_img)
-            if isinstance(handler, SevenZipFile):
-                handler.reset()
-                image_bita = list(image_bita.values())[0].read()
-            collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
+                if chapter_data not in collected_chapters:
+                    if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
+                        console.warning(f"[{volume}][?] Skipping chapter: {chapter_data}")
+                        skipped_chapters.append(chapter_data)
+                        continue
+                    console.info(f"[{volume}][+] Creating chapter: {chapter_data}")
+                    collected_chapters[chapter_data] = exporter.CBZMangaExporter(
+                        utils.secure_filename(chapter_data), target_path
+                    )
+
+                image_bita = archive.read(image)
+                collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
 
         for chapter, cbz_export in collected_chapters.items():
             console.info(f"[{volume}][+] Finishing chapter: {chapter}")
             cbz_export.close()
-        print()
-    console.info("Done!")
+        console.enter()
     return 0

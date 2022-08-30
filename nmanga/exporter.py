@@ -60,6 +60,9 @@ class MangaExporter:
             # Copy image
             target_path.write_bytes(image_data.read_bytes())
 
+    def set_comment(self, comment: Union[str, bytes]):
+        pass
+
     def close(self):
         pass
 
@@ -85,6 +88,11 @@ class CBZMangaExporter(MangaExporter):
             self._target_cbz.writestr(basename(image_name), image_data)
         else:
             self._target_cbz.write(str(image_data), basename(image_name))
+
+    def set_comment(self, comment: Union[str, bytes]):
+        if isinstance(comment, str):
+            comment = comment.encode("utf-8")
+        self._target_cbz.comment = comment
 
     def close(self):
         self._target_cbz.close()

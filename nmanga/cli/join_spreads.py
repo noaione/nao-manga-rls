@@ -36,6 +36,7 @@ import click
 from .. import file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_magick
+from .common import time_program
 
 console = term.get_console()
 _SpreadsRe = re.compile(r"[\d]{1,3}(-[\d]{1,3}){1,}")
@@ -89,7 +90,7 @@ class _ExportedImages(TypedDict):
 @click.command(
     name="spreads", help="Join multiple spreads into a single image", cls=CatchAllExceptionsCommand
 )
-@options.path_or_archive
+@options.path_or_archive(disable_archive=True)
 @click.option(
     "-q",
     "--quality",
@@ -117,6 +118,7 @@ class _ExportedImages(TypedDict):
     help="Reverse the order of the spreads (manga mode)",
 )
 @options.magick_path
+@time_program
 def spreads_join(
     path_or_archive: Path,
     quality: float,
@@ -161,24 +163,26 @@ def spreads_join(
     title_get: Optional[str] = None
     volume_get: Optional[str] = None
     console.info("Collecting image for spreads...")
-    for image, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
-        title_match = cmx_re.match(image.name)
-        if title_match is None:
-            console.error("Unmatching file name: {}".format(image.name))
-            return 1
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        for image, _ in archive:
+            title_match = cmx_re.match(image.name)
 
-        a_part = title_match.group("a")
-        b_part = title_match.group("b")
-        if not title_get:
-            title_get = title_match.group("t")
-        if not volume_get:
-            volume_get = title_match.group("vol")
-        if b_part:
-            continue
-        a_part = int(a_part)
-        for spd, spreads in valid_spreads_data.items():
-            if a_part in spreads:
-                exported_imgs[spd]["imgs"].append(image)
+            if title_match is None:
+                console.error("Unmatching file name: {}".format(image.name))
+                return 1
+
+            a_part = title_match.group("a")
+            b_part = title_match.group("b")
+            if not title_get:
+                title_get = title_match.group("t")
+            if not volume_get:
+                volume_get = title_match.group("vol")
+            if b_part:
+                continue
+            a_part = int(a_part)
+            for spd, spreads in valid_spreads_data.items():
+                if a_part in spreads:
+                    exported_imgs[spd]["imgs"].append(image.access())
 
     if title_get is None:
         console.error("Could not find the title")
@@ -217,4 +221,3 @@ def spreads_join(
                 mv(image, BACKUP_DIR / path.basename(image.name))
             except FileNotFoundError:
                 pass
-    console.info("Done")

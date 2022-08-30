@@ -58,20 +58,32 @@ class ConsoleChoice:
 
 
 class Console:
-    def __init__(self):
+    def __init__(self, debug_mode: bool = False):
+        self.__debug_mode = debug_mode
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True)
         self._status: Optional["RichStatus"] = None
 
+    def enable_debug(self):
+        self.__debug_mode = True
+
+    def disable_debug(self):
+        self.__debug_mode = False
+
+    def __wrap_theme(self, text: str, theme: str):
+        if self.__debug_mode:
+            return f"[{text}]"
+        return f"[[{theme}]{text}[/{theme}]]"
+
     def info(self, *args, **kwargs):
-        self.console.print("[[info]INFO[/info]]", *args, **kwargs)
+        self.console.print(self.__wrap_theme("INFO", "info"), *args, **kwargs)
 
     def warning(self, *args, **kwargs):
-        self.console.print("[[warning]WARN[/warning]]", *args, **kwargs)
+        self.console.print(self.__wrap_theme("WARN", "warning"), *args, **kwargs)
 
     def error(self, *args, **kwargs):
-        self.console.print("[[error]ERROR[/error]]", *args, **kwargs)
+        self.console.print(self.__wrap_theme("ERROR", "error"), *args, **kwargs)
 
-    def status(self, message: str, **kwargs_spinner_style):
+    def __beautiful_status(self, message: str, **kwargs_spinner_style):
         if not self._status:
             default = {}
             if self.is_advanced():
@@ -84,6 +96,16 @@ class Console:
             self._status.start()
         else:
             self._status.update(message, **kwargs_spinner_style)
+
+    def __debug_status(self, message: str):
+        # Rewrite message in same line, wipe out the previous message
+        self.console.print(message + "\r", end="")
+
+    def status(self, message: str, **kwargs_spinner_style):
+        if not self.__debug_mode:
+            self.__beautiful_status(message, **kwargs_spinner_style)
+        else:
+            self.__debug_status(message)
 
     @overload
     def stop_status(self) -> None:
@@ -99,9 +121,15 @@ class Console:
                 self._status.update(final_text)
             self._status.stop()
             self._status = None
+        elif self.__debug_mode:
+            if final_text is not None:
+                self.__debug_status(final_text)
+            # Print new line
+            self.console.print()
 
     def log(self, *args, **kwargs):
-        self.console.log("[[highlight]LOG[/highlight]]", *args, **kwargs)
+        if self.__debug_mode:
+            self.console.log(self.__wrap_theme("LOG", "highlight"), *args, **kwargs)
 
     def is_advanced(self):
         return not self.console.legacy_windows
@@ -164,7 +192,7 @@ class Console:
         # Custom inquirer
         inquired_text = default
         while True:
-            print_this = f"[[warning]?[/warning]] {prompt}"
+            print_this = f"{self.__wrap_theme('?', 'warning')} {prompt}"
             if default is not None:
                 print_this += f" [default: {default}]"
             input_temp = self.console.input(print_this + ": ")
@@ -180,7 +208,7 @@ class Console:
                     # Show error temporary and ask again
                     error_text = input_temp or "[No Input]"
                     self.console.print(
-                        "[[error]Error[/error]] Failed to validate input:",
+                        f"{self.__wrap_theme('ERROR', 'error')} Failed to validate input:",
                         error_text,
                     )
                     continue
@@ -192,6 +220,9 @@ class Console:
     def confirm(self, prompt: Optional[str] = None) -> bool:
         prompt = prompt or "Are you sure?"
         return inquirer.confirm(prompt, default=False)
+
+    def enter(self):
+        self.console.print()
 
     # Aliases
     warn = warning
