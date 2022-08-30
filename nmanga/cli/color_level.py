@@ -31,12 +31,11 @@ from os import path
 from pathlib import Path
 
 import click
-from py7zr import FileInfo as SevenZipInfo
-from py7zr import SevenZipFile
 
 from .. import exporter, file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, test_or_find_magick
+from .common import time_program
 
 console = term.get_console()
 
@@ -82,7 +81,7 @@ def execute_level(
 
 
 @click.command(name="level", help="Batch color level a cbz file or folder", cls=CatchAllExceptionsCommand)
-@options.path_or_archive
+@options.path_or_archive()
 @click.option(
     "-l",
     "--low",
@@ -116,6 +115,7 @@ def execute_level(
 )
 @options.magick_path
 @options.output_dir
+@time_program
 def color_level(
     path_or_archive: Path,
     low: float,
@@ -156,55 +156,33 @@ def color_level(
     is_first_time = True
     console.status("Processing: 1/???")
     counter = 1
-    for image, handler, total_img, type in file_handler.collect_image(path_or_archive):
-        console.status(f"Processing: {counter}/{total_img}")
-        if is_first_time:
-            is_first_time = False
-            if skip_first:
-                image_data = image
-                image_name = str(image)
-                if not isinstance(image, Path):
-                    input_img = image
-                    if isinstance(image, SevenZipInfo):
-                        input_img = [image.filename]
-                    image_data = handler.read(input_img)
-                    if isinstance(handler, SevenZipFile):
-                        handler.reset()
-                        image_data = list(image_data.values())[0].read()
-                    image_name = image.filename
-                else:
-                    image_data = image.read_bytes()
-                export_hdl.add_image(path.basename(image_name), image_data)
-                counter += 1
-                continue
-        if isinstance(image, Path) and isinstance(handler, Path):
-            temp_output = wrapped_func(input_file=image)
-            temp_output_file = temp_dir / temp_output
-            export_hdl.add_image(image.stem + ".png", temp_output_file)
-            temp_output_file.unlink(missing_ok=True)
-        elif isinstance(image, SevenZipInfo) and isinstance(handler, SevenZipFile):
-            temp_file = temp_dir / image.filename
-            for bio in handler.read([image.filename]).values():
-                temp_file.write_bytes(bio.read())
-            temp_output = wrapped_func(input_file=temp_file)
-            temp_output_file = temp_dir / temp_output
-            export_hdl.add_image(path.splitext(path.basename(image.filename))[0] + ".png", temp_output_file)
-            temp_output_file.unlink(missing_ok=True)
-            temp_file.unlink(missing_ok=True)
-            handler.reset()
-        else:
-            # image = cast(ZipInfo, image)
-            # handler = cast(ZipFile, handler)
-            temp_file = temp_dir / image.filename
-            temp_file.write_bytes(handler.read(image))
-            temp_output = wrapped_func(input_file=temp_file)
-            temp_output_file = temp_dir / temp_output
-            export_hdl.add_image(path.splitext(path.basename(image.filename))[0] + ".png", temp_output_file)
-            temp_output_file.unlink(missing_ok=True)
-            temp_file.unlink(missing_ok=True)
-        counter += 1
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        for image, total_img in archive:
+            console.status(f"Processing: {counter}/{total_img}")
+            if is_first_time:
+                is_first_time = False
+                if skip_first:
+                    image_bita = archive.read(image)
+                    image_name: str = getattr(image, "name", getattr(image, "filename"))
+                    export_hdl.add_image(path.basename(image_name), image_bita)
+
+            if not image.is_archive():
+                temp_output = wrapped_func(input_file=image)
+                temp_output_file = temp_dir / temp_output
+                export_hdl.add_image(image.stem + ".png", temp_output_file)
+                temp_output_file.unlink(missing_ok=True)
+            else:
+                image_name = path.basename(str(image.filename))
+                temp_file = temp_dir / image_name
+                temp_file.write_bytes(archive.read(image))
+                temp_output = wrapped_func(input_file=temp_file)
+                temp_output_file = temp_dir / temp_output
+                export_hdl.add_image(path.splitext(image_name)[0] + ".png", temp_output_file)
+                temp_output_file.unlink(missing_ok=True)
+                temp_file.unlink(missing_ok=True)
+            counter += 1
+
     console.stop_status()
     export_hdl.close()
     console.info("Removing temp folder: {}".format(temp_dir))
     file_handler.remove_folder_and_contents(temp_dir)
-    console.info("Done!")

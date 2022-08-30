@@ -31,10 +31,10 @@ from pathlib import Path
 from typing import List, Optional
 
 import click
-from py7zr import FileInfo, SevenZipFile
 
 from .. import exporter, file_handler, term
 from .base import CatchAllExceptionsCommand
+from .common import time_program
 
 console = term.get_console()
 
@@ -68,6 +68,7 @@ def _clean_filename(output_name: Optional[str]) -> Optional[str]:
     default=None,
     help="Override the output file, will default to first input if not provided!",
 )
+@time_program
 def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
     if len(archives) < 2:
         console.error("You must provide at least two archives to merge!")
@@ -84,15 +85,10 @@ def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
             return 1
 
         console.info(f"[+] Merging: {archive.stem}")
-        for image, handler, _, _ in file_handler.collect_image(archive):
-            in_img = image
-            if isinstance(image, FileInfo):
-                in_img = [image.filename]
-            image_bita = handler.read(in_img)
-            if isinstance(handler, SevenZipFile):
-                handler.reset()
-                image_bita = list(image_bita.values())[0].read()
-            target_cbz.add_image(path.basename(image.filename), image_bita)
+        with file_handler.MangaArchive(archive) as archive_file:
+            for image, _ in archive_file:
+                image_name = path.basename(getattr(image, "name", getattr(image, "filename")))
+                target_cbz.add_image(image_name, archive_file.read(image))
         console.info(f"[+] Merged: {archive.stem}")
         archive.unlink(missing_ok=True)
 
@@ -105,4 +101,4 @@ def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
         actual_name = first_name
         output_path.rename(target_name)
 
-    console.info(f"[+] Done! Output file: {actual_name}")
+    console.info(f"[+] Output file: {actual_name}")

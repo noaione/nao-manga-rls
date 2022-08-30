@@ -33,7 +33,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Pattern, Union
 
 import click
-from py7zr import FileInfo, SevenZipFile
 
 from .. import exporter, file_handler, term, utils
 from . import options
@@ -45,6 +44,7 @@ from .common import (
     create_chapter,
     inquire_chapter_ranges,
     safe_int,
+    time_program,
 )
 
 console = term.get_console()
@@ -78,6 +78,8 @@ def coerce_number_page(number: Union[int, float]) -> str:
 
 def _collect_custom_page():
     custom_data: Dict[str, int] = {}
+    console.enter()
+    console.info("Please input the custom page mapping:")
     while True:
         page = console.inquire("Page number", lambda y: safe_int(y) is not None)
         page_number = int(page)
@@ -88,6 +90,7 @@ def _collect_custom_page():
         do_more = console.confirm("Do you want to add another naming?")
         if not do_more:
             break
+    console.enter()
     return custom_data
 
 
@@ -103,64 +106,57 @@ def _collect_archive_to_chapters(
 
     collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
     skipped_chapters: List[str] = []
-    for image, handler, _, _ in file_handler.collect_image_archive(archive_file):
-        filename = image.filename
-        page_numbers = extract_page_num(path.basename(filename), custom_data, regex_data)
+    with file_handler.MangaArchive(archive_file) as archive:
+        for image, _ in archive:
+            filename = image.filename
+            page_numbers = extract_page_num(path.basename(filename), custom_data, regex_data)
 
-        first_page = page_numbers[0]
-        selected_chapter: ChapterRange = None
-        for chapter in chapters_mapping:
-            if chapter.is_single:
-                if first_page >= chapter.range[0]:
-                    selected_chapter = chapter
-                    break
-            else:
-                if first_page in chapter.range:
-                    selected_chapter = chapter
-                    break
+            first_page = page_numbers[0]
+            selected_chapter: ChapterRange = None
+            for chapter in chapters_mapping:
+                if chapter.is_single:
+                    if first_page >= chapter.range[0]:
+                        selected_chapter = chapter
+                        break
+                else:
+                    if first_page in chapter.range:
+                        selected_chapter = chapter
+                        break
 
-        if selected_chapter is None:
-            console.warning(f"Page {first_page} is not in any chapter ranges, skipping!")
-            continue
-
-        chapter_info = PseudoChapterMatch()
-        as_bnum = selected_chapter.bnum.split("x", 1)
-        chapter_info.set("ch", as_bnum[0])
-        if len(as_bnum) > 1:
-            chapter_info.set("ex", "x" + as_bnum[1])
-        if volume_num is not None:
-            chapter_info.set("vol", f"v{volume_num:02d}")
-        if selected_chapter.name is not None:
-            chapter_info.set("title", selected_chapter.name)
-
-        chapter_data = create_chapter(chapter_info)
-        if chapter_data in skipped_chapters:
-            continue
-
-        if chapter_data not in collected_chapters:
-            if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
-                console.warning(f"[?] Skipping chapter: {chapter_data}")
-                skipped_chapters.append(chapter_data)
+            if selected_chapter is None:
+                console.warning(f"Page {first_page} is not in any chapter ranges, skipping!")
                 continue
-            console.info(f"[+] Creating chapter: {chapter_data}")
-            collected_chapters[chapter_data] = exporter.CBZMangaExporter(
-                utils.secure_filename(chapter_data), target_path
-            )
 
-        in_img = image
-        if isinstance(image, FileInfo):
-            in_img = [image.filename]
-        image_bita = handler.read(in_img)
-        if isinstance(handler, SevenZipFile):
-            handler.reset()
-            image_bita = list(image_bita.values())[0].read()
+            chapter_info = PseudoChapterMatch()
+            as_bnum = selected_chapter.bnum.split("x", 1)
+            chapter_info.set("ch", as_bnum[0])
+            if len(as_bnum) > 1:
+                chapter_info.set("ex", "x" + as_bnum[1])
+            if volume_num is not None:
+                chapter_info.set("vol", f"v{volume_num:02d}")
+            if selected_chapter.name is not None:
+                chapter_info.set("title", selected_chapter.name)
 
-        collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
+            chapter_data = create_chapter(chapter_info)
+            if chapter_data in skipped_chapters:
+                continue
+
+            if chapter_data not in collected_chapters:
+                if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
+                    console.warning(f"[?] Skipping chapter: {chapter_data}")
+                    skipped_chapters.append(chapter_data)
+                    continue
+                console.info(f"[+] Creating chapter: {chapter_data}")
+                collected_chapters[chapter_data] = exporter.CBZMangaExporter(
+                    utils.secure_filename(chapter_data), target_path
+                )
+
+            collected_chapters[chapter_data].add_image(path.basename(filename), archive.read(image))
 
     for chapter, cbz_export in collected_chapters.items():
         console.info(f"[+] Finishing chapter: {chapter}")
         cbz_export.close()
-    print()
+    console.enter()
 
 
 def _handle_page_number_mode(
@@ -222,7 +218,7 @@ def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mod
     help="Manually split volumes into chapters using multiple modes",
     cls=CatchAllExceptionsCommand,
 )
-@options.path_or_archive
+@options.path_or_archive(disable_folder=True)
 @click.option(
     "-vol",
     "--volume",
@@ -232,6 +228,7 @@ def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mod
     help="The volume number for the archive",
     default=None,
 )
+@time_program
 def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
     """
     Manually split volumes into chapters using multiple modes
@@ -265,4 +262,3 @@ def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
     else:
         console.error("Unknown mode selected!")
         return 1
-    console.info("Done!")
