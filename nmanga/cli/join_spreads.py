@@ -165,10 +165,10 @@ def spreads_join(
     console.info("Collecting image for spreads...")
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, _ in archive:
-            title_match = cmx_re.match(image.name)
+            title_match = cmx_re.match(image.filename)
 
             if title_match is None:
-                console.error("Unmatching file name: {}".format(image.name))
+                console.error("Unmatching file name: {}".format(image.filename))
                 return 1
 
             a_part = title_match.group("a")

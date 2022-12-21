@@ -31,8 +31,9 @@ from mimetypes import types_map
 from os import path
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import List, Union
+from typing import Generator, List, Tuple, Union
 
+import ftfy
 import py7zr
 from unrar.cffi import rarfile
 
@@ -226,19 +227,23 @@ class MangaImage:
             raise TypeError(f"Unknown type: {type(self.__accessor)}")
 
     def __str__(self):
-        return self.name
+        return self.filename
 
     @property
     def filename(self):
         """Shortcut for the image filename."""
-        return self.name
+        try:
+            return ftfy.fix_encoding(self.name)
+        except Exception:
+            # In a absurd case that it fail miserably, just return the original name.
+            return self.name
 
     @property
     def stem(self):
         """Return the final component of the image filename without the extension."""
         if isinstance(self.__accessor, Path):
             return self.__accessor.stem
-        return path.splitext(self.name)[0]
+        return path.splitext(self.filename)[0]
 
     @property
     def suffix(self):
@@ -248,7 +253,7 @@ class MangaImage:
         """
         if isinstance(self.__accessor, Path):
             return self.__accessor.suffix
-        extension = path.splitext(self.name)[-1]
+        extension = path.splitext(self.filename)[-1]
         return extension if extension.startswith(".") else f".{extension}"
 
     def access(self):
@@ -351,7 +356,7 @@ class MangaArchive:
         elif isinstance(self.__accessor, tarfile.TarFile):
             return self.__accessor.getmembers()
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[Tuple[MangaImage, int], None, None]:
         self.__check_open()
         if isinstance(self.__accessor, Path):
             for file, _, count, _ in collect_image_from_folder(self.__path):
