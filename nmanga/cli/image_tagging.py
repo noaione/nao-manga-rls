@@ -67,6 +67,7 @@ def _is_default_path(path: str) -> bool:
     "-vol",
     "--volume",
     "manga_volume",
+    required=True,
     type=int,
     help="The volume of the series release",
 )
