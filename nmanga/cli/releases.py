@@ -24,7 +24,6 @@ SOFTWARE.
 
 # Prepare manga for releasing to the public
 
-import subprocess as sp
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Literal, Optional
@@ -34,7 +33,14 @@ import click
 from .. import exporter, file_handler, term
 from . import options
 from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_exiftool
-from .common import ChapterRange, inquire_chapter_ranges, safe_int, time_program
+from .common import (
+    BRACKET_MAPPINGS,
+    ChapterRange,
+    inject_metadata,
+    inquire_chapter_ranges,
+    safe_int,
+    time_program,
+)
 
 console = term.get_console()
 TARGET_FORMAT = "{mt} - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
@@ -45,22 +51,6 @@ __all__ = (
     "prepare_releases",
     "pack_releases",
 )
-
-use_bracket_type = click.option(
-    "-br",
-    "--bracket-type",
-    "bracket_type",
-    default="square",
-    help="Bracket to use to surround the ripper name",
-    show_default=True,
-    type=click.Choice(["square", "round", "curly"]),
-)
-
-BRACKET_MAPPINGS = {
-    "square": ["[", "]"],
-    "round": ["(", ")"],
-    "curly": ["{", "}"],
-}
 
 
 def _is_default_path(path: str) -> bool:
@@ -78,26 +68,6 @@ class SpecialNaming:
     def __init__(self, page: int, data: str):
         self.page = page
         self.data = data
-
-
-def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):
-    base_cmd = [exiftool_dir]
-    update_tags = {
-        "XPComment": image_email,
-        "Artist": image_email,
-        "XPAuthor": image_email,
-        "XPTitle": image_title,
-        "ImageDescription": image_title,
-        "Title": image_title,
-        "Description": image_title,
-    }
-    for tag, value in update_tags.items():
-        base_cmd.append(f"-{tag}={value}")
-    base_cmd.append("-overwrite_original_in_place")
-    full_dir = current_directory.resolve() / "*"
-    base_cmd.append(str(full_dir))
-    proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    proc.wait()
 
 
 @click.command(
@@ -160,7 +130,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
     help="Do exif metadata tagging on the files.",
 )
 @options.exiftool_path
-@use_bracket_type
+@options.use_bracket_type
 @time_program
 def prepare_releases(
     path_or_archive: Path,
@@ -346,7 +316,7 @@ def prepare_releases(
     show_default=True,
     default="noaione@protonmail.com",
 )
-@use_bracket_type
+@options.use_bracket_type
 @time_program
 def pack_releases(
     path_or_archive: Path,

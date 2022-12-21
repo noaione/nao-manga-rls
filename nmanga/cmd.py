@@ -30,6 +30,7 @@ import click
 
 from .cli.auto_split import auto_split
 from .cli.color_level import color_level
+from .cli.image_tagging import image_tagging
 from .cli.join_spreads import spreads_join
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
@@ -81,6 +82,7 @@ main.add_command(merge_chapters)
 main.add_command(pack_releases)
 main.add_command(prepare_releases)
 main.add_command(spreads_join)
+main.add_command(image_tagging)
 
 
 if __name__ == "__main__":

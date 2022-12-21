@@ -92,3 +92,12 @@ debug_mode = click.option(
     default=False,
     help="Enable debug mode",
 )
+use_bracket_type = click.option(
+    "-br",
+    "--bracket-type",
+    "bracket_type",
+    default="square",
+    help="Bracket to use to surround the ripper name",
+    show_default=True,
+    type=click.Choice(["square", "round", "curly"]),
+)

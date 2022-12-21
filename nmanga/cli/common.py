@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import subprocess as sp
 import time
 from pathlib import Path
 from typing import Dict, List, Match, Optional, Tuple, Union
@@ -29,6 +30,7 @@ from typing import Dict, List, Match, Optional, Tuple, Union
 from .. import term, utils
 
 __all__ = (
+    "BRACKET_MAPPINGS",
     "PseudoChapterMatch",
     "ChapterRange",
     "check_cbz_exist",
@@ -37,10 +39,17 @@ __all__ = (
     "inquire_chapter_ranges",
     "safe_int",
     "time_program",
+    "inject_metadata",
 )
 
 
 console = term.get_console()
+
+BRACKET_MAPPINGS = {
+    "square": ["[", "]"],
+    "round": ["(", ")"],
+    "curly": ["{", "}"],
+}
 
 
 class PseudoChapterMatch:
@@ -232,3 +241,38 @@ def time_program(func):
         return result
 
     return wrapper
+
+
+def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):
+    resolve_dir = current_directory.resolve()
+    any_jpg = len(list(resolve_dir.glob("*.jp[e]?g"))) > 0
+    any_tiff = len(list(resolve_dir.glob("*.tiff"))) > 0
+    if not any_jpg and not any_tiff:
+        console.warning("No valid images found in directory, skipping metadata injection")
+        return
+    base_cmd = [exiftool_dir]
+    update_tags = {
+        "XPComment": image_email,
+        "Artist": image_email,
+        "XPAuthor": image_email,
+        "XPTitle": image_title,
+        "ImageDescription": image_title,
+        "Title": image_title,
+        "Description": image_title,
+    }
+    for tag, value in update_tags.items():
+        base_cmd.append(f"-{tag}={value}")
+    base_cmd.append("-overwrite_original_in_place")
+    if any_jpg:
+        full_dir = current_directory.resolve() / "*.jpg"
+        base_cmd.append(str(full_dir))
+        console.info("Injecting metadata into JP(e)G files...")
+        proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait()
+        base_cmd.pop()
+    if any_tiff:
+        full_dir = current_directory.resolve() / "*.tiff"
+        base_cmd.append(str(full_dir))
+        console.info("Injecting metadata into TIFF files...")
+        proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait()
