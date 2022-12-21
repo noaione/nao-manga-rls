@@ -25,7 +25,7 @@ SOFTWARE.
 __name__ = "nmanga"
 __author__ = "noaione"
 __author_email__ = "noaione@n4o.xyz"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __license__ = "MIT"
 __copyright__ = "Copyright (c) 2022-present noaione"
 
