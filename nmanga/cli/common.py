@@ -84,6 +84,11 @@ class ChapterRange:
             return f"<ChapterRange c{self.number} - {self.name}>"
         return f"<ChapterRange c{self.number:03d} - {self.name}>"
 
+    def __eq__(self, other: Union[int, float, "ChapterRange"]):
+        if isinstance(other, ChapterRange):
+            other = other.number
+        return self.number == other
+
     @property
     def bnum(self):
         if isinstance(self.number, int):
@@ -94,6 +99,20 @@ class ChapterRange:
             # Handle split chapter (.1, .2, etc)
             floating -= 4
         return f"{int(base):03d}x{floating}"
+
+    @property
+    def base(self):
+        if isinstance(self.number, int):
+            return self.number
+        b, _ = str(self.number).split(".")
+        return int(b)
+
+    @property
+    def floating(self) -> Optional[int]:
+        if not isinstance(self.number, float):
+            return None
+        _, f = str(self.number).split(".")
+        return int(f)
 
 
 def check_cbz_exist(base_path: Path, filename: str):
@@ -145,7 +164,7 @@ def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: 
         chapter_data = f"{chapter_vol:02d}.{act_ch_num}"
     else:
         chapter_data = act_ch_num
-    if chapter_extra is not None:
+    if chapter_extra is not None and chapter_actual is None:
         add_num = int(chapter_extra[1:])
         if "." not in chapter_extra:
             add_num += 4

@@ -26,7 +26,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import click
 
@@ -43,8 +43,8 @@ from .common import (
 )
 
 console = term.get_console()
-TARGET_FORMAT = "{mt} - c{ch} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
-TARGET_FORMAT_ALT = "{mt} - c{ch} ({vol}) - p{pg}{ex}[dig] [{pb}] [{c}]"  # noqa
+TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
+TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[dig] [{pb}] [{c}]"  # noqa
 TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
 
 __all__ = (
@@ -170,6 +170,13 @@ def prepare_releases(
         "Do you want to add another release?",
         has_ch_title,
     )
+    rls_information.sort(key=lambda x: x.number)
+
+    packing_extra: Dict[int, List[ChapterRange]] = {}
+    for info in rls_information:
+        if info.base not in packing_extra:
+            packing_extra[info.base] = []
+        packing_extra[info.base].append(info)
 
     special_naming: Dict[int, SpecialNaming] = {}
     do_special_get = console.confirm("Do you want to add some special naming?")
@@ -223,13 +230,33 @@ def prepare_releases(
         if p01_copy in special_naming:
             extra_name = f" [{special_naming[p01_copy].data}] "
 
-        chapter_num = selected_range.bnum
+        chapter_num = f"{selected_range.base:03d}"
+        pack_data = packing_extra[selected_range.base]
+        pack_data.sort(key=lambda x: x.number)
+        chapter_ex_data = ""
+        if len(pack_data) > 1:
+            smallest = pack_data[1].floating
+            for pack in pack_data:
+                if pack.floating is not None and pack.floating < smallest:
+                    smallest = pack.floating
+            if smallest is not None and selected_range.floating is not None:
+                # Check if we should append the custom float data
+                if smallest >= 5:
+                    # We don't need to append the float data
+                    float_act = selected_range.floating - 4
+                    chapter_num += f"x{float_act}"
+                else:
+                    idx = pack_data.index(selected_range)
+                    chapter_ex_data = f" (c{chapter_num}.{selected_range.floating})"
+                    chapter_num += f"x{idx}"
+
         ch_title_name = selected_range.name
         extension = image.suffix
 
         final_filename = TARGET_FORMAT_ALT.format(
             mt=manga_title,
             ch=chapter_num,
+            chex=chapter_ex_data,
             vol=vol,
             pg=p01,
             ex=extra_name,
@@ -240,6 +267,7 @@ def prepare_releases(
             final_filename = TARGET_FORMAT.format(
                 mt=manga_title,
                 ch=chapter_num,
+                chex=chapter_ex_data,
                 vol=vol,
                 pg=p01,
                 ex=extra_name,
