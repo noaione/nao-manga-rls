@@ -2,7 +2,7 @@
 
 This repo contains stuff that I use to release and collect manga from a certain cat website.
 
-All my release use the `[nao]` tag.
+All my release use the `[nao]` or `(TooManyIsekai)` tag.
 
 ## Released Stuff
 See here: https://shigoto.n4o.xyz/manga
@@ -21,7 +21,8 @@ You can find it on a certain cat website.
 ## Requirements
 - Python 3.7+
 - imagemagick (for `level` and `spreads` command)
-- exiftool (for `releases`, optional)
+- exiftool (for `releases` and `tag`, optional)
+- pingo (for `releases` and `optimize`, optional)
 
 ## Scripts
 This repo also have a module or script to release and split stuff up.
@@ -41,7 +42,7 @@ This will install this project which then you can use the command `nmanga` to ex
 Same as the old auto split script, this command accept some parameter.
 
 ```py
-Usage: nmanga autosplit [OPTIONS] FOLDER_OR_ARCHIVE_FILE
+Usage: nmanga autosplit [OPTIONS] PATH_OR_ARCHIVE_FILE
 
   Automatically split volumes into chapters using regex
 
@@ -84,7 +85,7 @@ Recommended parameters:
 Same as the old manual split script, this command accept some parameter and will then ask a series of question.
 
 ```py
-Usage: nmanga manualsplit [OPTIONS] FOLDER_OR_ARCHIVE_FILE
+Usage: nmanga manualsplit [OPTIONS] ARCHIVE_FILE
 
   Manually split volumes into chapters using multiple modes
 
@@ -135,27 +136,92 @@ The `ARCHIVE_FILES` input can be repeated as many times as you want!
 **Note**<br />
 The archive file will be deleted in favor of the new one!
 
+#### `optimize`
+Optimize images with pingo
+
+```py
+Usage: nmanga optimize [OPTIONS] FOLDER_PATH
+
+  Optimize images with pingo
+
+Options:
+  -ax, --aggressive BOOLEAN  [default: False]
+  -pe, --pingo-exec TEXT     Path to the pingo executable  [default: pingo]
+  -h, --help                 Show this message and exit.
+```
+
+`--aggressive`, use `-jpgtype=1` for JPEG.<br />
+`--pingo-exec`, the path to pingo executable.
+
+It will automatically detect for the relevant images and apply "opinionated" optimization.
+
+- JPG: `-s0 -strip` (also include `-jpgtype=1` if `--aggressive`)
+- PNG: `-sb -strip`
+- WEBP: `-s9 -strip`
+
+It's recommended to run this before tagging the image!
+
+#### `pack`
+Pack a release to a `.cbz` archive.
+
+```py
+Usage: nmanga pack [OPTIONS] FOLDER_PATH
+
+  Pack a release to a cbz archive.
+
+Options:
+  -t, --title TEXT                The title of the series  [required]
+  -y, --year INTEGER              The year of the series release
+  -vol, --volume INTEGER          The volume of the series release
+  -c, --credit TEXT               The ripper credit for this series  [default:      
+                                  nao]
+  -e, --email TEXT                The ripper email for this series  [default:       
+                                  noaione@protonmail.com]
+  -br, --bracket-type [square|round|curly]
+                                  Bracket to use to surround the ripper name        
+                                  [default: square]
+  -h, --help                      Show this message and exit.
+```
+
+`--title`, the series title<br />
+`--year`, the series year (will be used for exif tagging)<br />
+`--volume`, the volume number<br />
+`--credit`, the ripped/group name<br />
+`--email`, will be used for exif tagging<br />
+`--bracket-type`, the bracket to be used.
+
+This will zipped all of the images in a folder.
+And will also add your email to the archive comment.
+
 #### `releases`
 Create a release from `comix` formatted filename.
 
 ```py
-Usage: nmanga releases [OPTIONS] FOLDER_OR_ARCHIVE_FILE
+Usage: nmanga releases [OPTIONS] FOLDER_PATH
 
   Prepare a release of a manga series.
 
 Options:
-  -t, --title TEXT           The title of the series  [required]
-  -y, --year INTEGER         The year of the series release
-  -pub, --publisher TEXT     The publisher of the series  [required]
-  -c, --credit TEXT          The ripper credit for this series  [default: nao]
-  -e, --email TEXT           The ripper email for this series  [default:
-                             noaione@protonmail.com]
-  -hq, --is-high-quality     Whether this is a high quality release
-  --tag / --no-tag           Do exif metadata tagging on the files.  [default:
-                             tag]
-  -ee, --exiftool-exec TEXT  Path to the exiftool executable  [default:
-                             exiftool]
-  -h, --help                 Show this message and exit.
+  -t, --title TEXT                The title of the series  [required]
+  -y, --year INTEGER              The year of the series release
+  -pub, --publisher TEXT          The publisher of the series  [required]
+  -c, --credit TEXT               The ripper credit for this series  [default:      
+                                  nao]
+  -e, --email TEXT                The ripper email for this series  [default:       
+                                  noaione@protonmail.com]
+  -hq, --is-high-quality          Whether this is a high quality release
+  --tag / --no-tag                Do exif metadata tagging on the files.
+                                  [default: tag]
+  --optimize / --no-optimize      Optimize the images using pingo.  [default:       
+                                  no-optimize]
+  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:        
+                                  exiftool]
+  -pe, --pingo-exec TEXT          Path to the pingo executable  [default:
+                                  pingo]
+  -br, --bracket-type [square|round|curly]
+                                  Bracket to use to surround the ripper name        
+                                  [default: square]
+  -h, --help                      Show this message and exit.
 ```
 
 `--title`, the series title<br />
@@ -164,7 +230,9 @@ Options:
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
-`--tag/--no-tag`, do exif tagging.
+`--tag/--no-tag`, do exif tagging.<br />
+`--optimize/--no-optimize`, optimize image with pingo<br />
+`--bracket-type`, the bracket to be used.
 
 After you mark the folder or archive, you will be asked a series of question.
 You can enter all the information and after that the program will rename everything and tag according to your specification.
@@ -200,3 +268,36 @@ The filename also must match something like this:
 - `Manga Title - vXX - pXXX`
 
 This will also make a `backup` folder which contains the unmerged images (in case something went wrong.)
+
+#### `tag`
+Tag images with exif metadata, only works for `.tiff` and `.jpg` files!
+
+```py
+Usage: nmanga tag [OPTIONS] FOLDER_PATH
+
+  Tag images with metadata
+
+Options:
+  -t, --title TEXT                The title of the series  [required]
+  -vol, --volume INTEGER          The volume of the series release  [required]      
+  -y, --year INTEGER              The year of the series release
+  -c, --credit TEXT               The ripper credit for this series  [default:      
+                                  nao]
+  -e, --email TEXT                The ripper email for this series  [default:       
+                                  noaione@protonmail.com]
+  -br, --bracket-type [square|round|curly]
+                                  Bracket to use to surround the ripper name        
+                                  [default: square]
+  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:        
+                                  exiftool]
+  -h, --help                      Show this message and exit.
+```
+
+`--title`, the series title<br />
+`--year`, the series year (will be used for exif tagging)<br />
+`--volume`, the volume number<br />
+`--credit`, the ripped/group name<br />
+`--email`, will be used for exif tagging<br />
+`--bracket-type`, the bracket to be used.
+
+This will automatically find any valid images that can be tagged with exif metadata and apply it!
