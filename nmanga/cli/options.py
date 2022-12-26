@@ -84,6 +84,14 @@ exiftool_path = click.option(
     help="Path to the exiftool executable",
     show_default=True,
 )
+pingo_path = click.option(
+    "-pe",
+    "--pingo-exec",
+    "pingo_path",
+    default="pingo",
+    help="Path to the pingo executable",
+    show_default=True,
+)
 debug_mode = click.option(
     "-v",
     "--verbose",

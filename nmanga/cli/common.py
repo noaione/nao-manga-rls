@@ -40,6 +40,7 @@ __all__ = (
     "safe_int",
     "time_program",
     "inject_metadata",
+    "optimize_images",
 )
 
 
@@ -295,3 +296,40 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
         console.info("Injecting metadata into TIFF files...")
         proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait()
+
+
+def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = False):
+    resolve_dir = target_directory.resolve()
+    any_jpg = len(list(resolve_dir.glob("*.jp[e]?g"))) > 0
+    any_png = len(list(resolve_dir.glob("*.png"))) > 0
+    any_webp = len(list(resolve_dir.glob("*.webp"))) > 0
+
+    base_cmd = [pingo_path, "-strip"]
+    if any_jpg:
+        pingo_cmd = base_cmd[:] + ["-s0"]
+        if aggresive:
+            pingo_cmd.append("-jpgtype=1")
+        pingo_cmd.append(str(resolve_dir / "*.jpg"))
+        console.status("Optimizing JP(e)G files...")
+        proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait()
+        console.stop_status("Optimized JP(e)G files!")
+        console.enter()
+
+    if any_png:
+        pingo_cmd = base_cmd[:] + ["-sb"]
+        pingo_cmd.append(str(resolve_dir / "*.png"))
+        console.status("Optimizing PNG files...")
+        proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait()
+        console.stop_status("Optimized PNG files!")
+        console.enter()
+
+    if any_webp:
+        pingo_cmd = base_cmd[:] + ["-s9"]
+        pingo_cmd.append(str(resolve_dir / "*.webp"))
+        console.status("Optimizing WEBP files...")
+        proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait()
+        console.stop_status("Optimized WEBP files!")
+        console.enter()

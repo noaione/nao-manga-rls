@@ -32,12 +32,19 @@ import click
 
 from .. import exporter, file_handler, term
 from . import options
-from .base import CatchAllExceptionsCommand, RegexCollection, test_or_find_exiftool
+from .base import (
+    CatchAllExceptionsCommand,
+    RegexCollection,
+    is_executeable_global_path,
+    test_or_find_exiftool,
+    test_or_find_pingo,
+)
 from .common import (
     BRACKET_MAPPINGS,
     ChapterRange,
     inject_metadata,
     inquire_chapter_ranges,
+    optimize_images,
     safe_int,
     time_program,
 )
@@ -51,17 +58,6 @@ __all__ = (
     "prepare_releases",
     "pack_releases",
 )
-
-
-def _is_default_path(path: str) -> bool:
-    path = path.lower()
-    if path == "exiftool":
-        return True
-    if path == "./exiftool":
-        return True
-    if path == ".\\exiftool":
-        return True
-    return False
 
 
 class SpecialNaming:
@@ -129,7 +125,15 @@ class SpecialNaming:
     show_default=True,
     help="Do exif metadata tagging on the files.",
 )
+@click.option(
+    "--optimize/--no-optimize",
+    "do_img_optimize",
+    default=False,
+    show_default=True,
+    help="Optimize the images using pingo.",
+)
 @options.exiftool_path
+@options.pingo_path
 @options.use_bracket_type
 @time_program
 def prepare_releases(
@@ -141,7 +145,9 @@ def prepare_releases(
     rls_email: str,
     is_high_quality: bool,
     do_exif_tagging: bool,
+    do_img_optimize: bool,
     exiftool_path: str,
+    pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
 ):
     """
@@ -159,10 +165,14 @@ def prepare_releases(
 
     pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
 
-    force_search = not _is_default_path(exiftool_path)
-    exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
+    force_search_exif = not is_executeable_global_path(exiftool_path, "exiftool")
+    exiftool_exe = test_or_find_exiftool(exiftool_path, force_search_exif)
     if exiftool_exe is None and do_exif_tagging:
         console.warning("Exiftool not found, will skip tagging image with exif metadata!")
+    force_search_pingo = not is_executeable_global_path(pingo_path, "pingo")
+    pingo_exe = test_or_find_pingo(pingo_path, force_search_pingo)
+    if pingo_exe is None and do_img_optimize:
+        console.warning("Pingo not found, will skip optimizing image!")
 
     has_ch_title = console.confirm("Does this release have chapter titles?")
     rls_information = inquire_chapter_ranges(
@@ -303,6 +313,9 @@ def prepare_releases(
         current += 1
     console.stop_status()
 
+    if pingo_exe is not None and do_img_optimize:
+        console.info("Optimizing images...")
+        optimize_images(pingo_exe, path_or_archive)
     if exiftool_exe is not None and do_exif_tagging:
         console.info("Tagging images with exif metadata...")
         inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)

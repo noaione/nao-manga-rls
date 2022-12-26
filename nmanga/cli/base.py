@@ -39,6 +39,9 @@ __all__ = (
     "RegexCollection",
     "UnrecoverableNMangaError",
     "test_or_find_magick",
+    "test_or_find_exiftool",
+    "test_or_find_pingo",
+    "is_executeable_global_path",
 )
 
 
@@ -91,6 +94,27 @@ def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Opti
         return exiftool_path or (None if not force_search else _find_exec_path("exiftool"))
     except OSError:
         return None if not force_search else _find_exec_path("exiftool")
+
+
+def test_or_find_pingo(pingo_path: str, force_search: bool = True) -> Optional[str]:
+    try:
+        success = _test_exec([pingo_path])
+        if not success:
+            return None if not force_search else _find_exec_path("pingo")
+        return pingo_path or (None if not force_search else _find_exec_path("pingo"))
+    except OSError:
+        return None if not force_search else _find_exec_path("pingo")
+
+
+def is_executeable_global_path(path: str, executable: str) -> bool:
+    path = path.lower()
+    if path == executable:
+        return True
+    if path == f"./{executable}":
+        return True
+    if path == f".\\{executable}":
+        return True
+    return False
 
 
 class CatchAllExceptionsCommand(click.Command):

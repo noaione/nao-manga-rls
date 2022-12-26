@@ -26,28 +26,18 @@ SOFTWARE.
 # This file is part of nmanga.
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Literal
 
 import click
 
 from .. import term
 from . import options
-from .base import CatchAllExceptionsCommand, test_or_find_exiftool
+from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_exiftool
 from .common import BRACKET_MAPPINGS, inject_metadata, time_program
 
 console = term.get_console()
 TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
-
-
-def _is_default_path(path: str) -> bool:
-    path = path.lower()
-    if path == "exiftool":
-        return True
-    if path == "./exiftool":
-        return True
-    if path == ".\\exiftool":
-        return True
-    return False
 
 
 @click.command(
@@ -99,7 +89,7 @@ def _is_default_path(path: str) -> bool:
 @options.exiftool_path
 @time_program
 def image_tagging(
-    path_or_archive: str,
+    path_or_archive: Path,
     manga_title: str,
     manga_volume: int,
     manga_year: int,
@@ -118,7 +108,7 @@ def image_tagging(
             param_hint="path_or_archive",
         )
 
-    force_search = not _is_default_path(exiftool_path)
+    force_search = not is_executeable_global_path(exiftool_path, "exiftool")
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
     if exiftool_exe is None:
         console.error("Exiftool not found, unable to tag image with exif metadata!")
