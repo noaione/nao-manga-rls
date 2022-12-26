@@ -249,6 +249,14 @@ def prepare_releases(
                     idx = pack_data.index(selected_range)
                     chapter_ex_data = f" (c{chapter_num}.{selected_range.floating})"
                     chapter_num += f"x{idx}"
+        else:
+            floaty = selected_range.floating
+            if floaty is not None:
+                if floaty >= 5:
+                    chapter_num += f"x{floaty - 4}"
+                else:
+                    chapter_ex_data = f" (c{chapter_num}.{floaty})"
+                    chapter_num += "x1"
 
         ch_title_name = selected_range.name
         extension = image.suffix
