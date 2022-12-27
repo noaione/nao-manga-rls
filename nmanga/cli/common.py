@@ -265,7 +265,7 @@ def time_program(func):
 
 def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):
     resolve_dir = current_directory.resolve()
-    any_jpg = len(list(resolve_dir.glob("*.jp[e]?g"))) > 0
+    any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_tiff = len(list(resolve_dir.glob("*.tiff"))) > 0
     if not any_jpg and not any_tiff:
         console.warning("No valid images found in directory, skipping metadata injection")
@@ -300,7 +300,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
 
 def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = False):
     resolve_dir = target_directory.resolve()
-    any_jpg = len(list(resolve_dir.glob("*.jp[e]?g"))) > 0
+    any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_png = len(list(resolve_dir.glob("*.png"))) > 0
     any_webp = len(list(resolve_dir.glob("*.webp"))) > 0
 
@@ -313,7 +313,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
         console.status("Optimizing JP(e)G files...")
         proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait()
-        console.stop_status("Optimized JP(e)G files!")
+        console.stop_status("Optimized JPG files!")
         console.enter()
 
     if any_png:
