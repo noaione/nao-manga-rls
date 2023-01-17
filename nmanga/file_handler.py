@@ -26,6 +26,7 @@ import random
 import tarfile
 import tempfile
 import zipfile
+from copy import deepcopy
 from enum import Enum
 from mimetypes import types_map
 from os import path
@@ -57,6 +58,15 @@ __all__ = (
     "remove_folder_and_contents",
     "random_name",
 )
+extended_types_map = deepcopy(types_map)
+# modern image formats
+extended_types_map[".avif"] = "image/avif"
+extended_types_map[".webp"] = "image/webp"
+extended_types_map[".heic"] = "image/heic"
+extended_types_map[".heif"] = "image/heif"
+extended_types_map[".jxl"] = "image/jxl"
+# jpeg2000
+extended_types_map[".jp2"] = "image/jp2"
 
 
 class YieldType(Enum):
@@ -85,7 +95,7 @@ class WrappedRarFile(rarfile.RarFile):
 
 
 def is_image(file_name: str) -> bool:
-    return types_map.get(path.splitext(file_name)[-1], "").startswith("image/")
+    return extended_types_map.get(path.splitext(file_name)[-1], "").startswith("image/")
 
 
 def collect_image_from_cbz(cbz_file: zipfile.ZipFile):
