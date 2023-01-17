@@ -343,11 +343,10 @@ def prepare_releases(
     help="The year of the series release",
 )
 @click.option(
-    "-vol",
-    "--volume",
-    "manga_volume",
-    type=int,
-    help="The volume of the series release",
+    "-vol", "--volume", "manga_volume", type=int, help="The volume of the series release", default=None
+)
+@click.option(
+    "-ch", "--chapter", "manga_chapter", type=int, help="The chapter of the series release", default=None
 )
 @click.option(
     "-c",
@@ -371,7 +370,8 @@ def pack_releases(
     path_or_archive: Path,
     manga_title: str,
     manga_year: Optional[int],
-    manga_volume: int,
+    manga_volume: Optional[int],
+    manga_chapter: Optional[int],
     rls_credit: str,
     rls_email: str,
     bracket_type: Literal["square", "round", "curly"],
@@ -389,11 +389,22 @@ def pack_releases(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
+    volume_text: Optional[str] = None
+    if manga_chapter is not None:
+        volume_text = f"{manga_chapter:03d}"
+    if manga_volume is not None:
+        volume_text = f"v{manga_volume:02d}"
+    if volume_text is None:
+        raise click.BadParameter(
+            "Please provide either a chapter or a volume number.",
+            param_hint="manga_volume",
+        )
+
     pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
     console.info("Trying to pack release...")
     actual_filename = TARGET_TITLE.format(
         mt=manga_title,
-        vol=f"v{manga_volume:02d}",
+        vol=volume_text,
         year=current_year,
         c=rls_credit,
         cpa=pair_left,

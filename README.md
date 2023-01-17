@@ -173,6 +173,7 @@ Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -vol, --volume INTEGER          The volume of the series release
+  -ch, --chapter INTEGER          The chapter of the series release
   -c, --credit TEXT               The ripper credit for this series  [default:      
                                   nao]
   -e, --email TEXT                The ripper email for this series  [default:       
@@ -186,12 +187,19 @@ Options:
 `--title`, the series title<br />
 `--year`, the series year (will be used for exif tagging)<br />
 `--volume`, the volume number<br />
+`--chapter`, the chapter number<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--bracket-type`, the bracket to be used.
 
 This will zipped all of the images in a folder.
 And will also add your email to the archive comment.
+
+For `--volume` and `--chapter`, provide one of them and the packed zip will be a bit different.
+- `--volume`: `Manga Title vXX (20xx) (Digital) (XXX)`
+- `--chapter`: `Manga Title XXX (20xx) (Digital) (XXX)`
+
+If you provide both, `--volume` will take priority.
 
 #### `releases`
 Create a release from `comix` formatted filename.
