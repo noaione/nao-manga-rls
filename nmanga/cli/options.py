@@ -52,6 +52,24 @@ def path_or_archive(disable_archive: bool = False, disable_folder: bool = False)
     )
 
 
+class FloatIntParamType(click.ParamType):
+    name = "int_or_float"
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, int):
+            return value
+
+        try:
+            if "." in value:
+                return float(value)
+            return int(value)
+        except ValueError:
+            self.fail(f"{value!r} is not a valid integer or floating type", param, ctx)
+
+
+FLOAT_INT = FloatIntParamType()
+
+
 archive_file = click.argument(
     "archive_file",
     metavar="ARCHIVE_FILE",
@@ -108,4 +126,20 @@ use_bracket_type = click.option(
     help="Bracket to use to surround the ripper name",
     show_default=True,
     type=click.Choice(["square", "round", "curly"]),
+)
+manga_volume = click.option(
+    "-vol",
+    "--volume",
+    "manga_volume",
+    type=int,
+    help="The volume of the series release",
+    default=None,
+)
+manga_chapter = click.option(
+    "-ch",
+    "--chapter",
+    "manga_chapter",
+    type=FLOAT_INT,
+    help="The chapter of the series release",
+    default=None,
 )

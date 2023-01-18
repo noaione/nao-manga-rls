@@ -26,7 +26,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Union
 
 import click
 
@@ -342,12 +342,8 @@ def prepare_releases(
     type=int,
     help="The year of the series release",
 )
-@click.option(
-    "-vol", "--volume", "manga_volume", type=int, help="The volume of the series release", default=None
-)
-@click.option(
-    "-ch", "--chapter", "manga_chapter", type=int, help="The chapter of the series release", default=None
-)
+@options.manga_volume
+@options.manga_chapter
 @click.option(
     "-c",
     "--credit",
@@ -371,7 +367,7 @@ def pack_releases(
     manga_title: str,
     manga_year: Optional[int],
     manga_volume: Optional[int],
-    manga_chapter: Optional[int],
+    manga_chapter: Optional[Union[int, float]],
     rls_credit: str,
     rls_email: str,
     bracket_type: Literal["square", "round", "curly"],
@@ -391,7 +387,15 @@ def pack_releases(
 
     volume_text: Optional[str] = None
     if manga_chapter is not None:
-        volume_text = f"{manga_chapter:03d}"
+        if isinstance(manga_chapter, float):
+            float_string = str(manga_chapter)
+            base_float, decimal_float = float_string.split(".")
+            dec_float = int(decimal_float)
+            if dec_float - 4 > 0:
+                dec_float -= 4
+            volume_text = f"{int(base_float):03d}x{dec_float}"
+        else:
+            volume_text = f"{manga_chapter:03d}"
     if manga_volume is not None:
         volume_text = f"v{manga_volume:02d}"
     if volume_text is None:

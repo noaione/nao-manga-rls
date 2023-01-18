@@ -27,7 +27,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional, Union
 
 import click
 
@@ -53,14 +53,8 @@ TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
     required=True,
     help="The title of the series",
 )
-@click.option(
-    "-vol",
-    "--volume",
-    "manga_volume",
-    required=True,
-    type=int,
-    help="The volume of the series release",
-)
+@options.manga_volume
+@options.manga_chapter
 @click.option(
     "-y",
     "--year",
@@ -91,7 +85,8 @@ TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
 def image_tagging(
     path_or_archive: Path,
     manga_title: str,
-    manga_volume: int,
+    manga_volume: Optional[int],
+    manga_chapter: Optional[Union[int, float]],
     manga_year: int,
     rls_credit: str,
     rls_email: str,
@@ -117,10 +112,29 @@ def image_tagging(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
+    volume_text: Optional[str] = None
+    if manga_chapter is not None:
+        if isinstance(manga_chapter, float):
+            float_string = str(manga_chapter)
+            base_float, decimal_float = float_string.split(".")
+            dec_float = int(decimal_float)
+            if dec_float - 4 > 0:
+                dec_float -= 4
+            volume_text = f"{int(base_float):03d}x{dec_float}"
+        else:
+            volume_text = f"{manga_chapter:03d}"
+    if manga_volume is not None:
+        volume_text = f"v{manga_volume:02d}"
+    if volume_text is None:
+        raise click.BadParameter(
+            "Please provide either a chapter or a volume number.",
+            param_hint="manga_volume",
+        )
+
     pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
     image_title = TARGET_TITLE.format(
         mt=manga_title,
-        vol=f"{manga_volume:02d}",
+        vol=volume_text,
         year=current_year,
         c=rls_credit,
         cpa=pair_left,
