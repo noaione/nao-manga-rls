@@ -199,7 +199,7 @@ def spreads_join(
         temp_output_path = path_or_archive / temp_output
         temp_output_path.rename(final_path)
         current += 1
-    console.stop_status()
+    console.stop_status(f"Joined {total_match_spread} spreads")
 
     BACKUP_DIR = path_or_archive / "backup"
     BACKUP_DIR.mkdir(exist_ok=True)

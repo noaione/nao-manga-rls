@@ -182,7 +182,7 @@ def color_level(
                 temp_file.unlink(missing_ok=True)
             counter += 1
 
-    console.stop_status()
+    console.stop_status(f"Processed: {counter}/{counter}")
     export_hdl.close()
     console.info("Removing temp folder: {}".format(temp_dir))
     file_handler.remove_folder_and_contents(temp_dir)

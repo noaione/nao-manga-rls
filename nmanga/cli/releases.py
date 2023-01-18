@@ -314,7 +314,7 @@ def prepare_releases(
         image.rename(new_name)
         console.status(f"Processing: {current}/{total_img}")
         current += 1
-    console.stop_status()
+    console.stop_status(f"Processed {current - 1} images!")
 
     if pingo_exe is not None and do_img_optimize:
         console.info("Optimizing images...")
@@ -429,7 +429,7 @@ def pack_releases(
             cbz_target.add_image(image.name, image.access())
             console.status(f"Packing... ({idx}/{total_count})")
             idx += 1
-    console.stop_status()
+    console.stop_status(f"Packed ({idx}/{total_count})")
     cbz_target.close()
 
 
