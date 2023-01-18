@@ -121,6 +121,8 @@ class Console:
                 self._status.update(final_text)
             self._status.stop()
             self._status = None
+            if final_text is not None:
+                self.info(final_text)
         elif self.__debug_mode:
             if final_text is not None:
                 self.__debug_status(final_text)
