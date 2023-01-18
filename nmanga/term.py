@@ -62,6 +62,7 @@ class Console:
         self.__debug_mode = debug_mode
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True)
         self._status: Optional["RichStatus"] = None
+        self.__last_known_status: Optional[str] = None
 
     def enable_debug(self):
         self.__debug_mode = True
@@ -102,6 +103,7 @@ class Console:
         self.console.print(message + "\r", end="")
 
     def status(self, message: str, **kwargs_spinner_style):
+        self.__last_known_status = message
         if not self.__debug_mode:
             self.__beautiful_status(message, **kwargs_spinner_style)
         else:
@@ -116,6 +118,7 @@ class Console:
         ...
 
     def stop_status(self, final_text: Optional[str] = None) -> None:
+        final_text = final_text or self.__last_known_status
         if self._status:
             if final_text is not None:
                 self._status.update(final_text)
