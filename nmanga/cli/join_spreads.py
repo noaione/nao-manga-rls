@@ -155,17 +155,16 @@ def spreads_join(
         matched_data = [int(x) for x in matched_data]
         valid_spreads_data[f"spread_{idx}"] = matched_data
 
-    cmx_re = RegexCollection.cmx_re()
+    page_re = RegexCollection.page_re()
 
     exported_imgs: Dict[str, _ExportedImages] = {
         x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()
     }
-    title_get: Optional[str] = None
-    volume_get: Optional[str] = None
+    initial_text: Optional[str] = None
     console.info("Collecting image for spreads...")
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, _ in archive:
-            title_match = cmx_re.match(image.filename)
+            title_match = page_re.match(image.filename)
 
             if title_match is None:
                 console.error("Unmatching file name: {}".format(image.filename))
@@ -173,25 +172,15 @@ def spreads_join(
 
             a_part = title_match.group("a")
             b_part = title_match.group("b")
-            if not title_get:
-                title_get = title_match.group("t")
-            if not volume_get:
-                volume_get = title_match.group("vol")
+            initial_text = title_match.group("any")
             if b_part:
                 continue
             a_part = int(a_part)
             for spd, spreads in valid_spreads_data.items():
                 if a_part in spreads:
                     exported_imgs[spd]["imgs"].append(image.access())
+    initial_text = initial_text or ""
 
-    if title_get is None:
-        console.error("Could not find the title")
-        return 1
-    if volume_get is None:
-        console.error("Could not find the volume")
-        return 1
-
-    title_get = title_get.rstrip()
     total_match_spread = len(list(exported_imgs.keys()))
     current = 1
     for spread, imgs in exported_imgs.items():
@@ -204,7 +193,7 @@ def spreads_join(
         last_val = pattern[-1]
 
         extension = path.splitext(temp_output)[1]
-        final_filename = f"{title_get} - {volume_get} - p{first_val:03d}-{last_val:03d}"
+        final_filename = f"{initial_text}p{first_val:03d}-{last_val:03d}"
         final_filename += extension
         final_path = path_or_archive / final_filename
         temp_output_path = path_or_archive / temp_output

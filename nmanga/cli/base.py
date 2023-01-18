@@ -180,3 +180,7 @@ class RegexCollection:
     @classmethod
     def cmx_re(cls) -> Pattern[str]:
         return re.compile(r"(?P<t>.*)\- \(?(?P<vol>v[\d]{1,2})\)? - p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?")
+
+    @classmethod
+    def page_re(cls) -> Pattern[str]:
+        return re.compile(r"(?P<any>.*)p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?")
