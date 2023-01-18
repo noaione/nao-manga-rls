@@ -27,6 +27,7 @@ SOFTWARE.
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Union
+from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 
 import click
 
@@ -53,10 +54,12 @@ console = term.get_console()
 TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
 TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[dig] [{pb}] [{c}]"  # noqa
 TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
+TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 
 __all__ = (
     "prepare_releases",
     "pack_releases",
+    "pack_releases_epub_mode",
 )
 
 
@@ -428,3 +431,104 @@ def pack_releases(
             idx += 1
     console.stop_status()
     cbz_target.close()
+
+
+@click.command(
+    name="packepub",
+    help="Pack a release to an epub archive.",
+    cls=CatchAllExceptionsCommand,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-t",
+    "--title",
+    "epub_title",
+    required=True,
+    help="The title of the series",
+)
+@click.option(
+    "-s",
+    "--source",
+    "epub_source",
+    required=True,
+    help="The source where this is ripped from",
+)
+@options.manga_volume
+@click.option(
+    "-c",
+    "--credit",
+    "rls_credit",
+    help="The ripper credit for this series",
+    show_default=True,
+    default="nao",
+)
+@time_program
+def pack_releases_epub_mode(
+    path_or_archive: Path,
+    epub_title: str,
+    epub_source: str,
+    manga_volume: Optional[int],
+    rls_credit: str,
+):
+    """
+    Pack a release to an epub archive.
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+    if manga_volume is None:
+        raise click.BadParameter(
+            "Please provide a volume number.",
+            param_hint="manga_volume",
+        )
+
+    console.info("Trying to pack release...")
+    actual_filename = TARGET_TITLE_NOVEL.format(
+        mt=epub_title,
+        c=rls_credit,
+        vol=f"v{manga_volume:02d}",
+        source=epub_source,
+    )
+
+    parent_dir = path_or_archive.parent
+    save_target = parent_dir / f"{actual_filename}.epub"
+    epub_target = ZipFile(save_target, "w", ZIP_DEFLATED)
+    epub_target.writestr("mimetype", "application/epub+zip", compress_type=ZIP_STORED)
+
+    # Check valid
+    if not (path_or_archive / "META-INF").exists():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a valid epub directory. Please provide a valid epub directory.",
+            param_hint="path_or_archive",
+        )
+
+    console.status("Packing... (0/???)")
+    idx = 1
+    for path in path_or_archive.rglob("*"):
+        if path.name == "mimetype":
+            continue
+        if path.is_file():
+            epub_target.write(path, path.name)
+            console.status(f"Packing... ({idx}/???)")
+            idx += 1
+    console.stop_status(f"Packed ({idx}/{idx})")
+    epub_target.close()
+
+    MIMETYPE_MAGIC = b"mimetypeapplication/epub+zip"
+    ZIP_MAGIC = b"PK\x03\x04"
+
+    # Verify
+    console.info("Verifying...")
+    with save_target.open("rb") as fp:
+        fp.seek(0)
+        read_meta = fp.read(120)  # should be good enough
+    if not read_meta.startswith(ZIP_MAGIC):
+        console.error("Failed to pack EPUB. Please try again.")
+        return 1
+
+    if MIMETYPE_MAGIC not in read_meta:
+        console.warning("We successfully packed the EPUB, but it is not a valid EPUB (mimetype is missing).")
+        return 1
