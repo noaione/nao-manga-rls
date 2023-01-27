@@ -24,6 +24,7 @@ SOFTWARE.
 
 # Join spreads from a directory of images.
 
+from dataclasses import dataclass
 import re
 import subprocess as sp
 from os import path
@@ -60,16 +61,23 @@ def make_prefix_convert(magick_exe: str):
     return ["magick", "convert"]
 
 
+@dataclass
+class _ExportedImage:
+    path: Path
+    prefix: Optional[str] = None
+    postfix: Optional[str] = None
+
+
 def execute_spreads_join(
-    magick_dir: str, quality: float, input_imgs: List[Path], out_dir: Path, reverse_mode: bool
+    magick_dir: str, quality: float, input_imgs: List[_ExportedImage], out_dir: Path, reverse_mode: bool
 ):
-    extensions = [x.suffix for x in input_imgs]
+    extensions = [x.path.suffix for x in input_imgs]
     select_ext = ".jpg"
     if ".png" in extensions:
         select_ext = ".png"
     output_name = file_handler.random_name() + select_ext
     execute_this = make_prefix_convert(magick_dir)
-    input_imgs.sort(key=lambda x: x.name)
+    input_imgs.sort(key=lambda x: x.path.name)
     if reverse_mode:
         input_imgs.reverse()
     execute_this += list(map(str, input_imgs))
@@ -83,7 +91,7 @@ def execute_spreads_join(
 
 
 class _ExportedImages(TypedDict):
-    imgs: List[Path]
+    imgs: List[_ExportedImage]
     pattern: List[int]
 
 
@@ -160,11 +168,10 @@ def spreads_join(
     exported_imgs: Dict[str, _ExportedImages] = {
         x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()
     }
-    initial_text: Optional[str] = None
     console.info("Collecting image for spreads...")
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, _ in archive:
-            title_match = page_re.match(image.filename)
+            title_match = page_re.match(image.stem)
 
             if title_match is None:
                 console.error("Unmatching file name: {}".format(image.filename))
@@ -172,14 +179,15 @@ def spreads_join(
 
             a_part = title_match.group("a")
             b_part = title_match.group("b")
-            initial_text = title_match.group("any")
+            prefix_text = title_match.group("any")
+            postfix_text = title_match.group("anyback")
             if b_part:
                 continue
             a_part = int(a_part)
             for spd, spreads in valid_spreads_data.items():
                 if a_part in spreads:
-                    exported_imgs[spd]["imgs"].append(image.access())
-    initial_text = initial_text or ""
+                    im_data = _ExportedImage(image.access(), prefix_text, postfix_text)
+                    exported_imgs[spd]["imgs"].append(im_data)
 
     total_match_spread = len(list(exported_imgs.keys()))
     current = 1
@@ -191,9 +199,12 @@ def spreads_join(
         pattern.sort()
         first_val = pattern[0]
         last_val = pattern[-1]
+        first_img = imgs["imgs"][0]
+        pre_t = first_img.prefix or ""
+        post_t = first_img.postfix or ""
 
         extension = path.splitext(temp_output)[1]
-        final_filename = f"{initial_text}p{first_val:03d}-{last_val:03d}"
+        final_filename = f"{pre_t}p{first_val:03d}-{last_val:03d}{post_t}"
         final_filename += extension
         final_path = path_or_archive / final_filename
         temp_output_path = path_or_archive / temp_output

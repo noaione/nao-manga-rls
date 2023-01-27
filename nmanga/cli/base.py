@@ -183,4 +183,4 @@ class RegexCollection:
 
     @classmethod
     def page_re(cls) -> Pattern[str]:
-        return re.compile(r"(?P<any>.*)p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?")
+        return re.compile(r"(?P<any>.*)p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?(?P<anyback>.*)")
