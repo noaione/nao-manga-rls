@@ -218,6 +218,6 @@ def spreads_join(
     for img_data in exported_imgs.values():
         for image in img_data["imgs"]:
             try:
-                mv(image, BACKUP_DIR / path.basename(image.name))
+                mv(image.path, BACKUP_DIR / path.basename(image.path.name))
             except FileNotFoundError:
                 pass
