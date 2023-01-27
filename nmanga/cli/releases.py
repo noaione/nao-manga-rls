@@ -429,7 +429,7 @@ def pack_releases(
             cbz_target.add_image(image.name, image.access())
             console.status(f"Packing... ({idx}/{total_count})")
             idx += 1
-    console.stop_status(f"Packed ({idx}/{total_count})")
+    console.stop_status(f"Packed ({idx - 1}/{total_count})")
     cbz_target.close()
 
 
@@ -507,14 +507,13 @@ def pack_releases_epub_mode(
 
     console.status("Packing... (0/???)")
     idx = 1
-    for path in path_or_archive.rglob("*"):
+    for path in path_or_archive.glob("**/*"):
         if path.name == "mimetype":
             continue
-        if path.is_file():
-            epub_target.write(path, path.name)
-            console.status(f"Packing... ({idx}/???)")
-            idx += 1
-    console.stop_status(f"Packed ({idx}/{idx})")
+        console.status(f"Packing... ({idx}/???)")
+        epub_target.write(path, path.relative_to(path_or_archive))
+        idx += 1
+    console.stop_status(f"Packed ({idx - 1}/{idx})")
     epub_target.close()
 
     MIMETYPE_MAGIC = b"mimetypeapplication/epub+zip"
