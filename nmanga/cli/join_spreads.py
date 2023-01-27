@@ -80,7 +80,7 @@ def execute_spreads_join(
     input_imgs.sort(key=lambda x: x.path.name)
     if reverse_mode:
         input_imgs.reverse()
-    execute_this += list(map(str, input_imgs))
+    execute_this += list(map(lambda x: str(x.path), input_imgs))
     execute_this += ["-quality", f"{quality:.2f}%", "+append", f"{out_dir / output_name}"]
     try:
         sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
