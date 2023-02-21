@@ -24,9 +24,9 @@ SOFTWARE.
 
 # Join spreads from a directory of images.
 
-from dataclasses import dataclass
 import re
 import subprocess as sp
+from dataclasses import dataclass
 from os import path
 from pathlib import Path
 from shutil import move as mv

@@ -27,7 +27,7 @@ SOFTWARE.
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Union
-from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
+from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import click
 
