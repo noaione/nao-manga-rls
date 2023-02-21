@@ -82,14 +82,7 @@ class SpecialNaming:
     required=True,
     help="The title of the series",
 )
-@click.option(
-    "-y",
-    "--year",
-    "manga_year",
-    default=None,
-    type=int,
-    help="The year of the series release",
-)
+@options.manga_year
 @click.option(
     "-pub",
     "--publisher",
@@ -97,22 +90,9 @@ class SpecialNaming:
     help="The publisher of the series",
     required=True,
 )
-@click.option(
-    "-c",
-    "--credit",
-    "rls_credit",
-    help="The ripper credit for this series",
-    show_default=True,
-    default="nao",
-)
-@click.option(
-    "-e",
-    "--email",
-    "rls_email",
-    help="The ripper email for this series",
-    show_default=True,
-    default="noaione@protonmail.com",
-)
+@options.rls_credit
+@options.rls_email
+@options.rls_revision
 @click.option(
     "-hq",
     "--is-high-quality",
@@ -146,6 +126,7 @@ def prepare_releases(
     publisher: str,
     rls_credit: str,
     rls_email: str,
+    rls_revision: int,
     is_high_quality: bool,
     do_exif_tagging: bool,
     do_img_optimize: bool,
@@ -177,6 +158,15 @@ def prepare_releases(
     if pingo_exe is None and do_img_optimize:
         console.warning("Pingo not found, will skip optimizing image!")
 
+    cmx_re = RegexCollection.cmx_re()
+    console.status("Checking folder contents...")
+    for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
+        title_match = cmx_re.match(image.name)
+        if title_match is None:
+            console.error("Unmatching file name: {}".format(image.name))
+            return 1
+    console.stop_status("Checking folder contents... done!")
+
     has_ch_title = console.confirm("Does this release have chapter titles?")
     rls_information = inquire_chapter_ranges(
         "Please input information regarding this release...",
@@ -207,10 +197,10 @@ def prepare_releases(
 
     console.info("Preparing release...")
     console.info(f"Has {len(rls_information)} chapters")
-    cmx_re = RegexCollection.cmx_re()
     current = 1
     console.info("Processing: 1/???")
     image_titling: Optional[str] = None
+    vol_oshot_warn = False
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = cmx_re.match(image.name)
         if title_match is None:
@@ -223,6 +213,11 @@ def prepare_releases(
         vol = title_match.group("vol")
         if p02 is not None:
             p01 = f"{p01}-{p02}"
+        if vol is None:
+            vol = "OShot"
+            if not vol_oshot_warn:
+                vol_oshot_warn = True
+                console.warning("Volume is not specified, using OShot (Oneshot) as default!")
 
         # print(p01_copy)
         selected_range: ChapterRange = None
@@ -298,6 +293,8 @@ def prepare_releases(
             )
         if is_high_quality:
             final_filename += r" {HQ}"
+        if rls_revision > 1:
+            final_filename += " {r%d}" % rls_revision
 
         if not image_titling:
             image_titling = TARGET_TITLE.format(
@@ -308,6 +305,8 @@ def prepare_releases(
                 cpa=pair_left,
                 cpb=pair_right,
             )
+            if rls_revision > 1:
+                image_titling += " (v%d)" % rls_revision
 
         final_filename += extension
         new_name = image.parent / final_filename
@@ -337,32 +336,12 @@ def prepare_releases(
     required=True,
     help="The title of the series",
 )
-@click.option(
-    "-y",
-    "--year",
-    "manga_year",
-    default=None,
-    type=int,
-    help="The year of the series release",
-)
+@options.manga_year
 @options.manga_volume
 @options.manga_chapter
-@click.option(
-    "-c",
-    "--credit",
-    "rls_credit",
-    help="The ripper credit for this series",
-    show_default=True,
-    default="nao",
-)
-@click.option(
-    "-e",
-    "--email",
-    "rls_email",
-    help="The ripper email for this series",
-    show_default=True,
-    default="noaione@protonmail.com",
-)
+@options.rls_credit
+@options.rls_email
+@options.rls_revision
 @options.use_bracket_type
 @time_program
 def pack_releases(
@@ -373,6 +352,7 @@ def pack_releases(
     manga_chapter: Optional[Union[int, float]],
     rls_credit: str,
     rls_email: str,
+    rls_revision: int,
     bracket_type: Literal["square", "round", "curly"],
 ):
     """
@@ -417,6 +397,8 @@ def pack_releases(
         cpa=pair_left,
         cpb=pair_right,
     )
+    if rls_revision > 1:
+        actual_filename += " (v%d)" % rls_revision
 
     parent_dir = path_or_archive.parent
     cbz_target = exporter.CBZMangaExporter(actual_filename, parent_dir)
@@ -454,14 +436,7 @@ def pack_releases(
     help="The source where this is ripped from",
 )
 @options.manga_volume
-@click.option(
-    "-c",
-    "--credit",
-    "rls_credit",
-    help="The ripper credit for this series",
-    show_default=True,
-    default="nao",
-)
+@options.rls_credit
 @time_program
 def pack_releases_epub_mode(
     path_or_archive: Path,

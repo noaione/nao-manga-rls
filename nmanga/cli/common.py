@@ -298,6 +298,30 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
         proc.wait()
 
 
+def _run_pingo_and_verify(pingo_cmd: List[str]):
+    proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    proc.wait()
+
+    stdout = proc.stdout.read().decode("utf-8")
+    stderr = proc.stderr.read().decode("utf-8")
+    # Merge both stdout and stderr
+    output = stdout + stderr
+
+    # The pingo output is formatted like this:
+    # pingo - (87.76s):
+    # -----------------------------------------------------------------
+    # 188 files => 12.32 MB - (5.39%) saved
+    # -----------------------------------------------------------------
+    # We want to extract the last line, which contains the percentage
+    for line in output.splitlines():
+        line = line.strip()
+        if line.endswith("\n"):
+            line = line[:-1]
+        if line.casefold().endswith("saved"):
+            return line
+    return None  # unknown result
+
+
 def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = False):
     resolve_dir = target_directory.resolve()
     any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
@@ -311,25 +335,31 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
             pingo_cmd.append("-jpgtype=1")
         pingo_cmd.append(str(resolve_dir / "*.jpg"))
         console.status("Optimizing JP(e)G files...")
-        proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        proc.wait()
-        console.stop_status("Optimized JPG files!")
+        proc = _run_pingo_and_verify(pingo_cmd)
+        end_msg = "Optimized JPG files!"
+        if proc is not None:
+            end_msg += f" [{proc}]"
+        console.stop_status(end_msg)
         console.enter()
 
     if any_png:
         pingo_cmd = base_cmd[:] + ["-sb"]
         pingo_cmd.append(str(resolve_dir / "*.png"))
         console.status("Optimizing PNG files...")
-        proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        proc.wait()
-        console.stop_status("Optimized PNG files!")
+        proc = _run_pingo_and_verify(pingo_cmd)
+        end_msg = "Optimized PNG files!"
+        if proc is not None:
+            end_msg += f" [{proc}]"
+        console.stop_status(end_msg)
         console.enter()
 
     if any_webp:
         pingo_cmd = base_cmd[:] + ["-s9"]
         pingo_cmd.append(str(resolve_dir / "*.webp"))
         console.status("Optimizing WEBP files...")
-        proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        proc.wait()
-        console.stop_status("Optimized WEBP files!")
+        proc = _run_pingo_and_verify(pingo_cmd)
+        end_msg = "Optimized WEBP files!"
+        if proc is not None:
+            end_msg += f" [{proc}]"
+        console.stop_status(end_msg)
         console.enter()

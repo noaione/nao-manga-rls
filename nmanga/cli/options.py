@@ -143,3 +143,44 @@ manga_chapter = click.option(
     help="The chapter of the series release",
     default=None,
 )
+manga_ripper = click.option(
+    "-ch",
+    "--chapter",
+    "manga_chapter",
+    type=FLOAT_INT,
+    help="The chapter of the series release",
+    default=None,
+)
+manga_year = click.option(
+    "-y",
+    "--year",
+    "manga_year",
+    default=None,
+    type=int,
+    help="The year of the series release",
+)
+rls_credit = click.option(
+    "-c",
+    "--credit",
+    "rls_credit",
+    help="The ripper credit for this series",
+    show_default=True,
+    default="nao",
+)
+rls_email = click.option(
+    "-e",
+    "--email",
+    "rls_email",
+    help="The ripper email for this series",
+    show_default=True,
+    default="noaione@protonmail.com",
+)
+rls_revision = click.option(
+    "-r",
+    "--revision",
+    "rls_revision",
+    help="The revision of the release, if the number 1 provided it will not put in the filename",
+    type=click.IntRange(min=1, max_open=True),
+    default=1,
+    show_default=True,
+)
