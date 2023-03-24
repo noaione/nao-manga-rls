@@ -70,7 +70,7 @@ The regex should match something like this:
 - `Manga Title - c001 (v01) - p000 [Cover] [dig] [Publisher Name?] [Group] {HQ}.jpg`
 - `Manga Title - c001 (v01) - p001 [dig] [Publisher Name?] [Group] {HQ}.jpg`
 
-This should match most of the release from a certain cat website (`danke`, `LuCaZ`, `1r0n`, etc.)
+This should match most of the release from a certain cat website (`danke`, `LuCaZ`, `1r0n`, `nao`, etc.)
 
 #### ~~`level`~~
 
@@ -272,8 +272,9 @@ Options:
 `--spreads`, the spread information, can be repeated (ex: `-s 3-4 -s 99-100` will merge page 3 and 4 together.)<br />
 `--reverse`, reverse the order of the spread (recommended for manga/RTL)
 
-The filename also must match something like this:
-- `Manga Title - vXX - pXXX`
+The filename should have the minimum format like this: `pXXX`<br />
+The prefix `p` is important to differentiate it from any other text in the filename.
+Everything else is ignored and will be included on the final filename.
 
 This will also make a `backup` folder which contains the unmerged images (in case something went wrong.)
 
