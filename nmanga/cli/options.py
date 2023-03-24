@@ -173,7 +173,7 @@ rls_email = click.option(
     "rls_email",
     help="The ripper email for this series",
     show_default=True,
-    default="noaione@protonmail.com",
+    default="noaione@protonmail.ch",
 )
 rls_revision = click.option(
     "-r",
