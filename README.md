@@ -72,14 +72,14 @@ The regex should match something like this:
 
 This should match most of the release from a certain cat website (`danke`, `LuCaZ`, `1r0n`, etc.)
 
-#### `level`
-Automatically batch color level an archive or folder containing images.<br />
-This can be useful to some VIZ release since sometimes the "black" color is not really that "black" (ex. `#202020` instead of `#000000`)
+#### ~~`level`~~
 
-Recommended parameters:
-- Darkest color at `#231f20`: `-l 13 -h 100 --gray -skip`
-- Darkest color at `#202020`: `-l 13 -h 100 --gray -skip`
-- Darkest color page at `#000`: `-l 0 -h 100 --gray` (Set as grayscale)
+**Deprecated/Removed!**
+
+Use `magick mogrify` instead.
+
+Example:
+- `magick mogrify -format png -alpha off -colorspace Gray -level 12.75%,100% -path ./output/ ./target/*.jpg`
 
 #### `manualsplit`
 Same as the old manual split script, this command accept some parameter and will then ask a series of question.

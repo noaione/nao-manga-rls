@@ -29,7 +29,6 @@ from pathlib import Path
 import click
 
 from .cli.auto_split import auto_split
-from .cli.color_level import color_level
 from .cli.image_optimizer import image_optimizer
 from .cli.image_tagging import image_tagging
 from .cli.join_spreads import spreads_join
@@ -77,7 +76,6 @@ def main(ctx: click.Context, verbose: bool):
 
 
 main.add_command(auto_split)
-main.add_command(color_level)
 main.add_command(manual_split)
 main.add_command(merge_chapters)
 main.add_command(pack_releases)
