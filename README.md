@@ -2,7 +2,11 @@
 
 This repo contains stuff that I use to release and collect manga from a certain cat website.
 
-All my release use the `[nao]` or `(TooManyIsekai)` tag.
+All my release use one of the following tag:
+- `[nao]`, default release tag for any of my stuff
+- `(TooManyIsekai)` any release that has Isekai element in it. (Normal Fantasy does not count)
+- `(oan)`, new tag for lower effort stuff that I use.
+- `(naoX)`, tag for upscaled stuff that I did.
 
 ## Released Stuff
 See here: https://shigoto.n4o.xyz/manga
@@ -20,7 +24,7 @@ You can find it on a certain cat website.
 
 ## Requirements
 - Python 3.7+
-- imagemagick (for `level` and `spreads` command)
+- imagemagick (for `spreads join` and `spreads split` command)
 - exiftool (for `releases` and `tag`, optional)
 - pingo (for `releases` and `optimize`, optional)
 
@@ -173,11 +177,14 @@ Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -vol, --volume INTEGER          The volume of the series release
-  -ch, --chapter INTEGER          The chapter of the series release
-  -c, --credit TEXT               The ripper credit for this series  [default:      
+  -ch, --chapter INT_OR_FLOAT     The chapter of the series release
+  -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
   -e, --email TEXT                The ripper email for this series  [default:       
-                                  noaione@protonmail.com]
+                                  noaione@protonmail.ch]
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1      
+                                  provided it will not put in the filename
+                                  [default: 1; x>=1]
   -br, --bracket-type [square|round|curly]
                                   Bracket to use to surround the ripper name        
                                   [default: square]
@@ -190,6 +197,7 @@ Options:
 `--chapter`, the chapter number<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
+`--revision`, the revision number of the releases.<br />
 `--bracket-type`, the bracket to be used.
 
 This will zipped all of the images in a folder.
@@ -213,10 +221,13 @@ Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -pub, --publisher TEXT          The publisher of the series  [required]
-  -c, --credit TEXT               The ripper credit for this series  [default:      
+  -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
   -e, --email TEXT                The ripper email for this series  [default:       
-                                  noaione@protonmail.com]
+                                  noaione@protonmail.ch]
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1      
+                                  provided it will not put in the filename
+                                  [default: 1; x>=1]
   -hq, --is-high-quality          Whether this is a high quality release
   --tag / --no-tag                Do exif metadata tagging on the files.
                                   [default: tag]
@@ -237,6 +248,7 @@ Options:
 `--publisher`, the publisher<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
+`--revision`, the revision number of the releases.<br />
 `--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
 `--tag/--no-tag`, do exif tagging.<br />
 `--optimize/--no-optimize`, optimize image with pingo<br />
@@ -251,32 +263,83 @@ The filename also must match something like this:
 - `Manga Title - vXX - pXXX`
 
 #### `spreads`
-Join spread pages together into a single page.
+Manage spreads from a directory of images.
 
 ```py
-Usage: nmanga spreads [OPTIONS] FOLDER_OR_ARCHIVE_FILE
+Usage: nmanga spreads [OPTIONS] COMMAND [ARGS]...
+
+  Manage spreads from a directory of images
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  join   Join multiple spreads into a single image
+  split  Split a joined spreads into two images
+```
+
+##### `spreads join`
+Join multiple spreads into a single image.
+
+```py
+Usage: nmanga spreads join [OPTIONS] FOLDER_PATH
 
   Join multiple spreads into a single image
 
 Options:
-  -q, --quality FLOAT RANGE  The quality of the output image  [default: 100.0;
-                             1.0<=x<=100.0]
-  -s, --spreads A-B          The spread information, can be repeated and must
-                             contain something like: 1-2  [required]
-  -r, --reverse              Reverse the order of the spreads (manga mode)
-  -me, --magick-exec TEXT    Path to the magick executable  [default: magick]
-  -h, --help                 Show this message and exit.
+  -q, --quality FLOAT RANGE    The quality of the output image  [default:
+                               100.0; 1.0<=x<=100.0]
+  -s, --spreads A-B            The spread information, can be repeated and
+                               must contain something like: 1-2  [required]
+  -r, --reverse                Reverse the order of the spreads (manga mode)        
+  -f, --format [auto|png|jpg]  The format of the output image, auto will
+                               detect the format from the input images
+                               [default: auto]
+  -me, --magick-exec TEXT      Path to the magick executable  [default:
+                               magick]
+  -h, --help                   Show this message and exit.
 ```
 
 `--quality`, the output quality (mainly used as jpg export)<br />
 `--spreads`, the spread information, can be repeated (ex: `-s 3-4 -s 99-100` will merge page 3 and 4 together.)<br />
-`--reverse`, reverse the order of the spread (recommended for manga/RTL)
+`--reverse`, reverse the order of the spread (recommended for manga/RTL layout)
+`--format`, the output format that should be used, default to `auto` that will determine the output format from the input images.
 
 The filename should have the minimum format like this: `pXXX`<br />
 The prefix `p` is important to differentiate it from any other text in the filename.
 Everything else is ignored and will be included on the final filename.
 
 This will also make a `backup` folder which contains the unmerged images (in case something went wrong.)
+
+##### `spreads split`
+Split a joined spreads into two images.
+
+```py
+Usage: nmanga spreads split [OPTIONS] FOLDER_PATH
+
+  Split a joined spreads into two images
+
+Options:
+  -q, --quality FLOAT RANGE    The quality of the output image  [default:
+                               100.0; 1.0<=x<=100.0]
+  -r, --reverse                Reverse the order of the spreads (manga mode)        
+  -f, --format [auto|png|jpg]  The format of the output image, auto will
+                               detect the format from the input images
+                               [default: auto]
+  -me, --magick-exec TEXT      Path to the magick executable  [default:
+                               magick]
+  -h, --help                   Show this message and exit.
+```
+
+`--quality`, the output quality (mainly used as jpg export)<br />
+`--reverse`, reverse the order of the spread (recommended for manga/RTL layout)
+`--format`, the output format that should be used, default to `auto` that will determine the output format from the input image.
+
+The filename should have the minimum format like this: `pXXX-YYY`<br />
+The prefix `p` is important to differentiate it from any other text in the filename.
+Everything else is ignored and will be included on the final filename.
+
+Same with `spreads join`, a `backup` folder will be created which contains the merged image (in case something went wrong.)
 
 #### `tag`
 Tag images with exif metadata, only works for `.tiff` and `.jpg` files!
@@ -288,12 +351,16 @@ Usage: nmanga tag [OPTIONS] FOLDER_PATH
 
 Options:
   -t, --title TEXT                The title of the series  [required]
-  -vol, --volume INTEGER          The volume of the series release  [required]      
+  -vol, --volume INTEGER          The volume of the series release
+  -ch, --chapter INT_OR_FLOAT     The chapter of the series release
   -y, --year INTEGER              The year of the series release
-  -c, --credit TEXT               The ripper credit for this series  [default:      
+  -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
   -e, --email TEXT                The ripper email for this series  [default:       
-                                  noaione@protonmail.com]
+                                  noaione@protonmail.ch]
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1      
+                                  provided it will not put in the filename
+                                  [default: 1; x>=1]
   -br, --bracket-type [square|round|curly]
                                   Bracket to use to surround the ripper name        
                                   [default: square]
@@ -305,8 +372,14 @@ Options:
 `--title`, the series title<br />
 `--year`, the series year (will be used for exif tagging)<br />
 `--volume`, the volume number<br />
+`--chapter`, the chapter number<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
+`--revision`, the revision number of the releases.<br />
 `--bracket-type`, the bracket to be used.
 
 This will automatically find any valid images that can be tagged with exif metadata and apply it!
+
+For `--volume` and `--chapter`, provide one of them and the packed zip will be a bit different.
+- `--volume`: `Manga Title vXX (20xx) (Digital) (XXX)`
+- `--chapter`: `Manga Title XXX (20xx) (Digital) (XXX)`
