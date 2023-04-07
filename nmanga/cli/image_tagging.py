@@ -55,30 +55,10 @@ TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
 )
 @options.manga_volume
 @options.manga_chapter
-@click.option(
-    "-y",
-    "--year",
-    "manga_year",
-    default=None,
-    type=int,
-    help="The year of the series release",
-)
-@click.option(
-    "-c",
-    "--credit",
-    "rls_credit",
-    help="The ripper credit for this series",
-    show_default=True,
-    default="nao",
-)
-@click.option(
-    "-e",
-    "--email",
-    "rls_email",
-    help="The ripper email for this series",
-    show_default=True,
-    default="noaione@protonmail.com",
-)
+@options.manga_year
+@options.rls_credit
+@options.rls_email
+@options.rls_revision
 @options.use_bracket_type
 @options.exiftool_path
 @time_program
@@ -90,6 +70,7 @@ def image_tagging(
     manga_year: int,
     rls_credit: str,
     rls_email: str,
+    rls_revision: int,
     bracket_type: Literal["square", "round", "curly"],
     exiftool_path: str,
 ):
@@ -140,5 +121,7 @@ def image_tagging(
         cpa=pair_left,
         cpb=pair_right,
     )
+    if rls_revision > 1:
+        image_title += f" (v{rls_revision})"
     console.info("Tagging images with exif metadata...")
     inject_metadata(exiftool_exe, path_or_archive, image_title, rls_email)
