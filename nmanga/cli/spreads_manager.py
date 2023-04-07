@@ -69,12 +69,19 @@ class _ExportedImage:
 
 
 def execute_spreads_join(
-    magick_dir: str, quality: float, input_imgs: List[_ExportedImage], out_dir: Path, reverse_mode: bool
+    magick_dir: str,
+    quality: float,
+    input_imgs: List[_ExportedImage],
+    out_dir: Path,
+    reverse_mode: bool,
+    output_fmt: str = "auto",
 ):
     extensions = [x.path.suffix for x in input_imgs]
     select_ext = ".jpg"
     if ".png" in extensions:
         select_ext = ".png"
+    if output_fmt != "auto":
+        select_ext = f".{output_fmt}"
     output_name = file_handler.random_name() + select_ext
     execute_this = make_prefix_convert(magick_dir)
     input_imgs.sort(key=lambda x: x.path.name)
@@ -90,16 +97,43 @@ def execute_spreads_join(
     return output_name
 
 
+def execute_spreads_split(
+    magick_dir: str,
+    quality: float,
+    input_img: _ExportedImage,
+    out_dir: Path,
+    output_fmt: str = "auto",
+):
+    select_ext = ".jpg"
+    if ".png" in input_img.path.suffix:
+        select_ext = ".png"
+    if output_fmt != "auto":
+        select_ext = f".{output_fmt}"
+    output_name = file_handler.random_name() + select_ext
+    execute_this = make_prefix_convert(magick_dir)
+    execute_this += ["-crop", "50%x100%", f"{input_img.path}"]
+    execute_this += ["-quality", f"{quality:.2f}%", f"{out_dir / output_name}"]
+    try:
+        sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    except sp.CalledProcessError as e:
+        console.error(f"Error: {e.output.decode('utf-8')}")
+        raise e
+    return output_name
+
+
 class _ExportedImages(TypedDict):
     imgs: List[_ExportedImage]
     pattern: List[int]
 
 
-@click.command(
-    name="spreads", help="Join multiple spreads into a single image", cls=CatchAllExceptionsCommand
-)
-@options.path_or_archive(disable_archive=True)
-@click.option(
+@dataclass
+class _SplitSpreads:
+    img: _ExportedImage
+    a_part: int
+    b_part: int
+
+
+quality_option = click.option(
     "-q",
     "--quality",
     "quality",
@@ -108,6 +142,33 @@ class _ExportedImages(TypedDict):
     type=click.FloatRange(1.0, 100.0),
     help="The quality of the output image",
 )
+reverse_direction = click.option(
+    "-r",
+    "--reverse",
+    "reverse",
+    is_flag=True,
+    default=False,
+    help="Reverse the order of the spreads (manga mode)",
+)
+format_output = click.option(
+    "-f",
+    "--format",
+    "image_fmt",
+    default="auto",
+    show_default=True,
+    type=click.Choice(["auto", "png", "jpg"]),
+    help="The format of the output image, auto will detect the format from the input images",
+)
+
+
+@click.group(name="spreads", help="Manage spreads from a directory of images")
+def spreads():
+    pass
+
+
+@spreads.command(name="join", help="Join multiple spreads into a single image", cls=CatchAllExceptionsCommand)
+@options.path_or_archive(disable_archive=True)
+@quality_option
 @click.option(
     "-s",
     "--spreads",
@@ -117,14 +178,8 @@ class _ExportedImages(TypedDict):
     help="The spread information, can be repeated and must contain something like: 1-2",
     metavar="A-B",
 )
-@click.option(
-    "-r",
-    "--reverse",
-    "reverse",
-    is_flag=True,
-    default=False,
-    help="Reverse the order of the spreads (manga mode)",
-)
+@reverse_direction
+@format_output
 @options.magick_path
 @time_program
 def spreads_join(
@@ -132,6 +187,7 @@ def spreads_join(
     quality: float,
     spreads_data: List[str],
     reverse: bool,
+    image_fmt: str,
     magick_path: str,
 ):
     """
@@ -193,7 +249,9 @@ def spreads_join(
     current = 1
     for spread, imgs in exported_imgs.items():
         console.status(f"Joining spreads: {current}/{total_match_spread}")
-        temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive, reverse)
+        temp_output = execute_spreads_join(
+            magick_exe, quality, imgs["imgs"], path_or_archive, reverse, image_fmt
+        )
         # Rename back
         pattern = imgs["pattern"]
         pattern.sort()
@@ -221,3 +279,92 @@ def spreads_join(
                 mv(image.path, BACKUP_DIR / path.basename(image.path.name))
             except FileNotFoundError:
                 pass
+
+
+@spreads.command(name="split", help="Split a joined spreads into two images", cls=CatchAllExceptionsCommand)
+@options.path_or_archive(disable_archive=True)
+@quality_option
+@reverse_direction
+@format_output
+@options.magick_path
+@time_program
+def spreads_split(
+    path_or_archive: Path,
+    quality: float,
+    reverse: bool,
+    image_fmt: str,
+    magick_path: str,
+):
+    """
+    Split a joined spreads into two images
+    """
+    force_search = not _is_default_path(magick_path)
+    magick_exe = test_or_find_magick(magick_path, force_search)
+    if magick_exe is None:
+        console.error("Could not find the magick executable")
+        return 1
+    console.info("Using magick executable: {}".format(magick_exe))
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    image_list: List[_SplitSpreads] = []
+    page_re = RegexCollection.page_re()
+    console.info("Collecting image for spreads...")
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        for image, _ in archive:
+            title_match = page_re.match(image.stem)
+
+            if title_match is None:
+                console.warning("Unmatching file name: {}".format(image.filename))
+                continue
+
+            a_part = title_match.group("a")
+            b_part = title_match.group("b")
+            prefix_text = title_match.group("any")
+            postfix_text = title_match.group("anyback")
+            if not b_part:
+                continue
+            a_part = int(a_part)
+            b_part = int(b_part)
+            im_data = _ExportedImage(image.access(), prefix_text, postfix_text)
+            split_spread = _SplitSpreads(img=im_data, a_part=a_part, b_part=b_part)
+            image_list.append(split_spread)
+    console.info(f"Found {len(image_list)} spreads to split")
+
+    for idx, split_spread in enumerate(image_list):
+        console.status(f"Splitting spreads: {idx + 1}/{len(image_list)}")
+        output_name = execute_spreads_split(
+            magick_exe,
+            quality,
+            split_spread.img,
+            path_or_archive,
+            image_fmt,
+        )
+
+        output_fn, output_fmt = path.splitext(output_name)
+        first_img = output_fn + "-0" + output_fmt
+        second_img = output_fn + "-1" + output_fmt
+
+        pre_t = split_spread.img.prefix or ""
+        post_t = split_spread.img.postfix or ""
+        first_val = split_spread.a_part if not reverse else split_spread.b_part
+        second_val = split_spread.b_part if not reverse else split_spread.a_part
+
+        final_a = f"{pre_t}p{first_val:03d}{post_t}{output_fmt}"
+        final_b = f"{pre_t}p{second_val:03d}{post_t}{output_fmt}"
+
+        (path_or_archive / first_img).rename(path_or_archive / final_a)
+        (path_or_archive / second_img).rename(path_or_archive / final_b)
+    console.stop_status(f"Splitted {len(image_list)} spreads")
+
+    BACKUP_DIR = path_or_archive / "backup"
+    BACKUP_DIR.mkdir(exist_ok=True)
+    for image in image_list:
+        try:
+            mv(image.img.path, BACKUP_DIR / path.basename(image.img.path.name))
+        except FileNotFoundError:
+            pass
