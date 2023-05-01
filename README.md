@@ -89,10 +89,24 @@ Options:
 `--limit-to` Limit the regex to certain group/ripper.
 
 The regex should match something like this:
-- `Manga Title - c001 (v01) - p001 [dig] [Chapter Title] [Publisher Name?] [Group] {HQ}.jpg`
-- `Manga Title - c001 (v01) - p000 [Cover] [dig] [Chapter Title] [Publisher Name?] [Group] {HQ}.jpg`
-- `Manga Title - c001 (v01) - p000 [Cover] [dig] [Publisher Name?] [Group] {HQ}.jpg`
-- `Manga Title - c001 (v01) - p001 [dig] [Publisher Name?] [Group] {HQ}.jpg`
+- `Manga Title - c001 (v01) - p001 [dig] [Chapter Title] [Publisher Name?] [Group] {HQ}.jpg` (`danke/nao`)
+- `Manga Title - c001 (v01) - p000 [Cover] [dig] [Chapter Title] [Publisher Name?] [Group] {HQ}.jpg` (`danke/nao`)
+- `Manga Title - c001 (v01) - p000 [Cover] [dig] [Publisher Name?] [Group] {HQ}.jpg` (`danke/LuCaZ/nao`)
+- `Manga Title - c001 (v01) - p001 [dig] [Publisher Name?] [Group] {HQ}.jpg` (`danke/LuCaZ/nao`)
+- `Manga Title - c001 (v01) - p001 [Publisher Name?] [Group] {HQ}.jpg` (`1r0n`)
+- `Manga Title - c001x1 (c001.1) (v01) - p001 [dig] [Publisher Name?] [Group] {HQ}.jpg`
+
+The `{HQ}` thing is optional, for the last one you cannot add chapter name to it.
+
+The output format would be like this:
+- If `[Chapter Title]` exist and `-pub/--publisher` are used: `01.001 - Chapter Title.cbz`
+- If `[Chapter Title]` **DOES NOT** exist and `-pub/--publisher` are used: `01.001.cbz`
+- If `-pub/--publisher` are **NOT** used: `01.001.cbz`
+- If `--is-oneshot` are used, **sometimes**: `00.001.cbz`
+- If there is `#1` or `x1` or similar after the chapter number, it would be: `01.001.5.cbz` (or `01.001.5 - Chapter Title.cbz` with chapter title)
+- If there is something like `(c001.1)` after the chapter number: `01.001.1.cbz` (or `01.001.1 - Chapter Title.cbz` with chapter title)
+
+You can play around and see what it would result with, report any problem in the [Issues](https://github.com/noaione/nao-manga-rls/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc) if there is unexpected results.
 
 This should match most of the release from a certain cat website (`danke`, `LuCaZ`, `1r0n`, `nao`, etc.)
 
