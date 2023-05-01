@@ -29,6 +29,7 @@ from pathlib import Path
 import click
 
 from .cli.auto_split import auto_split
+from .cli.config import cli_config
 from .cli.image_optimizer import image_optimizer
 from .cli.image_tagging import image_tagging
 from .cli.manual_split import manual_split
@@ -76,6 +77,7 @@ def main(ctx: click.Context, verbose: bool):
 
 
 main.add_command(auto_split)
+main.add_command(cli_config)
 main.add_command(manual_split)
 main.add_command(merge_chapters)
 main.add_command(pack_releases)

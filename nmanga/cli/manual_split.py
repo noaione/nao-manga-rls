@@ -36,6 +36,7 @@ import click
 
 from .. import exporter, file_handler, term, utils
 from . import options
+from ._deco import time_program
 from .base import CatchAllExceptionsCommand
 from .common import (
     ChapterRange,
@@ -44,7 +45,6 @@ from .common import (
     create_chapter,
     inquire_chapter_ranges,
     safe_int,
-    time_program,
 )
 
 console = term.get_console()
@@ -159,9 +159,7 @@ def _collect_archive_to_chapters(
     console.enter()
 
 
-def _handle_page_number_mode(
-    archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False
-):
+def _handle_page_number_mode(archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False):
     console.info(f"Handling in page number mode (custom enabled? {custom_mode_enabled!r})")
 
     custom_data: Dict[str, int] = {}
@@ -246,9 +244,7 @@ def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
         "Select mode",
         choices=[
             term.ConsoleChoice("page_number", "Page number mode (all filename must be page number)"),
-            term.ConsoleChoice(
-                "regex", "Regex mode (Enter regex that should atleast match the page number!)"
-            ),
+            term.ConsoleChoice("regex", "Regex mode (Enter regex that should atleast match the page number!)"),
             term.ConsoleChoice("page_number_and_custom", "Page number mode with custom page number mapping"),
             term.ConsoleChoice("regex_and_custom", "Regex mode with custom page number mapping"),
         ],

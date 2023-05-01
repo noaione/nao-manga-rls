@@ -5,8 +5,9 @@
     ],
     "[python]": {
         "editor.formatOnSave": true,
+        "editor.defaultFormatter": "ms-python.black-formatter",
     },
-    "python.formatting.provider": "black",
+    "python.formatting.provider": "none",
     "python.analysis.diagnosticMode": "workspace",
     "python.languageServer": "Pylance",
     "autoDocstring.docstringFormat": "sphinx",

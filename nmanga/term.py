@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, List, Optional, Union, overload
 
@@ -136,19 +137,35 @@ class Console:
         if self.__debug_mode:
             self.console.log(self.__wrap_theme("LOG", "highlight"), *args, **kwargs)
 
+    def sleep(self, duration: int):
+        time.sleep(duration)
+
     def is_advanced(self):
         return not self.console.legacy_windows
 
     @overload
-    def choice(self, message: Optional[str] = ..., choices: List[AnyType] = ...) -> str:
+    def choice(
+        self,
+        message: Optional[str] = ...,
+        choices: List[AnyType] = ...,
+        default: Optional[Union[AnyType, ConsoleChoice]] = ...,
+    ) -> str:
         ...
 
     @overload
-    def choice(self, message: Optional[str] = ..., choices: List[ConsoleChoice] = ...) -> ConsoleChoice:
+    def choice(
+        self,
+        message: Optional[str] = ...,
+        choices: List[ConsoleChoice] = ...,
+        default: Optional[Union[AnyType, ConsoleChoice]] = ...,
+    ) -> ConsoleChoice:
         ...
 
     def choice(
-        self, message: Optional[str] = None, choices: Union[List[AnyType], List[ConsoleChoice]] = []
+        self,
+        message: Optional[str] = None,
+        choices: Union[List[AnyType], List[ConsoleChoice]] = [],
+        default: Optional[Union[AnyType, ConsoleChoice]] = None,
     ) -> Union[AnyType, ConsoleChoice]:
         if not choices:
             raise ValueError("No choices provided")
@@ -161,7 +178,12 @@ class Console:
                 any_cchoice = True
             else:
                 console_choice.append(choice)
-        answers = inquirer.list_input(message, choices=console_choice)
+        default_val = None
+        if isinstance(default, ConsoleChoice):
+            default_val = default.value
+        else:
+            default_val = default
+        answers = inquirer.list_input(message, choices=console_choice, default=default_val)
         if any_cchoice:
             return choices[console_choice.index(answers)]
         return answers

@@ -36,8 +36,9 @@ import click
 
 from .. import exporter, file_handler, term, utils
 from . import options
+from ._deco import time_program
 from .base import CatchAllExceptionsCommand, RegexCollection
-from .common import check_cbz_exist, create_chapter, time_program
+from .common import check_cbz_exist, create_chapter
 
 console = term.get_console()
 

@@ -31,8 +31,9 @@ import click
 
 from .. import term
 from . import options
+from ._deco import check_config_first, time_program
 from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_pingo
-from .common import optimize_images, time_program
+from .common import optimize_images
 
 console = term.get_console()
 
@@ -51,6 +52,7 @@ console = term.get_console()
     show_default=True,
 )
 @options.pingo_path
+@check_config_first
 @time_program
 def image_optimizer(
     path_or_archive: Path,

@@ -33,6 +33,7 @@ import click
 
 from .. import exporter, file_handler, term
 from . import options
+from ._deco import check_config_first, time_program
 from .base import (
     CatchAllExceptionsCommand,
     RegexCollection,
@@ -47,7 +48,6 @@ from .common import (
     inquire_chapter_ranges,
     optimize_images,
     safe_int,
-    time_program,
 )
 
 console = term.get_console()
@@ -118,6 +118,7 @@ class SpecialNaming:
 @options.exiftool_path
 @options.pingo_path
 @options.use_bracket_type
+@check_config_first
 @time_program
 def prepare_releases(
     path_or_archive: Path,
@@ -343,6 +344,7 @@ def prepare_releases(
 @options.rls_email
 @options.rls_revision
 @options.use_bracket_type
+@check_config_first
 @time_program
 def pack_releases(
     path_or_archive: Path,
@@ -437,6 +439,7 @@ def pack_releases(
 )
 @options.manga_volume
 @options.rls_credit
+@check_config_first
 @time_program
 def pack_releases_epub_mode(
     path_or_archive: Path,

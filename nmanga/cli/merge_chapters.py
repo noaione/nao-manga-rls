@@ -33,8 +33,8 @@ from typing import List, Optional
 import click
 
 from .. import exporter, file_handler, term
+from ._deco import time_program
 from .base import CatchAllExceptionsCommand
-from .common import time_program
 
 console = term.get_console()
 

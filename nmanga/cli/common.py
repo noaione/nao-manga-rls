@@ -23,7 +23,6 @@ SOFTWARE.
 """
 
 import subprocess as sp
-import time
 from pathlib import Path
 from typing import Dict, List, Match, Optional, Tuple, Union
 
@@ -38,7 +37,6 @@ __all__ = (
     "create_chapter",
     "inquire_chapter_ranges",
     "safe_int",
-    "time_program",
     "inject_metadata",
     "optimize_images",
 )
@@ -222,9 +220,7 @@ def validate_ch_ranges(current: str):
     return True
 
 
-def inquire_chapter_ranges(
-    initial_prompt: str, continue_prompt: str, ask_title: bool = False
-) -> List[ChapterRange]:
+def inquire_chapter_ranges(initial_prompt: str, continue_prompt: str, ask_title: bool = False) -> List[ChapterRange]:
     chapter_ranges: List[ChapterRange] = []
     while True:
         console.info(initial_prompt)
@@ -246,21 +242,6 @@ def inquire_chapter_ranges(
             break
 
     return chapter_ranges
-
-
-def time_program(func):
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        result = func(*args, **kwargs)
-        end = time.time()
-        delta = end - start
-        if isinstance(result, int) and result > 0:
-            console.error(f"Failure! (Took {delta:.2f}s) [exit code {result}]")
-        else:
-            console.info(f"Done! (Took {delta:.2f}s)")
-        return result
-
-    return wrapper
 
 
 def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):

@@ -27,6 +27,10 @@ from pathlib import Path
 
 import click
 
+from ..config import get_config
+
+config = get_config()
+
 
 def path_or_archive(disable_archive: bool = False, disable_folder: bool = False):
     if disable_archive and disable_folder:
@@ -80,9 +84,7 @@ output_dir = click.option(
     "-o",
     "--output",
     "output_dirpath",
-    type=click.Path(
-        exists=True, resolve_path=True, file_okay=False, dir_okay=True, writable=True, path_type=Path
-    ),
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True, writable=True, path_type=Path),
     default=os.getcwd(),
     help="Existing folder to write the output [default: The current directory]",
 )
@@ -90,7 +92,7 @@ magick_path = click.option(
     "-me",
     "--magick-exec",
     "magick_path",
-    default="magick",
+    default=config.executables.magick_path,
     help="Path to the magick executable",
     show_default=True,
 )
@@ -98,7 +100,7 @@ exiftool_path = click.option(
     "-ee",
     "--exiftool-exec",
     "exiftool_path",
-    default="exiftool",
+    default=config.executables.exiftool_path,
     help="Path to the exiftool executable",
     show_default=True,
 )
@@ -106,7 +108,7 @@ pingo_path = click.option(
     "-pe",
     "--pingo-exec",
     "pingo_path",
-    default="pingo",
+    default=config.executables.pingo_path,
     help="Path to the pingo executable",
     show_default=True,
 )
@@ -122,7 +124,7 @@ use_bracket_type = click.option(
     "-br",
     "--bracket-type",
     "bracket_type",
-    default="square",
+    default=config.defaults.bracket_type,
     help="Bracket to use to surround the ripper name",
     show_default=True,
     type=click.Choice(["square", "round", "curly"]),
@@ -165,7 +167,7 @@ rls_credit = click.option(
     "rls_credit",
     help="The ripper credit for this series",
     show_default=True,
-    default="nao",
+    default=config.defaults.ripper_credit,
 )
 rls_email = click.option(
     "-e",
@@ -173,7 +175,7 @@ rls_email = click.option(
     "rls_email",
     help="The ripper email for this series",
     show_default=True,
-    default="noaione@protonmail.ch",
+    default=config.defaults.ripper_email,
 )
 rls_revision = click.option(
     "-r",

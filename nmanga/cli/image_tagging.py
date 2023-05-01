@@ -33,8 +33,9 @@ import click
 
 from .. import term
 from . import options
+from ._deco import check_config_first, time_program
 from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_exiftool
-from .common import BRACKET_MAPPINGS, inject_metadata, time_program
+from .common import BRACKET_MAPPINGS, inject_metadata
 
 console = term.get_console()
 TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
@@ -61,6 +62,7 @@ TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
 @options.rls_revision
 @options.use_bracket_type
 @options.exiftool_path
+@check_config_first
 @time_program
 def image_tagging(
     path_or_archive: Path,

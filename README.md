@@ -40,6 +40,22 @@ pip install -U git+https://github.com/noaione/nao-manga-rls.git
 
 This will install this project which then you can use the command `nmanga` to execute everything.
 
+## Configuration
+
+This project or script use `nmanga config` command to configure defaults and executables path.
+
+You can run the command to configure some stuff, you will get warned if you haven't done the first setup yet.
+
+You can configure the following:
+- Defaults
+  - Bracket type (round, square, curly)
+  - Ripper credit name (used in the filename)
+  - Ripper credit email (used in the `.cbz` file comment and image tagging at author/comment)
+- Executables path
+  - `pingo`
+  - `magick`/`imagemagick`
+  - `exiftool`
+
 ### Commands
 
 #### `autosplit`
