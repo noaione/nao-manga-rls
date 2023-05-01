@@ -56,6 +56,10 @@ You can configure the following:
   - `magick`/`imagemagick`
   - `exiftool`
 
+The configuration file will be saved in `.json` format in the following path:
+- Windows: `%APPDATA\nmanga\config.json`
+- Linux/macOS: `~/.config/nmanga/config.json`
+
 ### Commands
 
 #### `autosplit`
