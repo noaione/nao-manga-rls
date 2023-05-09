@@ -53,7 +53,7 @@ def time_program(func):
 def check_config_first(func):
     def wrapper(*args, **kwargs):
         if cfhandler.is_first_time():
-            console.warning("First time setup not complete, please run `manga config`")
+            console.warning("First time setup not complete, please run `nmanga config`")
         result = func(*args, **kwargs)
         return result
 
