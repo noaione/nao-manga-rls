@@ -31,13 +31,14 @@ from typing import Literal, Optional, Union
 
 import click
 
-from .. import term
+from .. import config, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_exiftool
 from .common import BRACKET_MAPPINGS, inject_metadata
 
 console = term.get_console()
+conf = config.get_config()
 TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
 
 
@@ -95,6 +96,8 @@ def image_tagging(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
+    tag_sep = conf.defaults.ch_special_tag
+
     volume_text: Optional[str] = None
     if manga_chapter is not None:
         if isinstance(manga_chapter, float):
@@ -103,9 +106,11 @@ def image_tagging(
             dec_float = int(decimal_float)
             if dec_float - 4 > 0:
                 dec_float -= 4
-            volume_text = f"{int(base_float):03d}x{dec_float}"
+            volume_text = f"{int(base_float):03d}{tag_sep}{dec_float}"
         else:
             volume_text = f"{manga_chapter:03d}"
+        if conf.defaults.ch_add_c_prefix:
+            volume_text = f"c{volume_text}"
     if manga_volume is not None:
         volume_text = f"v{manga_volume:02d}"
     if volume_text is None:
@@ -115,7 +120,7 @@ def image_tagging(
         )
 
     pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
-    image_title = TARGET_TITLE.format(
+    image_titling = TARGET_TITLE.format(
         mt=manga_title,
         vol=volume_text,
         year=current_year,
@@ -124,6 +129,6 @@ def image_tagging(
         cpb=pair_right,
     )
     if rls_revision > 1:
-        image_title += f" (v{rls_revision})"
+        image_titling += f" (v{rls_revision})"
     console.info("Tagging images with exif metadata...")
-    inject_metadata(exiftool_exe, path_or_archive, image_title, rls_email)
+    inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)

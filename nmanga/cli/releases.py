@@ -31,7 +31,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import click
 
-from .. import exporter, file_handler, term
+from .. import config, exporter, file_handler, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import (
@@ -51,6 +51,7 @@ from .common import (
 )
 
 console = term.get_console()
+conf = config.get_config()
 TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[dig] [{t}] [{pb}] [{c}]"  # noqa
 TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[dig] [{pb}] [{c}]"  # noqa
 TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
@@ -370,6 +371,8 @@ def pack_releases(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
+    tag_sep = conf.defaults.ch_special_tag
+
     volume_text: Optional[str] = None
     if manga_chapter is not None:
         if isinstance(manga_chapter, float):
@@ -378,9 +381,11 @@ def pack_releases(
             dec_float = int(decimal_float)
             if dec_float - 4 > 0:
                 dec_float -= 4
-            volume_text = f"{int(base_float):03d}x{dec_float}"
+            volume_text = f"{int(base_float):03d}{tag_sep}{dec_float}"
         else:
             volume_text = f"{manga_chapter:03d}"
+        if conf.defaults.ch_add_c_prefix:
+            volume_text = f"c{volume_text}"
     if manga_volume is not None:
         volume_text = f"v{manga_volume:02d}"
     if volume_text is None:

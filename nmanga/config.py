@@ -66,13 +66,21 @@ class _ConfigDefaults:
     bracket_type: BracketTypeT = field(default="round")
     ripper_credit: str = field(default="nao")
     ripper_email: str = field(default="noaione@protonmail.ch")
+    ch_add_c_prefix: bool = field(default=False)
+    ch_special_tag: str = field(default="x")
 
     def to_dict(self) -> _ConfigDefaultsT:
         return {
             "bracket_type": self.bracket_type,
             "ripper_credit": self.ripper_credit,
             "ripper_email": self.ripper_email,
+            "chapter_add_c_prefix": self.ch_add_c_prefix,
+            "chapter_special_tag": self.ch_special_tag,
         }
+
+    @property
+    def is_special_x(self) -> bool:
+        return self.ch_special_tag == "x"
 
 
 @dataclass
@@ -125,8 +133,20 @@ class ConfigHandler:
         if not isinstance(ripper_email, str):
             raise ConfigError("`defaults.ripper_email` must be a string")
 
+        ch_add_c_prefix = defaults.get("chapter_add_c_prefix", False)
+        if not isinstance(ch_add_c_prefix, bool):
+            raise ConfigError("`defaults.chapter_add_c_prefix` must be a bool")
+
+        ch_special_tag = defaults.get("chapter_special_tag", "x")
+        if not isinstance(ch_special_tag, str):
+            raise ConfigError("`defaults.chapter_special_tag` must be a string")
+
         config.defaults = _ConfigDefaults(
-            bracket_type=bracket_type, ripper_credit=ripper_credit, ripper_email=ripper_email
+            bracket_type=bracket_type,
+            ripper_credit=ripper_credit,
+            ripper_email=ripper_email,
+            ch_add_c_prefix=ch_add_c_prefix,
+            ch_special_tag=ch_special_tag,
         )
 
         magick_path = executables.get("magick_path", "magick")

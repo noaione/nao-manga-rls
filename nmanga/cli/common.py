@@ -26,7 +26,7 @@ import subprocess as sp
 from pathlib import Path
 from typing import Dict, List, Match, Optional, Tuple, Union
 
-from .. import term, utils
+from .. import config, term, utils
 
 __all__ = (
     "BRACKET_MAPPINGS",
@@ -43,6 +43,7 @@ __all__ = (
 
 
 console = term.get_console()
+conf = config.get_config()
 
 BRACKET_MAPPINGS = {
     "square": ["[", "]"],
@@ -97,7 +98,7 @@ class ChapterRange:
         if floating - 4 >= 1:
             # Handle split chapter (.1, .2, etc)
             floating -= 4
-        return f"{int(base):03d}x{floating}"
+        return f"{int(base):03d}{conf.defaults.ch_special_tag}{floating}"
 
     @property
     def base(self):
@@ -220,7 +221,9 @@ def validate_ch_ranges(current: str):
     return True
 
 
-def inquire_chapter_ranges(initial_prompt: str, continue_prompt: str, ask_title: bool = False) -> List[ChapterRange]:
+def inquire_chapter_ranges(
+    initial_prompt: str, continue_prompt: str, ask_title: bool = False
+) -> List[ChapterRange]:
     chapter_ranges: List[ChapterRange] = []
     while True:
         console.info(initial_prompt)

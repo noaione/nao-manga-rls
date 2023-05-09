@@ -93,6 +93,48 @@ def _loop_defaults_ripper_email(config: config.Config) -> config.Config:
     return config
 
 
+def _loop_defaults_chapter_prefixed(config: config.Config) -> config.Config:
+    CHOICE_ENABLE = term.ConsoleChoice("yes_add", "Enable")
+    CHOICE_DISABLE = term.ConsoleChoice("no_yeet", "Disable")
+
+    message = "Enable `c` prefixing for chapter packing? (ex: c001 instead of 001)"
+    message += f" [Current: {config.defaults.ch_add_c_prefix}]"
+
+    select_option = console.choice(
+        message=message,
+        choices=[CHOICE_ENABLE, CHOICE_DISABLE],
+        default=CHOICE_ENABLE if config.defaults.ch_add_c_prefix else CHOICE_DISABLE,
+    )
+
+    option = select_option.name
+    if option == CHOICE_ENABLE.name:
+        config.defaults.ch_add_c_prefix = True
+    else:
+        config.defaults.ch_add_c_prefix = False
+    return config
+
+
+def _loop_defaults_chapter_special_tag(config: config.Config) -> config.Config:
+    CHOICE_ENABLE = term.ConsoleChoice("use_hashtag", "Use `#`")
+    CHOICE_DISABLE = term.ConsoleChoice("use_xmark", "Use `x`")
+
+    message = "Use `#` instead of `x` as special separator"
+    message += f" [Current: {config.defaults.is_special_x}]"
+
+    select_option = console.choice(
+        message=message,
+        choices=[CHOICE_ENABLE, CHOICE_DISABLE],
+        default=CHOICE_DISABLE if config.defaults.is_special_x else CHOICE_ENABLE,
+    )
+
+    option = select_option.name
+    if option == CHOICE_ENABLE.name:
+        config.defaults.ch_special_tag = "#"
+    else:
+        config.defaults.ch_special_tag = "x"
+    return config
+
+
 def _loop_defaults_sections(config: config.Config) -> config.Config:
     while True:
         select_option = console.choice(
@@ -101,6 +143,8 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
                 term.ConsoleChoice("bracket_type", "Configure default bracket type"),
                 term.ConsoleChoice("ripper_credit", "Configure default ripper credit name"),
                 term.ConsoleChoice("ripper_email", "Configure default ripper credit email"),
+                term.ConsoleChoice("ch_add_prefix", "Enable `c` prefixing for chapter packing/tagging"),
+                term.ConsoleChoice("hashtag_special", "Use `#` instead of `x` as special separator"),
                 SAVE_CHOICE,
             ],
         )
@@ -114,6 +158,10 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
             config = _loop_defaults_ripper_credit(config)
         elif option == "ripper_email":
             config = _loop_defaults_ripper_email(config)
+        elif option == "ch_add_prefix":
+            config = _loop_defaults_chapter_prefixed(config)
+        elif option == "hashtag_special":
+            config = _loop_defaults_chapter_special_tag(config)
         else:
             console.warning("Invalid option selected")
             console.sleep(2)
@@ -171,15 +219,21 @@ def _loop_executables_sections(config: config.Config):
         if option == SAVE_CHOICE.name:
             return config
         elif option == "pingo_path":
-            result = _loop_executables_check_single("pingo", config.executables.pingo_path, test_or_find_pingo)
+            result = _loop_executables_check_single(
+                "pingo", config.executables.pingo_path, test_or_find_pingo
+            )
             if result is not None:
                 config.executables.pingo_path = result
         elif option == "ripper_credit":
-            result = _loop_executables_check_single("exiftool", config.executables.exiftool_path, test_or_find_exiftool)
+            result = _loop_executables_check_single(
+                "exiftool", config.executables.exiftool_path, test_or_find_exiftool
+            )
             if result is not None:
                 config.executables.exiftool_path = result
         elif option == "ripper_email":
-            result = _loop_executables_check_single("magick", config.executables.magick_path, test_or_find_magick)
+            result = _loop_executables_check_single(
+                "magick", config.executables.magick_path, test_or_find_magick
+            )
             if result is not None:
                 config.executables.magick_path = result
         else:

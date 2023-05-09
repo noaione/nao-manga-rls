@@ -51,6 +51,8 @@ You can configure the following:
   - Bracket type (round, square, curly)
   - Ripper credit name (used in the filename)
   - Ripper credit email (used in the `.cbz` file comment and image tagging at author/comment)
+  - Add `c` prefix to chapter name when packing. (ex: `Title c001 (20xx)` instead of `Title 001 (20xx)`)
+  - Use `#` as chapter special separator, if your name is `1r0n` enable this. (ex: `Title - c001#1 (vXX) ----` instead of `Title - c001x1 (vXX) ----`)
 - Executables path
   - `pingo`
   - `magick`/`imagemagick`
