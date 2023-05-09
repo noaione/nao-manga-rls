@@ -28,7 +28,9 @@ from enum import Enum
 from os.path import basename
 from pathlib import Path
 from typing import Union
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
+
+from .utils import encode_or
 
 __all__ = (
     "MangaExporter",
@@ -74,7 +76,7 @@ class CBZMangaExporter(MangaExporter):
         super().__init__(output_directory)
 
         self._file_name = file_name
-        self._target_cbz: ZipFile = ZipFile(self._out_dir / f"{file_name}.cbz", "w")
+        self._target_cbz: ZipFile = ZipFile(self._out_dir / f"{file_name}.cbz", "w", compression=ZIP_DEFLATED)
 
     def is_existing(self):
         parent_dir = self._out_dir.parent
@@ -90,9 +92,7 @@ class CBZMangaExporter(MangaExporter):
             self._target_cbz.write(str(image_data), basename(image_name))
 
     def set_comment(self, comment: Union[str, bytes]):
-        if isinstance(comment, str):
-            comment = comment.encode("utf-8")
-        self._target_cbz.comment = comment
+        self._target_cbz.comment = encode_or(comment)
 
     def close(self):
         self._target_cbz.close()

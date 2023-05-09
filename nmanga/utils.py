@@ -23,8 +23,15 @@ SOFTWARE.
 """
 
 import re
+from typing import Optional, Union
 
-__all__ = ("secure_filename", "clean_title", "is_oneshot")
+__all__ = (
+    "secure_filename",
+    "clean_title",
+    "is_oneshot",
+    "decode_or",
+    "encode_or",
+)
 
 
 def secure_filename(fn: str):
@@ -80,3 +87,19 @@ def is_oneshot(title: str):
         "one shot",
     ]
     return title in valid_oshot
+
+
+def decode_or(any: Optional[Union[str, bytes]]) -> Optional[str]:
+    if any is None:
+        return None
+    if isinstance(any, bytes):
+        return any.decode("utf-8")
+    return any
+
+
+def encode_or(any: Optional[Union[str, bytes]]) -> Optional[bytes]:
+    if any is None:
+        return None
+    if isinstance(any, str):
+        return any.encode("utf-8")
+    return any

@@ -509,3 +509,57 @@ def pack_releases_epub_mode(
     if MIMETYPE_MAGIC not in read_meta:
         console.warning("We successfully packed the EPUB, but it is not a valid EPUB (mimetype is missing).")
         return 1
+
+
+@click.command(
+    name="packcomment",
+    help="Comment an archive file.",
+    cls=CatchAllExceptionsCommand,
+)
+@options.path_or_archive(disable_folder=True)
+@click.option(
+    "-c",
+    "--comment",
+    "archive_comment",
+    required=False,
+    default=None,
+    help="The comment for this file.",
+)
+@click.option(
+    "--remove",
+    "remove_comment",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Remove the comment from the archive.",
+)
+@time_program
+def pack_releases_comment_archive(
+    path_or_archive: Path,
+    archive_comment: Optional[str],
+    remove_comment: bool,
+):
+    """ """
+
+    if not path_or_archive.is_file():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a file. Please provide a file!",
+            param_hint="path_or_archive",
+        )
+
+    if archive_comment is None and not remove_comment:
+        raise click.BadParameter(
+            "Please provide a comment or use --remove to remove the comment.",
+            param_hint="archive_comment",
+        )
+
+    stat_check = "Removing" if remove_comment else "Adding"
+    archive = file_handler.MangaArchive(path_or_archive)
+    console.status(f"{stat_check} comment...")
+    if remove_comment:
+        archive.comment = None
+    else:
+        archive.comment = archive_comment
+    archive.close()
+
+    console.stop_status(f"{stat_check} comment... done!")

@@ -32,11 +32,13 @@ from mimetypes import types_map
 from os import path
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import Generator, List, Tuple, Union
+from typing import Generator, List, Optional, Tuple, Union
 
 import ftfy
 import py7zr
 from unrar.cffi import rarfile
+
+from .utils import decode_or, encode_or
 
 __all__ = (
     "YieldType",
@@ -385,6 +387,20 @@ class MangaArchive:
                 yield MangaImage(file), count
         else:
             raise NotImplementedError("Not implemented for this archive type")
+
+    @property
+    def comment(self) -> Optional[str]:
+        self.__check_open()
+        if isinstance(self.__accessor, (zipfile.ZipFile, rarfile.RarFile)):
+            return decode_or(self.__accessor.comment)
+        return None
+
+    @comment.setter
+    def comment(self, new_comment: Optional[Union[str, bytes]]):
+        self.__check_open()
+        if isinstance(self.__accessor, (zipfile.ZipFile, rarfile.RarFile)):
+            print("yo")
+            self.__accessor.comment = encode_or(new_comment) or b""
 
 
 def create_temp_dir() -> Path:
