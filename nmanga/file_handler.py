@@ -399,7 +399,6 @@ class MangaArchive:
     def comment(self, new_comment: Optional[Union[str, bytes]]):
         self.__check_open()
         if isinstance(self.__accessor, (zipfile.ZipFile, rarfile.RarFile)):
-            print("yo")
             self.__accessor.comment = encode_or(new_comment) or b""
 
 
