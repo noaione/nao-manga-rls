@@ -37,8 +37,8 @@ import lxml.etree as ET
 import py7zr
 from PIL import Image
 
-from .utils import encode_or
 from .templates.epub import EPUB_CONTAINER, EPUB_CONTENT, EPUB_PAGE, EPUB_STYLES
+from .utils import encode_or
 
 __all__ = (
     "MangaExporter",
