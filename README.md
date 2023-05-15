@@ -62,6 +62,10 @@ The configuration file will be saved in `.json` format in the following path:
 - Windows: `%APPDATA\nmanga\config.json`
 - Linux/macOS: `~/.config/nmanga/config.json`
 
+## Changelog
+
+See here: [CHANGELOG.md](https://github.com/noaione/nao-manga-rls/blob/master/CHANGELOG.md)
+
 ### Commands
 
 #### `autosplit`
