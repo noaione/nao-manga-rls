@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 import subprocess as sp
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Match, Optional, Tuple, Union
 
@@ -30,6 +31,7 @@ from .. import config, term, utils
 
 __all__ = (
     "BRACKET_MAPPINGS",
+    "MangaPublication",
     "PseudoChapterMatch",
     "ChapterRange",
     "check_cbz_exist",
@@ -45,10 +47,26 @@ __all__ = (
 console = term.get_console()
 conf = config.get_config()
 
+
+@dataclass
+class MangaPublication:
+    image: str
+    """Used in the image filename"""
+    archive: str
+    """Used in the archive filename"""
+
+
 BRACKET_MAPPINGS = {
     "square": ["[", "]"],
     "round": ["(", ")"],
     "curly": ["{", "}"],
+}
+MANGA_PUBLICATION_TYPES = {
+    "digital": MangaPublication("dig", "Digital"),
+    "magazine": MangaPublication("mag", "c2c"),
+    "scan": MangaPublication("c2c", "c2c"),
+    "web": MangaPublication("web", "Digital"),
+    "mix": MangaPublication("mix", "Digital"),
 }
 
 

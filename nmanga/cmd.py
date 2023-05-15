@@ -28,18 +28,14 @@ from pathlib import Path
 
 import click
 
+from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
 from .cli.config import cli_config
 from .cli.image_optimizer import image_optimizer
 from .cli.image_tagging import image_tagging
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
-from .cli.releases import (
-    pack_releases,
-    pack_releases_comment_archive,
-    pack_releases_epub_mode,
-    prepare_releases,
-)
+from .cli.releases import prepare_releases
 from .cli.spreads_manager import spreads
 from .constants import __author__, __name__, __version__
 from .term import get_console

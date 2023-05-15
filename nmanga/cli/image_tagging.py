@@ -35,11 +35,11 @@ from .. import config, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_exiftool
-from .common import BRACKET_MAPPINGS, inject_metadata
+from .common import BRACKET_MAPPINGS, MangaPublication, inject_metadata
 
 console = term.get_console()
 conf = config.get_config()
-TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
+TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 
 
 @click.command(
@@ -58,6 +58,7 @@ TARGET_TITLE = "{mt} {vol} ({year}) (Digital) {cpa}{c}{cpb}"
 @options.manga_volume
 @options.manga_chapter
 @options.manga_year
+@options.manga_publication_type
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
@@ -71,6 +72,7 @@ def image_tagging(
     manga_volume: Optional[int],
     manga_chapter: Optional[Union[int, float]],
     manga_year: int,
+    manga_publication_type: MangaPublication,
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
@@ -124,6 +126,7 @@ def image_tagging(
         mt=manga_title,
         vol=volume_text,
         year=current_year,
+        pt=manga_publication_type.archive,
         c=rls_credit,
         cpa=pair_left,
         cpb=pair_right,

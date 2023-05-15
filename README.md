@@ -207,23 +207,29 @@ Pack a release to a `.cbz` archive.
 ```py
 Usage: nmanga pack [OPTIONS] FOLDER_PATH
 
-  Pack a release to a cbz archive.
+  Pack a release to an archive.
 
 Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -vol, --volume INTEGER          The volume of the series release
   -ch, --chapter INT_OR_FLOAT     The chapter of the series release
+  -pt, --publication-type [digital|magazine|scan|web|mix]
+                                  The publication type for this series
+                                  [default: digital]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
-  -e, --email TEXT                The ripper email for this series  [default:       
+  -e, --email TEXT                The ripper email for this series  [default:
                                   noaione@protonmail.ch]
-  -r, --revision INTEGER RANGE    The revision of the release, if the number 1      
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
   -br, --bracket-type [square|round|curly]
-                                  Bracket to use to surround the ripper name        
+                                  Bracket to use to surround the ripper name
                                   [default: square]
+  -m, --mode [folder|cbz|cb7|epub]
+                                  The output mode for the archive packing
+                                  [default: ExporterType.cbz]
   -h, --help                      Show this message and exit.
 ```
 
@@ -231,10 +237,12 @@ Options:
 `--year`, the series year (will be used for exif tagging)<br />
 `--volume`, the volume number<br />
 `--chapter`, the chapter number<br />
+`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
-`--bracket-type`, the bracket to be used.
+`--bracket-type`, the bracket to be used.<br />
+`--mode`, the output for archive output, `folder` will be ignored in this case.
 
 This will zipped all of the images in a folder.
 And will also add your email to the archive comment.
@@ -257,24 +265,27 @@ Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -pub, --publisher TEXT          The publisher of the series  [required]
+  -pt, --publication-type [digital|magazine|scan|web|mix]
+                                  The publication type for this series
+                                  [default: digital]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
-  -e, --email TEXT                The ripper email for this series  [default:       
+  -e, --email TEXT                The ripper email for this series  [default:
                                   noaione@protonmail.ch]
-  -r, --revision INTEGER RANGE    The revision of the release, if the number 1      
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
   -hq, --is-high-quality          Whether this is a high quality release
   --tag / --no-tag                Do exif metadata tagging on the files.
                                   [default: tag]
-  --optimize / --no-optimize      Optimize the images using pingo.  [default:       
+  --optimize / --no-optimize      Optimize the images using pingo.  [default:
                                   no-optimize]
-  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:        
+  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
                                   exiftool]
   -pe, --pingo-exec TEXT          Path to the pingo executable  [default:
                                   pingo]
   -br, --bracket-type [square|round|curly]
-                                  Bracket to use to surround the ripper name        
+                                  Bracket to use to surround the ripper name
                                   [default: square]
   -h, --help                      Show this message and exit.
 ```
@@ -282,6 +293,7 @@ Options:
 `--title`, the series title<br />
 `--year`, the series year (will be used for exif tagging)<br />
 `--publisher`, the publisher<br />
+`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
@@ -338,11 +350,11 @@ Options:
 
 `--quality`, the output quality (mainly used as jpg export)<br />
 `--spreads`, the spread information, can be repeated (ex: `-s 3-4 -s 99-100` will merge page 3 and 4 together.)<br />
-`--reverse`, reverse the order of the spread (recommended for manga/RTL layout)
+`--reverse`, reverse the order of the spread (recommended for manga/RTL layout)<br />
 `--format`, the output format that should be used, default to `auto` that will determine the output format from the input images.
 
 The filename should have the minimum format like this: `pXXX`<br />
-The prefix `p` is important to differentiate it from any other text in the filename.
+The prefix `p` is important to differentiate it from any other text in the filename.<br />
 Everything else is ignored and will be included on the final filename.
 
 This will also make a `backup` folder which contains the unmerged images (in case something went wrong.)
@@ -368,11 +380,11 @@ Options:
 ```
 
 `--quality`, the output quality (mainly used as jpg export)<br />
-`--reverse`, reverse the order of the spread (recommended for manga/RTL layout)
+`--reverse`, reverse the order of the spread (recommended for manga/RTL layout)<br />
 `--format`, the output format that should be used, default to `auto` that will determine the output format from the input image.
 
 The filename should have the minimum format like this: `pXXX-YYY`<br />
-The prefix `p` is important to differentiate it from any other text in the filename.
+The prefix `p` is important to differentiate it from any other text in the filename.<br />
 Everything else is ignored and will be included on the final filename.
 
 Same with `spreads join`, a `backup` folder will be created which contains the merged image (in case something went wrong.)
@@ -390,17 +402,20 @@ Options:
   -vol, --volume INTEGER          The volume of the series release
   -ch, --chapter INT_OR_FLOAT     The chapter of the series release
   -y, --year INTEGER              The year of the series release
+  -pt, --publication-type [digital|magazine|scan|web|mix]
+                                  The publication type for this series
+                                  [default: digital]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
-  -e, --email TEXT                The ripper email for this series  [default:       
+  -e, --email TEXT                The ripper email for this series  [default:
                                   noaione@protonmail.ch]
-  -r, --revision INTEGER RANGE    The revision of the release, if the number 1      
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
   -br, --bracket-type [square|round|curly]
-                                  Bracket to use to surround the ripper name        
+                                  Bracket to use to surround the ripper name
                                   [default: square]
-  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:        
+  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
                                   exiftool]
   -h, --help                      Show this message and exit.
 ```
@@ -409,6 +424,7 @@ Options:
 `--year`, the series year (will be used for exif tagging)<br />
 `--volume`, the volume number<br />
 `--chapter`, the chapter number<br />
+`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />

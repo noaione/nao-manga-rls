@@ -22,12 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import os
 from pathlib import Path
+from typing import Optional
 
 import click
 
 from ..config import get_config
+from ..exporter import ExporterType
+from .common import MANGA_PUBLICATION_TYPES
 
 config = get_config()
 
@@ -71,7 +73,31 @@ class FloatIntParamType(click.ParamType):
             self.fail(f"{value!r} is not a valid integer or floating type", param, ctx)
 
 
+class MangaPublicationParamType(click.ParamType):
+    name = "publication_type"
+
+    def convert(self, value, param, ctx):
+        if not isinstance(value, str):
+            self.fail(f"{value!r} is not a valid string", param, ctx)
+
+        pub_type = MANGA_PUBLICATION_TYPES.get(value)
+        pub_keys_list = list(MANGA_PUBLICATION_TYPES.keys())
+        pub_keys = "`" + "`, `".join(pub_keys_list) + "`"
+
+        if pub_type is None:
+            self.fail(f"{value!r} is not a valid publication type (must be either: {pub_keys})")
+        return pub_type
+
+    def get_metavar(self, param: "click.core.Parameter") -> Optional[str]:
+        choices_str = "|".join(list(MANGA_PUBLICATION_TYPES.keys()))
+
+        if param.required and param.param_type_name == "argument":
+            return f"{{{choices_str}}}"
+        return f"[{choices_str}]"
+
+
 FLOAT_INT = FloatIntParamType()
+PUBLICATION_TYPE = MangaPublicationParamType()
 
 
 archive_file = click.argument(
@@ -80,13 +106,14 @@ archive_file = click.argument(
     required=True,
     type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
 )
-output_dir = click.option(
-    "-o",
-    "--output",
-    "output_dirpath",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True, writable=True, path_type=Path),
-    default=os.getcwd(),
-    help="Existing folder to write the output [default: The current directory]",
+output_mode = click.option(
+    "-m",
+    "--mode",
+    "output_mode",
+    type=click.Choice(ExporterType),
+    help="The output mode for the archive packing",
+    default=ExporterType.cbz,
+    show_default=True,
 )
 magick_path = click.option(
     "-me",
@@ -160,6 +187,15 @@ manga_year = click.option(
     default=None,
     type=int,
     help="The year of the series release",
+)
+manga_publication_type = click.option(
+    "-pt",
+    "--publication-type",
+    "manga_publication_type",
+    type=PUBLICATION_TYPE,
+    help="The publication type for this series",
+    default=list(MANGA_PUBLICATION_TYPES.keys())[0],
+    show_default=True,
 )
 rls_credit = click.option(
     "-c",
