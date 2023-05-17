@@ -23,6 +23,7 @@
   - [v0.7.1](#071)
   - [v0.7.2](#072)
 - [v0.8.0](#080)
+  - [v0.8.1](#081)
 
 ## 0.1.0
 
@@ -153,3 +154,8 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Fixes**
 - Move all `pack` command to it's own module (`nmanga.cli.archive`)
+
+## 0.8.1
+**New Features**
+- Add `nmanga releasesch` to rename a single chapter.
+  - Same with spreads, it needs a minimum of `p000` for filename.

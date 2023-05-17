@@ -188,6 +188,20 @@ manga_year = click.option(
     type=int,
     help="The year of the series release",
 )
+manga_title = click.option(
+    "-t",
+    "--title",
+    "manga_title",
+    required=True,
+    help="The title of the series",
+)
+manga_publisher = click.option(
+    "-pub",
+    "--publisher",
+    "manga_publisher",
+    help="The publisher of the series",
+    required=True,
+)
 manga_publication_type = click.option(
     "-pt",
     "--publication-type",

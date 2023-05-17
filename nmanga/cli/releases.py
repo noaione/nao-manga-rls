@@ -26,7 +26,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Union
 
 import click
 
@@ -56,7 +56,10 @@ TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[{pt}] [{t}] [{pb}] [{c}]
 TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[{pt}] [{pb}] [{c}]"  # noqa
 TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 
-__all__ = ("prepare_releases",)
+__all__ = (
+    "prepare_releases",
+    "prepare_releases_chapter",
+)
 
 
 class SpecialNaming:
@@ -71,21 +74,9 @@ class SpecialNaming:
     cls=CatchAllExceptionsCommand,
 )
 @options.path_or_archive(disable_archive=True)
-@click.option(
-    "-t",
-    "--title",
-    "manga_title",
-    required=True,
-    help="The title of the series",
-)
+@options.manga_title
 @options.manga_year
-@click.option(
-    "-pub",
-    "--publisher",
-    "manga_publisher",
-    help="The publisher of the series",
-    required=True,
-)
+@options.manga_publisher
 @options.manga_publication_type
 @options.rls_credit
 @options.rls_email
@@ -301,6 +292,203 @@ def prepare_releases(
             image_titling = TARGET_TITLE.format(
                 mt=manga_title,
                 vol=vol,
+                year=current_year,
+                pt=manga_publication_type.archive,
+                c=rls_credit,
+                cpa=pair_left,
+                cpb=pair_right,
+            )
+            if rls_revision > 1:
+                image_titling += " (v%d)" % rls_revision
+
+        final_filename += extension
+        new_name = image.parent / final_filename
+        image.rename(new_name)
+        console.status(f"Processing: {current}/{total_img}")
+        current += 1
+    console.stop_status(f"Processed {current - 1} images!")
+
+    if pingo_exe is not None and do_img_optimize:
+        console.info("Optimizing images...")
+        optimize_images(pingo_exe, path_or_archive)
+    if exiftool_exe is not None and do_exif_tagging:
+        console.info("Tagging images with exif metadata...")
+        inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)
+
+
+@click.command(
+    name="releasesch",
+    help="Prepare a release of a manga chapter.",
+    cls=CatchAllExceptionsCommand,
+)
+@options.path_or_archive(disable_archive=True)
+@options.manga_title
+@options.manga_year
+@options.manga_publisher
+@options.manga_chapter
+@options.manga_volume
+@click.option(
+    "-cht",
+    "--chapter-title",
+    "chapter_title",
+    help="Chapter title that will be included between the publication type and publisher",
+    default=None,
+    required=False,
+)
+@options.manga_publication_type
+@options.rls_credit
+@options.rls_email
+@options.rls_revision
+@click.option(
+    "-hq",
+    "--is-high-quality",
+    "is_high_quality",
+    is_flag=True,
+    help="Whether this is a high quality release",
+    default=False,
+)
+@click.option(
+    "--tag/--no-tag",
+    "do_exif_tagging",
+    default=True,
+    show_default=True,
+    help="Do exif metadata tagging on the files.",
+)
+@click.option(
+    "--optimize/--no-optimize",
+    "do_img_optimize",
+    default=False,
+    show_default=True,
+    help="Optimize the images using pingo.",
+)
+@options.exiftool_path
+@options.pingo_path
+@options.use_bracket_type
+@check_config_first
+@time_program
+def prepare_releases_chapter(
+    path_or_archive: Path,
+    manga_title: str,
+    manga_year: Optional[int],
+    manga_publisher: str,
+    manga_chapter: Optional[Union[float, int]],
+    manga_volume: Optional[int],
+    chapter_title: Optional[str],
+    manga_publication_type: MangaPublication,
+    rls_credit: str,
+    rls_email: str,
+    rls_revision: int,
+    is_high_quality: bool,
+    do_exif_tagging: bool,
+    do_img_optimize: bool,
+    exiftool_path: str,
+    pingo_path: str,
+    bracket_type: Literal["square", "round", "curly"],
+):
+    """
+    Prepare a release of a manga chapter.
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    if manga_chapter is None:
+        raise click.BadParameter(
+            "-ch/--chapter is required for this command.",
+            param_hint="manga_chapter",
+        )
+
+    current_pst = datetime.now(timezone(timedelta(hours=-8)))
+    current_year = manga_year or current_pst.year
+
+    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
+
+    force_search_exif = not is_executeable_global_path(exiftool_path, "exiftool")
+    exiftool_exe = test_or_find_exiftool(exiftool_path, force_search_exif)
+    if exiftool_exe is None and do_exif_tagging:
+        console.warning("Exiftool not found, will skip tagging image with exif metadata!")
+    force_search_pingo = not is_executeable_global_path(pingo_path, "pingo")
+    pingo_exe = test_or_find_pingo(pingo_path, force_search_pingo)
+    if pingo_exe is None and do_img_optimize:
+        console.warning("Pingo not found, will skip optimizing image!")
+
+    page_re = RegexCollection.page_re()
+    console.status("Checking folder contents...")
+    for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
+        title_match = page_re.match(image.name)
+        if title_match is None:
+            console.error("Unmatching file name: {}".format(image.name))
+            return 1
+    console.stop_status("Checking folder contents... done!")
+
+    console.info("Preparing release...")
+    current = 1
+    console.info("Processing: 1/???")
+    image_titling: Optional[str] = None
+    for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
+        title_match = page_re.match(image.name)
+        if title_match is None:
+            console.error("Unmatching file name: {}".format(image.name))
+            return 1
+
+        p01 = title_match.group("a")
+        p02 = title_match.group("b")
+        if p02 is not None:
+            p01 = f"{p01}-{p02}"
+
+        ch_range = ChapterRange(manga_chapter, chapter_title, [], True)
+
+        chapter_num = f"{ch_range.base:03d}"
+        chapter_ex_data = ""
+        floaty = ch_range.floating
+        if floaty is not None:
+            if floaty >= 5:
+                chapter_num += f"x{floaty - 4}"
+            else:
+                chapter_ex_data = f" (c{chapter_num}.{floaty})"
+                chapter_num += "x1"
+
+        extension = image.suffix
+        volume_n = "NA"
+        if manga_volume is not None:
+            volume_n = f"v{manga_volume:02d}"
+
+        final_filename = TARGET_FORMAT_ALT.format(
+            mt=manga_title,
+            ch=chapter_num,
+            chex=chapter_ex_data,
+            vol=volume_n,
+            pg=p01,
+            ex=" ",
+            pt=manga_publication_type.image,
+            pb=manga_publisher,
+            c=rls_credit,
+        )
+        if chapter_title is not None:
+            final_filename = TARGET_FORMAT.format(
+                mt=manga_title,
+                ch=chapter_num,
+                chex=chapter_ex_data,
+                vol=volume_n,
+                pg=p01,
+                ex=" ",
+                t=chapter_title,
+                pt=manga_publication_type.image,
+                pb=manga_publisher,
+                c=rls_credit,
+            )
+        if is_high_quality:
+            final_filename += r" {HQ}"
+        if rls_revision > 1:
+            final_filename += " {r%d}" % rls_revision
+
+        if not image_titling:
+            image_titling = TARGET_TITLE.format(
+                mt=manga_title,
+                vol=volume_n,
                 year=current_year,
                 pt=manga_publication_type.archive,
                 c=rls_credit,

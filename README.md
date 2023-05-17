@@ -314,6 +314,75 @@ This use the same inquiring method as `manualsplit`
 The filename also must match something like this:
 - `Manga Title - vXX - pXXX`
 
+#### `releasesch`
+Create a release for a single chapter, this will format the filename into the formatting we wanted.
+
+```py
+Usage: nmanga releasesch [OPTIONS] FOLDER_PATH
+
+  Prepare a release of a manga chapter.
+
+Options:
+  -t, --title TEXT                The title of the series  [required]
+  -y, --year INTEGER              The year of the series release
+  -pub, --publisher TEXT          The publisher of the series  [required]
+  -ch, --chapter INT_OR_FLOAT     The chapter of the series release
+  -vol, --volume INTEGER          The volume of the series release
+  -cht, --chapter-title TEXT      Chapter title that will be included between
+                                  the publication type and publisher
+  -pt, --publication-type [digital|magazine|scan|web|mix]
+                                  The publication type for this series
+                                  [default: digital]
+  -c, --credit TEXT               The ripper credit for this series  [default:
+                                  nao]
+  -e, --email TEXT                The ripper email for this series  [default:
+                                  noaione@protonmail.ch]
+  -r, --revision INTEGER RANGE    The revision of the release, if the number 1
+                                  provided it will not put in the filename
+                                  [default: 1; x>=1]
+  -hq, --is-high-quality          Whether this is a high quality release
+  --tag / --no-tag                Do exif metadata tagging on the files.
+                                  [default: tag]
+  --optimize / --no-optimize      Optimize the images using pingo.  [default:
+                                  no-optimize]
+  -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
+                                  exiftool]
+  -pe, --pingo-exec TEXT          Path to the pingo executable  [default:
+                                  pingo]
+  -br, --bracket-type [square|round|curly]
+                                  Bracket to use to surround the ripper name
+                                  [default: square]
+  -h, --help                      Show this message and exit.
+```
+
+`--title`, the series title<br />
+`--year`, the series year (will be used for exif tagging)<br />
+`--publisher`, the publisher<br />
+`--chapter`, the chapter number<br />
+`--chapter-title`, the chapter title, same formatting if you use with chapter title mode on `releases`<br />
+`--volume`, the chapter associated volume, if not provided it will use `(NA)`<br />
+`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
+`--credit`, the ripped/group name<br />
+`--email`, will be used for exif tagging<br />
+`--revision`, the revision number of the releases.<br />
+`--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
+`--tag/--no-tag`, do exif tagging.<br />
+`--optimize/--no-optimize`, optimize image with pingo<br />
+`--bracket-type`, the bracket to be used.
+
+This will automatically format everything depending on the option provided.<br/>
+For example:
+- Command: `nmanga releasesch -t "The Necromancer Maid" -pub "Comikey" -ch 26 -pt web -cht "Princess Chloe" ./c026`
+  - Output: `The Necromancer Maid - c026 (NA) - p000 [web] [Princess Chloe] [Comikey] [RIPPER]`
+- Command: `nmanga releasesch -t "The Necromancer Maid" -pub "Comikey" -vol 3 -ch 26 -pt web -cht "Princess Chloe" ./c026`
+  - Output: `The Necromancer Maid - c026 (v03) - p000 [web] [Princess Chloe] [Comikey] [RIPPER]`
+
+The filename must have a minimum match like this:
+- `pXXX`
+- `pXXX-YYY`
+
+Anything outside that is ignored.
+
 #### `spreads`
 Manage spreads from a directory of images.
 
