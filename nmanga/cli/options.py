@@ -110,7 +110,7 @@ def manga_publication_type(chapter_mode: bool = False):
         "--publication-type",
         "manga_publication_type",
         type=PUBLICATION_TYPE,
-        help="The publication type for this series",
+        help="The publication type for this series, use none to remove it from image filename",
         default=default_arg,
         show_default=True,
     )

@@ -24,6 +24,8 @@
   - [v0.7.2](#072)
 - [v0.8.0](#080)
   - [v0.8.1](#081)
+  - [v0.8.2](#082)
+- [v0.9.0](#090)
 
 ## 0.1.0
 
@@ -167,3 +169,12 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Refactor**
 - Create a function for creating filename format, simplify it too.
 - This changes the formatting around a bit.
+
+## 0.9.0
+**BREAKING CHANGES**
+- Deprecated `--is-high-quality` in favor of `--quality` for marking LQ/HQ image
+
+**Fixes**
+- Publication type not being written
+- Extra mapping is now gated behind empty check before processing
+- Fix typo when it should use `manga_volume_text` instead of `manga_volume`

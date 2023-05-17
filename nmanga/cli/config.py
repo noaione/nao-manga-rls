@@ -28,7 +28,7 @@ from typing import Callable, List, Optional, Tuple
 import click
 
 from .. import config, term
-from .base import CatchAllExceptionsCommand, test_or_find_exiftool, test_or_find_magick, test_or_find_pingo
+from .base import NMangaCommandHandler, test_or_find_exiftool, test_or_find_magick, test_or_find_pingo
 from .constants import MANGA_PUBLICATION_TYPES
 
 __all__ = ("cli_config",)
@@ -304,7 +304,7 @@ def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:
         console.enter()
 
 
-@click.command("config", help="Configure nmanga CLI", cls=CatchAllExceptionsCommand)
+@click.command("config", help="Configure nmanga CLI", cls=NMangaCommandHandler)
 def cli_config():
     config = cfhandler.config
 

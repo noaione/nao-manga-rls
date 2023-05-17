@@ -32,7 +32,7 @@ import click
 from .. import term
 from . import options
 from ._deco import check_config_first, time_program
-from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_pingo
+from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_pingo
 from .common import optimize_images
 
 console = term.get_console()
@@ -41,7 +41,7 @@ console = term.get_console()
 @click.command(
     name="optimize",
     help="Optimize images with pingo",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @click.option(

@@ -34,7 +34,7 @@ import click
 
 from .. import exporter, file_handler, term
 from ._deco import time_program
-from .base import CatchAllExceptionsCommand
+from .base import NMangaCommandHandler
 
 console = term.get_console()
 
@@ -51,7 +51,7 @@ def _clean_filename(output_name: Optional[str]) -> Optional[str]:
 @click.command(
     "merge",
     help="Merge chapters together into a single chapter",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @click.argument(
     "archives",

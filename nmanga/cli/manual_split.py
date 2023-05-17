@@ -37,7 +37,7 @@ import click
 from .. import exporter, file_handler, term, utils
 from . import options
 from ._deco import time_program
-from .base import CatchAllExceptionsCommand
+from .base import NMangaCommandHandler
 from .common import (
     ChapterRange,
     PseudoChapterMatch,
@@ -159,7 +159,9 @@ def _collect_archive_to_chapters(
     console.enter()
 
 
-def _handle_page_number_mode(archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False):
+def _handle_page_number_mode(
+    archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False
+):
     console.info(f"Handling in page number mode (custom enabled? {custom_mode_enabled!r})")
 
     custom_data: Dict[str, int] = {}
@@ -214,7 +216,7 @@ def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mod
 @click.command(
     name="manualsplit",
     help="Manually split volumes into chapters using multiple modes",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_folder=True)
 @click.option(
@@ -244,7 +246,9 @@ def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
         "Select mode",
         choices=[
             term.ConsoleChoice("page_number", "Page number mode (all filename must be page number)"),
-            term.ConsoleChoice("regex", "Regex mode (Enter regex that should atleast match the page number!)"),
+            term.ConsoleChoice(
+                "regex", "Regex mode (Enter regex that should atleast match the page number!)"
+            ),
             term.ConsoleChoice("page_number_and_custom", "Page number mode with custom page number mapping"),
             term.ConsoleChoice("regex_and_custom", "Regex mode with custom page number mapping"),
         ],

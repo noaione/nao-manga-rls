@@ -34,7 +34,7 @@ import click
 from .. import config, term
 from . import options
 from ._deco import check_config_first, time_program
-from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_exiftool
+from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_exiftool
 from .common import format_archive_filename, inject_metadata
 from .constants import MangaPublication
 
@@ -46,7 +46,7 @@ TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 @click.command(
     name="tag",
     help="Tag images with metadata",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @click.option(

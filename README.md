@@ -222,8 +222,9 @@ Options:
   -y, --year INTEGER              The year of the series release
   -vol, --volume INTEGER          The volume of the series release
   -ch, --chapter INT_OR_FLOAT     The chapter of the series release
-  -pt, --publication-type [digital|magazine|scan|web|mix]
-                                  The publication type for this series
+  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+                                  The publication type for this series, use
+                                  none to remove it from image filename
                                   [default: digital]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
@@ -275,8 +276,9 @@ Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -pub, --publisher TEXT          The publisher of the series  [required]
-  -pt, --publication-type [digital|magazine|scan|web|mix]
-                                  The publication type for this series
+  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+                                  The publication type for this series, use
+                                  none to remove it from image filename
                                   [default: digital]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
@@ -285,7 +287,9 @@ Options:
   -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
-  -hq, --is-high-quality          Whether this is a high quality release
+  -hq, --is-high-quality          (DEPRECATED) Whether this is a high quality
+                                  release
+  -mq, --quality [LQ|HQ]          Image quality of this release.
   --tag / --no-tag                Do exif metadata tagging on the files.
                                   [default: tag]
   --optimize / --no-optimize      Optimize the images using pingo.  [default:
@@ -307,7 +311,8 @@ Options:
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
-`--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
+**[DEPRECATED]** `--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
+`--quality`, the image quality of this release (optional, add `{HQ}` or `{LQ}` to filename)<br />
 `--tag/--no-tag`, do exif tagging.<br />
 `--optimize/--no-optimize`, optimize image with pingo<br />
 `--bracket-type`, the bracket to be used.
@@ -338,9 +343,10 @@ Options:
   -vol, --volume INTEGER          The volume of the series release
   -cht, --chapter-title TEXT      Chapter title that will be included between
                                   the publication type and publisher
-  -pt, --publication-type [digital|magazine|scan|web|mix]
-                                  The publication type for this series
-                                  [default: digital]
+  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+                                  The publication type for this series, use
+                                  none to remove it from image filename
+                                  [default: web]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]
   -e, --email TEXT                The ripper email for this series  [default:
@@ -348,7 +354,9 @@ Options:
   -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
-  -hq, --is-high-quality          Whether this is a high quality release
+  -hq, --is-high-quality          (DEPRECATED) Whether this is a high quality
+                                  release
+  -mq, --quality [LQ|HQ]          Image quality of this release.
   --tag / --no-tag                Do exif metadata tagging on the files.
                                   [default: tag]
   --optimize / --no-optimize      Optimize the images using pingo.  [default:
@@ -373,7 +381,8 @@ Options:
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
-`--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
+**[DEPRECATED]** `--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
+`--quality`, the image quality of this release (optional, add `{HQ}` or `{LQ}` to filename)<br />
 `--tag/--no-tag`, do exif tagging.<br />
 `--optimize/--no-optimize`, optimize image with pingo<br />
 `--bracket-type`, the bracket to be used.
@@ -485,8 +494,9 @@ Options:
   -vol, --volume INTEGER          The volume of the series release
   -ch, --chapter INT_OR_FLOAT     The chapter of the series release
   -y, --year INTEGER              The year of the series release
-  -pt, --publication-type [digital|magazine|scan|web|mix]
-                                  The publication type for this series
+  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+                                  The publication type for this series, use
+                                  none to remove it from image filename
                                   [default: digital]
   -c, --credit TEXT               The ripper credit for this series  [default:
                                   nao]

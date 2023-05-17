@@ -401,36 +401,37 @@ def format_daiz_like_filename(
 ):
     pub_type = ""
     if publication_type.image:
-        pub_type = f"[{pub_type}]"
+        pub_type = f"[{publication_type.image}]"
 
     chapter_num = f"{chapter_info.base:03d}"
 
-    pack_data = chapter_extra_maps[chapter_info.base]
-    pack_data.sort(key=lambda x: x.number)
     chapter_ex_data = ""
-    if len(pack_data) > 1:
-        smallest = pack_data[1].floating
-        for pack in pack_data:
-            if pack.floating is not None and pack.floating < smallest:
-                smallest = pack.floating
-        if smallest is not None and chapter_info.floating is not None:
-            # Check if we should append the custom float data
-            if smallest >= 5:
-                # We don't need to append the float data
-                float_act = chapter_info.floating - 4
-                chapter_num += f"x{float_act}"
-            else:
-                idx = pack_data.index(chapter_info)
-                chapter_ex_data = f" (c{chapter_num}.{chapter_info.floating})"
-                chapter_num += f"x{idx}"
-    else:
-        floaty = chapter_info.floating
-        if floaty is not None:
-            if floaty >= 5:
-                chapter_num += f"x{floaty - 4}"
-            else:
-                chapter_ex_data = f" (c{chapter_num}.{floaty})"
-                chapter_num += "x1"
+    if chapter_extra_maps:
+        pack_data = chapter_extra_maps[chapter_info.base]
+        pack_data.sort(key=lambda x: x.number)
+        if len(pack_data) > 1:
+            smallest = pack_data[1].floating
+            for pack in pack_data:
+                if pack.floating is not None and pack.floating < smallest:
+                    smallest = pack.floating
+            if smallest is not None and chapter_info.floating is not None:
+                # Check if we should append the custom float data
+                if smallest >= 5:
+                    # We don't need to append the float data
+                    float_act = chapter_info.floating - 4
+                    chapter_num += f"x{float_act}"
+                else:
+                    idx = pack_data.index(chapter_info)
+                    chapter_ex_data = f" (c{chapter_num}.{chapter_info.floating})"
+                    chapter_num += f"x{idx}"
+        else:
+            floaty = chapter_info.floating
+            if floaty is not None:
+                if floaty >= 5:
+                    chapter_num += f"x{floaty - 4}"
+                else:
+                    chapter_ex_data = f" (c{chapter_num}.{floaty})"
+                    chapter_num += "x1"
 
     act_vol = fallback_volume_name
     if manga_volume is not None:
@@ -477,6 +478,6 @@ def format_daiz_like_filename(
         publication_type=publication_type,
         ripper_credit=ripper_credit,
         bracket_type=bracket_type,
-        manga_volume=f"v{manga_volume:02d}" if manga_volume is not None else None,
+        manga_volume_text=f"v{manga_volume:02d}" if manga_volume is not None else None,
         rls_revision=rls_revision,
     )

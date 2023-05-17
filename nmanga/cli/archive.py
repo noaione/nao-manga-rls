@@ -34,7 +34,7 @@ import click
 from .. import config, exporter, file_handler, term
 from . import options
 from ._deco import check_config_first, time_program
-from .base import CatchAllExceptionsCommand
+from .base import NMangaCommandHandler
 from .common import format_archive_filename
 from .constants import MangaPublication
 
@@ -47,7 +47,7 @@ TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 @click.command(
     name="pack",
     help="Pack a release to an archive.",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @click.option(
@@ -155,7 +155,7 @@ def pack_releases(
 @click.command(
     name="packepub",
     help="Pack a release to an epub archive.",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @click.option(
@@ -249,7 +249,7 @@ def pack_releases_epub_mode(
 @click.command(
     name="packcomment",
     help="Comment an archive file.",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_folder=True)
 @click.option(

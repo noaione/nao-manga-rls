@@ -34,8 +34,9 @@ from .. import config, file_handler, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import (
-    CatchAllExceptionsCommand,
+    NMangaCommandHandler,
     RegexCollection,
+    WithDeprecatedOption,
     is_executeable_global_path,
     test_or_find_exiftool,
     test_or_find_pingo,
@@ -68,7 +69,7 @@ class SpecialNaming:
 @click.command(
     name="releases",
     help="Prepare a release of a manga series.",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @options.manga_title
@@ -82,9 +83,20 @@ class SpecialNaming:
     "-hq",
     "--is-high-quality",
     "is_high_quality",
+    cls=WithDeprecatedOption,
     is_flag=True,
     help="Whether this is a high quality release",
     default=False,
+    deprecated=True,
+    preferred=["-mq", "--quality"],
+)
+@click.option(
+    "-mq",
+    "--quality",
+    "image_quality",
+    type=click.Choice(["LQ", "HQ"]),
+    default=None,
+    help="Image quality of this release.",
 )
 @click.option(
     "--tag/--no-tag",
@@ -115,6 +127,7 @@ def prepare_releases(
     rls_email: str,
     rls_revision: int,
     is_high_quality: bool,
+    image_quality: Optional[str],
     do_exif_tagging: bool,
     do_img_optimize: bool,
     exiftool_path: str,
@@ -229,6 +242,10 @@ def prepare_releases(
         if p01_copy in special_naming:
             extra_name = special_naming[p01_copy].data
 
+        act_img_quality = "HQ" if is_high_quality else None
+        if image_quality is not None:
+            act_img_quality = image_quality
+
         image_filename, archive_filename = format_daiz_like_filename(
             manga_title=manga_title,
             manga_publisher=manga_publisher,
@@ -240,7 +257,7 @@ def prepare_releases(
             bracket_type=bracket_type,
             manga_volume=vol_act,
             extra_metadata=extra_name,
-            image_quality="HQ" if is_high_quality else None,
+            image_quality=act_img_quality,
             rls_revision=rls_revision,
             chapter_extra_maps=packing_extra,
         )
@@ -266,7 +283,7 @@ def prepare_releases(
 @click.command(
     name="releasesch",
     help="Prepare a release of a manga chapter.",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @options.manga_title
@@ -290,9 +307,20 @@ def prepare_releases(
     "-hq",
     "--is-high-quality",
     "is_high_quality",
+    cls=WithDeprecatedOption,
     is_flag=True,
     help="Whether this is a high quality release",
     default=False,
+    deprecated=True,
+    preferred=["-mq", "--quality"],
+)
+@click.option(
+    "-mq",
+    "--quality",
+    "image_quality",
+    type=click.Choice(["LQ", "HQ"]),
+    default=None,
+    help="Image quality of this release.",
 )
 @click.option(
     "--tag/--no-tag",
@@ -326,6 +354,7 @@ def prepare_releases_chapter(
     rls_email: str,
     rls_revision: int,
     is_high_quality: bool,
+    image_quality: Optional[str],
     do_exif_tagging: bool,
     do_img_optimize: bool,
     exiftool_path: str,
@@ -385,6 +414,9 @@ def prepare_releases_chapter(
             p01 = f"{p01}-{p02}"
 
         ch_range = ChapterRange(manga_chapter, chapter_title, [], True)
+        act_img_quality = "HQ" if is_high_quality else None
+        if image_quality is not None:
+            act_img_quality = image_quality
 
         image_filename, _ = format_daiz_like_filename(
             manga_title=manga_title,
@@ -396,7 +428,7 @@ def prepare_releases_chapter(
             ripper_credit=rls_credit,
             bracket_type=bracket_type,
             manga_volume=manga_volume,
-            image_quality="HQ" if is_high_quality else None,
+            image_quality=act_img_quality,
             rls_revision=rls_revision,
             fallback_volume_name="NA",
         )

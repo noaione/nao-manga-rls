@@ -37,7 +37,7 @@ import click
 from .. import exporter, file_handler, term, utils
 from . import options
 from ._deco import time_program
-from .base import CatchAllExceptionsCommand, RegexCollection
+from .base import NMangaCommandHandler, RegexCollection
 from .common import check_cbz_exist, create_chapter
 
 console = term.get_console()
@@ -46,7 +46,7 @@ console = term.get_console()
 @click.command(
     name="autosplit",
     help="Automatically split volumes into chapters using regex",
-    cls=CatchAllExceptionsCommand,
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive()
 @click.option(
