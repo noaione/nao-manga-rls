@@ -23,12 +23,13 @@ SOFTWARE.
 """
 
 import functools
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import click
 
 from .. import config, term
 from .base import CatchAllExceptionsCommand, test_or_find_exiftool, test_or_find_magick, test_or_find_pingo
+from .constants import MANGA_PUBLICATION_TYPES
 
 __all__ = ("cli_config",)
 cfhandler = config.get_config_handler()
@@ -135,6 +136,26 @@ def _loop_defaults_chapter_special_tag(config: config.Config) -> config.Config:
     return config
 
 
+def _loop_defaults_release_publication_type(config: config.Config, default_now: str) -> str:
+    choices_raw: List[term.ConsoleChoice] = []
+    selected_choice = 0
+    for idx, (key_name, key_value) in enumerate(MANGA_PUBLICATION_TYPES.items()):
+        if key_name == default_now:
+            selected_choice = idx
+        fmt_desc = (
+            f"{key_name.capitalize()}: {key_value.description} ({key_value.image!r}/{key_value.archive!r})"
+        )
+        choices_raw.append(term.ConsoleChoice(key_name, fmt_desc))
+
+    select_option = console.choice(
+        f"Select default bracket type [current: {config.defaults.bracket_type}]",
+        choices=choices_raw,
+        default=choices_raw[selected_choice],
+    )
+
+    return select_option.name
+
+
 def _loop_defaults_sections(config: config.Config) -> config.Config:
     while True:
         select_option = console.choice(
@@ -145,6 +166,10 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
                 term.ConsoleChoice("ripper_email", "Configure default ripper credit email"),
                 term.ConsoleChoice("ch_add_prefix", "Enable `c` prefixing for chapter packing/tagging"),
                 term.ConsoleChoice("hashtag_special", "Use `#` instead of `x` as special separator"),
+                term.ConsoleChoice("rls_pub_type", "Configure default publication type for releases command"),
+                term.ConsoleChoice(
+                    "rls_ch_pub_type", "Configure default publication type for releasesch command"
+                ),
                 SAVE_CHOICE,
             ],
         )
@@ -162,6 +187,14 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
             config = _loop_defaults_chapter_prefixed(config)
         elif option == "hashtag_special":
             config = _loop_defaults_chapter_special_tag(config)
+        elif option == "rls_pub_type":
+            config.defaults.rls_pub_type = _loop_defaults_release_publication_type(
+                config, config.defaults.rls_pub_type
+            )
+        elif option == "rls_ch_pub_type":
+            config.defaults.rls_ch_pub_type = _loop_defaults_release_publication_type(
+                config, config.defaults.rls_ch_pub_type
+            )
         else:
             console.warning("Invalid option selected")
             console.sleep(2)

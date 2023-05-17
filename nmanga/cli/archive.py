@@ -35,11 +35,12 @@ from .. import config, exporter, file_handler, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import CatchAllExceptionsCommand
-from .common import BRACKET_MAPPINGS, MangaPublication
+from .common import format_archive_filename
+from .constants import MangaPublication
 
 console = term.get_console()
 conf = config.get_config()
-TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
+
 TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 
 
@@ -59,7 +60,7 @@ TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 @options.manga_year
 @options.manga_volume
 @options.manga_chapter
-@options.manga_publication_type
+@options.manga_publication_type()
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
@@ -122,22 +123,19 @@ def pack_releases(
             param_hint="manga_volume",
         )
 
-    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
     console.info("Trying to pack release...")
-    actual_filename = TARGET_TITLE.format(
-        mt=manga_title,
-        vol=volume_text,
-        year=current_year,
-        pt=manga_publication_type.archive,
-        c=rls_credit,
-        cpa=pair_left,
-        cpb=pair_right,
+    archive_filename = format_archive_filename(
+        manga_title=manga_title,
+        manga_year=current_year,
+        publication_type=manga_publication_type,
+        ripper_credit=rls_credit,
+        bracket_type=bracket_type,
+        manga_volume_text=volume_text,
+        rls_revision=rls_revision,
     )
-    if rls_revision > 1:
-        actual_filename += " (v%d)" % rls_revision
 
     parent_dir = path_or_archive.parent
-    arc_target = exporter.exporter_factory(actual_filename, parent_dir, output_mode, manga_title=manga_title)
+    arc_target = exporter.exporter_factory(archive_filename, parent_dir, output_mode, manga_title=manga_title)
 
     if output_mode == exporter.ExporterType.epub:
         console.warning("Packing as EPUB, this will be a slower operation because of size checking!")

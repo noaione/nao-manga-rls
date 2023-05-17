@@ -35,7 +35,8 @@ from .. import config, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import CatchAllExceptionsCommand, is_executeable_global_path, test_or_find_exiftool
-from .common import BRACKET_MAPPINGS, MangaPublication, inject_metadata
+from .common import format_archive_filename, inject_metadata
+from .constants import MangaPublication
 
 console = term.get_console()
 conf = config.get_config()
@@ -58,7 +59,7 @@ TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 @options.manga_volume
 @options.manga_chapter
 @options.manga_year
-@options.manga_publication_type
+@options.manga_publication_type()
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
@@ -121,17 +122,15 @@ def image_tagging(
             param_hint="manga_volume",
         )
 
-    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
-    image_titling = TARGET_TITLE.format(
-        mt=manga_title,
-        vol=volume_text,
-        year=current_year,
-        pt=manga_publication_type.archive,
-        c=rls_credit,
-        cpa=pair_left,
-        cpb=pair_right,
+    archive_filename = format_archive_filename(
+        manga_title=manga_title,
+        manga_year=current_year,
+        publication_type=manga_publication_type,
+        ripper_credit=rls_credit,
+        bracket_type=bracket_type,
+        manga_volume_text=volume_text,
+        rls_revision=rls_revision,
     )
-    if rls_revision > 1:
-        image_titling += f" (v{rls_revision})"
+
     console.info("Tagging images with exif metadata...")
-    inject_metadata(exiftool_exe, path_or_archive, image_titling, rls_email)
+    inject_metadata(exiftool_exe, path_or_archive, archive_filename, rls_email)

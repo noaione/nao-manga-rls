@@ -41,20 +41,17 @@ from .base import (
     test_or_find_pingo,
 )
 from .common import (
-    BRACKET_MAPPINGS,
     ChapterRange,
-    MangaPublication,
+    format_daiz_like_filename,
     inject_metadata,
     inquire_chapter_ranges,
     optimize_images,
     safe_int,
 )
+from .constants import MangaPublication
 
 console = term.get_console()
 conf = config.get_config()
-TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[{pt}] [{t}] [{pb}] [{c}]"  # noqa
-TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}[{pt}] [{pb}] [{c}]"  # noqa
-TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 
 __all__ = (
     "prepare_releases",
@@ -77,7 +74,7 @@ class SpecialNaming:
 @options.manga_title
 @options.manga_year
 @options.manga_publisher
-@options.manga_publication_type
+@options.manga_publication_type()
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
@@ -136,8 +133,6 @@ def prepare_releases(
 
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
-
-    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
 
     force_search_exif = not is_executeable_global_path(exiftool_path, "exiftool")
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search_exif)
@@ -204,12 +199,17 @@ def prepare_releases(
         if p02 is not None:
             p01 = f"{p01}-{p02}"
         if vol is None:
-            vol = "OShot"
+            vol_act = None
             if not vol_oshot_warn:
                 vol_oshot_warn = True
-                console.warning("Volume is not specified, using OShot (Oneshot) as default!")
+                console.warning(
+                    "Volume is not specified, using OShot (Oneshot) as default for image and empty for archive name!"  # noqa: E501
+                )
+        else:
+            if vol.startswith("v"):
+                vol = vol[1:]
+            vol_act = int(vol)
 
-        # print(p01_copy)
         selected_range: ChapterRange = None
         for rls_info in rls_information:
             if rls_info.is_single:
@@ -224,85 +224,32 @@ def prepare_releases(
             console.warning(f"Page {p01} are not included in any range, skipping!")
             current += 1
             continue
-        extra_name = " "
+
+        extra_name = None
         if p01_copy in special_naming:
-            extra_name = f" [{special_naming[p01_copy].data}] "
+            extra_name = special_naming[p01_copy].data
 
-        chapter_num = f"{selected_range.base:03d}"
-        pack_data = packing_extra[selected_range.base]
-        pack_data.sort(key=lambda x: x.number)
-        chapter_ex_data = ""
-        if len(pack_data) > 1:
-            smallest = pack_data[1].floating
-            for pack in pack_data:
-                if pack.floating is not None and pack.floating < smallest:
-                    smallest = pack.floating
-            if smallest is not None and selected_range.floating is not None:
-                # Check if we should append the custom float data
-                if smallest >= 5:
-                    # We don't need to append the float data
-                    float_act = selected_range.floating - 4
-                    chapter_num += f"x{float_act}"
-                else:
-                    idx = pack_data.index(selected_range)
-                    chapter_ex_data = f" (c{chapter_num}.{selected_range.floating})"
-                    chapter_num += f"x{idx}"
-        else:
-            floaty = selected_range.floating
-            if floaty is not None:
-                if floaty >= 5:
-                    chapter_num += f"x{floaty - 4}"
-                else:
-                    chapter_ex_data = f" (c{chapter_num}.{floaty})"
-                    chapter_num += "x1"
-
-        ch_title_name = selected_range.name
-        extension = image.suffix
-
-        final_filename = TARGET_FORMAT_ALT.format(
-            mt=manga_title,
-            ch=chapter_num,
-            chex=chapter_ex_data,
-            vol=vol,
-            pg=p01,
-            ex=extra_name,
-            pt=manga_publication_type.image,
-            pb=manga_publisher,
-            c=rls_credit,
+        image_filename, archive_filename = format_daiz_like_filename(
+            manga_title=manga_title,
+            manga_publisher=manga_publisher,
+            manga_year=current_year,
+            chapter_info=selected_range,
+            page_number=p01,
+            publication_type=manga_publication_type,
+            ripper_credit=rls_credit,
+            bracket_type=bracket_type,
+            manga_volume=vol_act,
+            extra_metadata=extra_name,
+            image_quality="HQ" if is_high_quality else None,
+            rls_revision=rls_revision,
+            chapter_extra_maps=packing_extra,
         )
-        if has_ch_title:
-            final_filename = TARGET_FORMAT.format(
-                mt=manga_title,
-                ch=chapter_num,
-                chex=chapter_ex_data,
-                vol=vol,
-                pg=p01,
-                ex=extra_name,
-                t=ch_title_name,
-                pt=manga_publication_type.image,
-                pb=manga_publisher,
-                c=rls_credit,
-            )
-        if is_high_quality:
-            final_filename += r" {HQ}"
-        if rls_revision > 1:
-            final_filename += " {r%d}" % rls_revision
 
         if not image_titling:
-            image_titling = TARGET_TITLE.format(
-                mt=manga_title,
-                vol=vol,
-                year=current_year,
-                pt=manga_publication_type.archive,
-                c=rls_credit,
-                cpa=pair_left,
-                cpb=pair_right,
-            )
-            if rls_revision > 1:
-                image_titling += " (v%d)" % rls_revision
+            image_titling = archive_filename
 
-        final_filename += extension
-        new_name = image.parent / final_filename
+        image_filename += image.suffix
+        new_name = image.parent / image_filename
         image.rename(new_name)
         console.status(f"Processing: {current}/{total_img}")
         current += 1
@@ -335,7 +282,7 @@ def prepare_releases(
     default=None,
     required=False,
 )
-@options.manga_publication_type
+@options.manga_publication_type(chapter_mode=True)
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
@@ -404,8 +351,6 @@ def prepare_releases_chapter(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
-    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
-
     force_search_exif = not is_executeable_global_path(exiftool_path, "exiftool")
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search_exif)
     if exiftool_exe is None and do_exif_tagging:
@@ -441,65 +386,23 @@ def prepare_releases_chapter(
 
         ch_range = ChapterRange(manga_chapter, chapter_title, [], True)
 
-        chapter_num = f"{ch_range.base:03d}"
-        chapter_ex_data = ""
-        floaty = ch_range.floating
-        if floaty is not None:
-            if floaty >= 5:
-                chapter_num += f"x{floaty - 4}"
-            else:
-                chapter_ex_data = f" (c{chapter_num}.{floaty})"
-                chapter_num += "x1"
-
-        extension = image.suffix
-        volume_n = "NA"
-        if manga_volume is not None:
-            volume_n = f"v{manga_volume:02d}"
-
-        final_filename = TARGET_FORMAT_ALT.format(
-            mt=manga_title,
-            ch=chapter_num,
-            chex=chapter_ex_data,
-            vol=volume_n,
-            pg=p01,
-            ex=" ",
-            pt=manga_publication_type.image,
-            pb=manga_publisher,
-            c=rls_credit,
+        image_filename, _ = format_daiz_like_filename(
+            manga_title=manga_title,
+            manga_publisher=manga_publisher,
+            manga_year=current_year,
+            chapter_info=ch_range,
+            page_number=p01,
+            publication_type=manga_publication_type,
+            ripper_credit=rls_credit,
+            bracket_type=bracket_type,
+            manga_volume=manga_volume,
+            image_quality="HQ" if is_high_quality else None,
+            rls_revision=rls_revision,
+            fallback_volume_name="NA",
         )
-        if chapter_title is not None:
-            final_filename = TARGET_FORMAT.format(
-                mt=manga_title,
-                ch=chapter_num,
-                chex=chapter_ex_data,
-                vol=volume_n,
-                pg=p01,
-                ex=" ",
-                t=chapter_title,
-                pt=manga_publication_type.image,
-                pb=manga_publisher,
-                c=rls_credit,
-            )
-        if is_high_quality:
-            final_filename += r" {HQ}"
-        if rls_revision > 1:
-            final_filename += " {r%d}" % rls_revision
 
-        if not image_titling:
-            image_titling = TARGET_TITLE.format(
-                mt=manga_title,
-                vol=volume_n,
-                year=current_year,
-                pt=manga_publication_type.archive,
-                c=rls_credit,
-                cpa=pair_left,
-                cpb=pair_right,
-            )
-            if rls_revision > 1:
-                image_titling += " (v%d)" % rls_revision
-
-        final_filename += extension
-        new_name = image.parent / final_filename
+        image_filename += image.suffix
+        new_name = image.parent / image_filename
         image.rename(new_name)
         console.status(f"Processing: {current}/{total_img}")
         current += 1

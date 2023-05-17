@@ -29,7 +29,7 @@ import click
 
 from ..config import get_config
 from ..exporter import ExporterType
-from .common import MANGA_PUBLICATION_TYPES
+from .constants import MANGA_PUBLICATION_TYPES
 
 config = get_config()
 
@@ -98,6 +98,22 @@ class MangaPublicationParamType(click.ParamType):
 
 FLOAT_INT = FloatIntParamType()
 PUBLICATION_TYPE = MangaPublicationParamType()
+
+
+def manga_publication_type(chapter_mode: bool = False):
+    default_arg = config.defaults.rls_pub_type
+    if chapter_mode:
+        default_arg = config.defaults.rls_ch_pub_type
+
+    return click.option(
+        "-pt",
+        "--publication-type",
+        "manga_publication_type",
+        type=PUBLICATION_TYPE,
+        help="The publication type for this series",
+        default=default_arg,
+        show_default=True,
+    )
 
 
 archive_file = click.argument(
@@ -202,15 +218,7 @@ manga_publisher = click.option(
     help="The publisher of the series",
     required=True,
 )
-manga_publication_type = click.option(
-    "-pt",
-    "--publication-type",
-    "manga_publication_type",
-    type=PUBLICATION_TYPE,
-    help="The publication type for this series",
-    default=list(MANGA_PUBLICATION_TYPES.keys())[0],
-    show_default=True,
-)
+
 rls_credit = click.option(
     "-c",
     "--credit",

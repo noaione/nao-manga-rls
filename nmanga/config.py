@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Optional
 
 from ._ntypes import BracketTypeT, ConfigT, _ConfigDefaultsT, _ConfigExecutableT
+from .cli.constants import MANGA_PUBLICATION_TYPES
 
 __all__ = (
     "get_config",
@@ -69,6 +70,9 @@ class _ConfigDefaults:
     ch_add_c_prefix: bool = field(default=False)
     ch_special_tag: str = field(default="x")
 
+    rls_pub_type: str = field(default=list(MANGA_PUBLICATION_TYPES.keys())[0])
+    rls_ch_pub_type: str = field(default=list(MANGA_PUBLICATION_TYPES.keys())[0])
+
     def to_dict(self) -> _ConfigDefaultsT:
         return {
             "bracket_type": self.bracket_type,
@@ -76,6 +80,8 @@ class _ConfigDefaults:
             "ripper_email": self.ripper_email,
             "chapter_add_c_prefix": self.ch_add_c_prefix,
             "chapter_special_tag": self.ch_special_tag,
+            "release_publication_type": self.rls_pub_type,
+            "release_chapter_publication_type": self.rls_ch_pub_type,
         }
 
     @property
@@ -141,12 +147,29 @@ class ConfigHandler:
         if not isinstance(ch_special_tag, str):
             raise ConfigError("`defaults.chapter_special_tag` must be a string")
 
+        rls_pub_type = defaults.get("release_publication_type", list(MANGA_PUBLICATION_TYPES.keys())[0])
+        if not isinstance(rls_pub_type, str):
+            raise ConfigError("`defaults.release_publication_type` must be a string")
+
+        rls_ch_pub_type = defaults.get(
+            "release_chapter_publication_type", list(MANGA_PUBLICATION_TYPES.keys())[0]
+        )
+        if not isinstance(rls_ch_pub_type, str):
+            raise ConfigError("`defaults.release_chapter_publication_type` must be a string")
+
+        if rls_pub_type not in MANGA_PUBLICATION_TYPES:
+            raise ConfigError("`defaults.release_publication_type` is not a valid publication type")
+        if rls_ch_pub_type not in MANGA_PUBLICATION_TYPES:
+            raise ConfigError("`defaults.release_chapter_publication_type` is not a valid publication type")
+
         config.defaults = _ConfigDefaults(
             bracket_type=bracket_type,
             ripper_credit=ripper_credit,
             ripper_email=ripper_email,
             ch_add_c_prefix=ch_add_c_prefix,
             ch_special_tag=ch_special_tag,
+            rls_pub_type=rls_pub_type,
+            rls_ch_pub_type=rls_ch_pub_type,
         )
 
         magick_path = executables.get("magick_path", "magick")

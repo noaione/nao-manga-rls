@@ -23,15 +23,14 @@ SOFTWARE.
 """
 
 import subprocess as sp
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Match, Optional, Tuple, Union
 
 from .. import config, term, utils
+from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
 
 __all__ = (
     "BRACKET_MAPPINGS",
-    "MangaPublication",
     "PseudoChapterMatch",
     "ChapterRange",
     "check_cbz_exist",
@@ -41,6 +40,8 @@ __all__ = (
     "safe_int",
     "inject_metadata",
     "optimize_images",
+    "format_archive_filename",
+    "format_daiz_like_filename",
 )
 
 
@@ -48,25 +49,10 @@ console = term.get_console()
 conf = config.get_config()
 
 
-@dataclass
-class MangaPublication:
-    image: str
-    """Used in the image filename"""
-    archive: str
-    """Used in the archive filename"""
-
-
 BRACKET_MAPPINGS = {
     "square": ["[", "]"],
     "round": ["(", ")"],
     "curly": ["{", "}"],
-}
-MANGA_PUBLICATION_TYPES = {
-    "digital": MangaPublication("dig", "Digital"),
-    "magazine": MangaPublication("mag", "c2c"),
-    "scan": MangaPublication("c2c", "c2c"),
-    "web": MangaPublication("web", "Digital"),
-    "mix": MangaPublication("mix", "Digital"),
 }
 
 
@@ -365,3 +351,132 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
             end_msg += f" [{proc}]"
         console.stop_status(end_msg)
         console.enter()
+
+
+def format_archive_filename(
+    manga_title: int,
+    manga_year: int,
+    publication_type: MangaPublication,
+    ripper_credit: str,
+    bracket_type: str,
+    manga_volume_text: Optional[str] = None,
+    rls_revision: Optional[int] = None,
+):
+    pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
+
+    act_vol = " "
+    if manga_volume_text is not None:
+        act_vol = f" {manga_volume_text}"
+    archive_filename = TARGET_TITLE.format(
+        mt=manga_title,
+        vol=act_vol,
+        year=manga_year,
+        pt=publication_type.archive,
+        c=ripper_credit,
+        cpa=pair_left,
+        cpb=pair_right,
+    )
+
+    if rls_revision is not None and rls_revision > 1:
+        archive_filename += " (v%d)" % rls_revision
+
+    return archive_filename
+
+
+def format_daiz_like_filename(
+    manga_title: str,
+    manga_publisher: str,
+    manga_year: int,
+    chapter_info: ChapterRange,
+    page_number: str,
+    publication_type: MangaPublication,
+    ripper_credit: str,
+    bracket_type: str,
+    manga_volume: Optional[int] = None,
+    extra_metadata: Optional[str] = None,
+    image_quality: Optional[str] = None,  # {HQ}/{LQ} thing
+    rls_revision: Optional[int] = None,
+    chapter_extra_maps: Dict[int, List[ChapterRange]] = dict(),
+    fallback_volume_name: str = "OShot",
+):
+    pub_type = ""
+    if publication_type.image:
+        pub_type = f"[{pub_type}]"
+
+    chapter_num = f"{chapter_info.base:03d}"
+
+    pack_data = chapter_extra_maps[chapter_info.base]
+    pack_data.sort(key=lambda x: x.number)
+    chapter_ex_data = ""
+    if len(pack_data) > 1:
+        smallest = pack_data[1].floating
+        for pack in pack_data:
+            if pack.floating is not None and pack.floating < smallest:
+                smallest = pack.floating
+        if smallest is not None and chapter_info.floating is not None:
+            # Check if we should append the custom float data
+            if smallest >= 5:
+                # We don't need to append the float data
+                float_act = chapter_info.floating - 4
+                chapter_num += f"x{float_act}"
+            else:
+                idx = pack_data.index(chapter_info)
+                chapter_ex_data = f" (c{chapter_num}.{chapter_info.floating})"
+                chapter_num += f"x{idx}"
+    else:
+        floaty = chapter_info.floating
+        if floaty is not None:
+            if floaty >= 5:
+                chapter_num += f"x{floaty - 4}"
+            else:
+                chapter_ex_data = f" (c{chapter_num}.{floaty})"
+                chapter_num += "x1"
+
+    act_vol = fallback_volume_name
+    if manga_volume is not None:
+        act_vol = f"v{act_vol:02d}"
+
+    extra_name = " "
+    if extra_metadata is not None:
+        extra_name = f" [{extra_metadata}]"
+
+    image_filename = TARGET_FORMAT_ALT.format(
+        mt=manga_title,
+        ch=chapter_num,
+        chex=chapter_ex_data,
+        vol=act_vol,
+        pg=page_number,
+        ex=extra_name,
+        pt=pub_type,
+        pb=manga_publisher or "Unknown Publisher",
+        c=ripper_credit,
+    )
+    if chapter_info.name is not None:
+        image_filename = TARGET_FORMAT.format(
+            mt=manga_title,
+            ch=chapter_num,
+            chex=chapter_ex_data,
+            vol=act_vol,
+            pg=page_number,
+            ex=extra_name,
+            t=chapter_info.name,
+            pt=pub_type,
+            pb=manga_publisher or "Unknown Publisher",
+            c=ripper_credit,
+        )
+
+    if image_quality is not None:
+        image_filename += " {" + image_quality + "}"
+
+    if rls_revision is not None and rls_revision > 1:
+        image_filename += " {r%d}" % rls_revision
+
+    return image_filename, format_archive_filename(
+        manga_title=manga_title,
+        manga_year=manga_year,
+        publication_type=publication_type,
+        ripper_credit=ripper_credit,
+        bracket_type=bracket_type,
+        manga_volume=f"v{manga_volume:02d}" if manga_volume is not None else None,
+        rls_revision=rls_revision,
+    )

@@ -53,6 +53,10 @@ You can configure the following:
   - Ripper credit email (used in the `.cbz` file comment and image tagging at author/comment)
   - Add `c` prefix to chapter name when packing. (ex: `Title c001 (20xx)` instead of `Title 001 (20xx)`)
   - Use `#` as chapter special separator, if your name is `1r0n` enable this. (ex: `Title - c001#1 (vXX) ----` instead of `Title - c001x1 (vXX) ----`)
+  - Publication type for `releases` command (Default: `digital`)
+    - If you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
+  - Publication type for `releasesch` command (Default: `digital`)
+    - If you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
 - Executables path
   - `pingo`
   - `magick`/`imagemagick`
@@ -257,6 +261,8 @@ For `--volume` and `--chapter`, provide one of them and the packed zip will be a
 
 If you provide both, `--volume` will take priority.
 
+For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
+
 #### `releases`
 Create a release from `comix` formatted filename.
 
@@ -313,6 +319,8 @@ This use the same inquiring method as `manualsplit`
 
 The filename also must match something like this:
 - `Manga Title - vXX - pXXX`
+
+For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
 
 #### `releasesch`
 Create a release for a single chapter, this will format the filename into the formatting we wanted.
@@ -382,6 +390,8 @@ The filename must have a minimum match like this:
 - `pXXX-YYY`
 
 Anything outside that is ignored.
+
+For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
 
 #### `spreads`
 Manage spreads from a directory of images.
@@ -508,3 +518,5 @@ This will automatically find any valid images that can be tagged with exif metad
 For `--volume` and `--chapter`, provide one of them and the packed zip will be a bit different.
 - `--volume`: `Manga Title vXX (20xx) (Digital) (XXX)`
 - `--chapter`: `Manga Title XXX (20xx) (Digital) (XXX)`
+
+For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.

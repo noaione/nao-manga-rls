@@ -155,7 +155,15 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - Move all `pack` command to it's own module (`nmanga.cli.archive`)
 
-## 0.8.1
+### 0.8.1
 **New Features**
 - Add `nmanga releasesch` to rename a single chapter.
   - Same with spreads, it needs a minimum of `p000` for filename.
+
+### 0.8.2
+**New Features**
+- Add configurable option for default publication type
+
+**Refactor**
+- Create a function for creating filename format, simplify it too.
+- This changes the formatting around a bit.
