@@ -1,0 +1,13 @@
+[run]
+branch = True
+
+[paths]
+source =
+	nmanga/
+	
+[report]
+omit =
+	nmanga/**/__init__.py
+	nmanga/cli/_deco.py
+	nmanga/_ntypes.py
+	tests/*

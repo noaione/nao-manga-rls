@@ -13,34 +13,22 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.9
-
-      - name: Setup virtualenv
-        uses: syphar/restore-virtualenv@v1
-        id: lint-venv-cache
-
-      - name: Restore pip cache download 
-        uses: syphar/restore-pip-download-cache@v1
-        if: steps.lint-venv-cache.outputs.cache-hit != 'true'
+          python-version: 3.9'
+          cache: 'pip'
 
       - name: Install requirements
-        if: steps.lint-venv-cache.outputs.cache-hit != 'true'
         run: |
           pip install -U -r requirements.txt
           pip install -U -r requirements-dev.txt
 
-      - name: Execute multilint scripts
+      - name: Lint and Test
         run: |
-          python3 ci/multilint.py -si -sv
-
-      - name: Test
-        run: |
-          python3 -m pytest -v --cov=nmanga --cov-report=xml --cov-report=term-missing tests/
+          make
 
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@v1.3.0
