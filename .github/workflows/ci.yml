@@ -28,7 +28,8 @@ jobs:
 
       - name: Lint and Test
         run: |
-          make
+          make lint
+          make test-cov
 
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@v1.3.0
