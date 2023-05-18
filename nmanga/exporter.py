@@ -208,7 +208,9 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         identifier = self._manga_title.lower() + f"-{int(current_date)}"
 
         fixed_content_opf = EPUB_CONTENT.format(
-            title=self._manga_title, identifier=identifier, time=int(current_date)
+            title=self._manga_title,
+            identifier=identifier,
+            time=int(current_date),
         )
 
         content_opf_xml = ET.fromstring(fixed_content_opf.encode("utf-8"))
@@ -237,9 +239,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
             page_id.replace("page-", "image-"),
         )
 
-    def __add_item_to_manifest(
-        self, idname: str, filename: str, mimetype: str, fallback: Optional[str] = None
-    ):
+    def __add_item_to_manifest(self, idname: str, filename: str, mimetype: str, fallback: Optional[str] = None):
         # ref: <item id="cover" href="Text/cover.xhtml" media-type="application/xhtml+xml"/>
         # ref: <item id="Color1.jpg" href="Images/Color1.jpg" media-type="image/jpeg"/>
         manifest_root = self._xml_content_opf.find(".//{http://www.idpf.org/2007/opf}manifest")

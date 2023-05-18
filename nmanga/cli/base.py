@@ -86,9 +86,7 @@ def test_or_find_magick(magick_path: str, force_search: bool = True) -> Optional
         success = _test_exec([magick_path, "-version"])
         if not success:
             return None if not force_search else _find_exec_path(["magick", "convert"], "-version")
-        return magick_path or (
-            None if not force_search else _find_exec_path(["magick", "convert"], "-version")
-        )
+        return magick_path or (None if not force_search else _find_exec_path(["magick", "convert"], "-version"))
     except OSError:
         return None if not force_search else _find_exec_path(["magick", "convert"], "-version")
 
@@ -270,9 +268,7 @@ class RegexCollection:
         if publisher is None:
             return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", re.escape(title)))
         return re.compile(
-            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title)).replace(
-                "CHANGEPUBLISHER", re.escape(publisher)
-            )
+            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title)).replace("CHANGEPUBLISHER", re.escape(publisher))
         )
 
     @classmethod

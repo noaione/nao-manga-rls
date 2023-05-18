@@ -51,9 +51,7 @@ MANGA_PUBLICATION_TYPES = {
         "web", "Digital", "Webcomic release, from many kind of website that are not using volume format."
     ),
     "mix": MangaPublication("mix", "Digital", "Mixed release format"),
-    "none": MangaPublication(
-        "", "Digital", "No publication type used in image filename, Digital in archive filename"
-    ),
+    "none": MangaPublication("", "Digital", "No publication type used in image filename, Digital in archive filename"),
 }
 
 TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{t}] [{pb}] [{c}]"  # noqa

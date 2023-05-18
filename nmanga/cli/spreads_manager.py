@@ -221,9 +221,7 @@ def spreads_join(
 
     page_re = RegexCollection.page_re()
 
-    exported_imgs: Dict[str, _ExportedImages] = {
-        x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()
-    }
+    exported_imgs: Dict[str, _ExportedImages] = {x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()}
     console.info("Collecting image for spreads...")
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, _ in archive:
@@ -249,9 +247,7 @@ def spreads_join(
     current = 1
     for spread, imgs in exported_imgs.items():
         console.status(f"Joining spreads: {current}/{total_match_spread}")
-        temp_output = execute_spreads_join(
-            magick_exe, quality, imgs["imgs"], path_or_archive, reverse, image_fmt
-        )
+        temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive, reverse, image_fmt)
         # Rename back
         pattern = imgs["pattern"]
         pattern.sort()

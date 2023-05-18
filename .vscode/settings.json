@@ -7,6 +7,7 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "ms-python.black-formatter",
     },
+    "editor.rulers": [120],
     "python.formatting.provider": "none",
     "python.analysis.diagnosticMode": "workspace",
     "python.languageServer": "Pylance",
@@ -24,5 +25,10 @@
         "**/__pycache__": true,
         "**/node_modules": true,
         "**/.qt_for_python": true,
-    }
+    },
+    "black-formatter.importStrategy": "fromEnvironment",
+    "black-formatter.args": [
+        "--config",
+        "pyproject.toml"
+    ]
 }

@@ -91,8 +91,10 @@ print("[*] Running isort test...")
 isort_res = sp.Popen(["isort", "-c", "nmanga"]).wait()
 print("[*] Running flake8 test...")
 flake8_res = sp.Popen(["flake8", "--statistics", "--show-source", "--benchmark", "--tee", "nmanga"]).wait()
+print("[*] Running black test...")
+black_res = sp.Popen(["black", "--check", "nmanga"]).wait()
 
-results = [(isort_res, "isort"), (flake8_res, "flake8")]
+results = [(isort_res, "isort"), (flake8_res, "flake8"), (black_res, "black")]
 any_error = False
 
 for res in results:

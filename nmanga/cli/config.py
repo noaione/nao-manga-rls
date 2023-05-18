@@ -142,9 +142,7 @@ def _loop_defaults_release_publication_type(config: config.Config, default_now: 
     for idx, (key_name, key_value) in enumerate(MANGA_PUBLICATION_TYPES.items()):
         if key_name == default_now:
             selected_choice = idx
-        fmt_desc = (
-            f"{key_name.capitalize()}: {key_value.description} ({key_value.image!r}/{key_value.archive!r})"
-        )
+        fmt_desc = f"{key_name.capitalize()}: {key_value.description} ({key_value.image!r}/{key_value.archive!r})"
         choices_raw.append(term.ConsoleChoice(key_name, fmt_desc))
 
     select_option = console.choice(
@@ -167,9 +165,7 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
                 term.ConsoleChoice("ch_add_prefix", "Enable `c` prefixing for chapter packing/tagging"),
                 term.ConsoleChoice("hashtag_special", "Use `#` instead of `x` as special separator"),
                 term.ConsoleChoice("rls_pub_type", "Configure default publication type for releases command"),
-                term.ConsoleChoice(
-                    "rls_ch_pub_type", "Configure default publication type for releasesch command"
-                ),
+                term.ConsoleChoice("rls_ch_pub_type", "Configure default publication type for releasesch command"),
                 SAVE_CHOICE,
             ],
         )
@@ -188,9 +184,7 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
         elif option == "hashtag_special":
             config = _loop_defaults_chapter_special_tag(config)
         elif option == "rls_pub_type":
-            config.defaults.rls_pub_type = _loop_defaults_release_publication_type(
-                config, config.defaults.rls_pub_type
-            )
+            config.defaults.rls_pub_type = _loop_defaults_release_publication_type(config, config.defaults.rls_pub_type)
         elif option == "rls_ch_pub_type":
             config.defaults.rls_ch_pub_type = _loop_defaults_release_publication_type(
                 config, config.defaults.rls_ch_pub_type
@@ -252,21 +246,15 @@ def _loop_executables_sections(config: config.Config):
         if option == SAVE_CHOICE.name:
             return config
         elif option == "pingo_path":
-            result = _loop_executables_check_single(
-                "pingo", config.executables.pingo_path, test_or_find_pingo
-            )
+            result = _loop_executables_check_single("pingo", config.executables.pingo_path, test_or_find_pingo)
             if result is not None:
                 config.executables.pingo_path = result
         elif option == "ripper_credit":
-            result = _loop_executables_check_single(
-                "exiftool", config.executables.exiftool_path, test_or_find_exiftool
-            )
+            result = _loop_executables_check_single("exiftool", config.executables.exiftool_path, test_or_find_exiftool)
             if result is not None:
                 config.executables.exiftool_path = result
         elif option == "ripper_email":
-            result = _loop_executables_check_single(
-                "magick", config.executables.magick_path, test_or_find_magick
-            )
+            result = _loop_executables_check_single("magick", config.executables.magick_path, test_or_find_magick)
             if result is not None:
                 config.executables.magick_path = result
         else:

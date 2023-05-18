@@ -151,9 +151,7 @@ class ConfigHandler:
         if not isinstance(rls_pub_type, str):
             raise ConfigError("`defaults.release_publication_type` must be a string")
 
-        rls_ch_pub_type = defaults.get(
-            "release_chapter_publication_type", list(MANGA_PUBLICATION_TYPES.keys())[0]
-        )
+        rls_ch_pub_type = defaults.get("release_chapter_publication_type", list(MANGA_PUBLICATION_TYPES.keys())[0])
         if not isinstance(rls_ch_pub_type, str):
             raise ConfigError("`defaults.release_chapter_publication_type` must be a string")
 

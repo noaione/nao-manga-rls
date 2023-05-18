@@ -225,9 +225,7 @@ def validate_ch_ranges(current: str):
     return True
 
 
-def inquire_chapter_ranges(
-    initial_prompt: str, continue_prompt: str, ask_title: bool = False
-) -> List[ChapterRange]:
+def inquire_chapter_ranges(initial_prompt: str, continue_prompt: str, ask_title: bool = False) -> List[ChapterRange]:
     chapter_ranges: List[ChapterRange] = []
     while True:
         console.info(initial_prompt)

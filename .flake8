@@ -1,5 +1,5 @@
 [flake8]
-ignore = E203,W503,F405,F403,W0621,W0703,W1203,F722
+ignore = E203,W503,F405,F403,F722
 max-line-length = 120
 exclude =
     # Auto-generated stuff.
