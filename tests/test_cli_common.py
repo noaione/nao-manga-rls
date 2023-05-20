@@ -45,6 +45,34 @@ class TestFormatDaizLikeFilename:
     _PUB_TYPE = MANGA_PUBLICATION_TYPES["digital"]
     _PUB_TYPE_NONE = MANGA_PUBLICATION_TYPES["none"]
 
+    _REAL_WORLD_MAPPING_CASE_A = {
+        "title": "Captain Corinth",
+        "publisher": "One Peace Books",
+        "ripper": "nao",
+        "volume": 2,
+        "chapters": [
+            ChapterRange(7, "The Village of Talas", [0, 26]),
+            ChapterRange(8, "Escort, Part 1", [27, 50]),
+            ChapterRange(9, "Escort, Part 2", [51, 76]),
+            ChapterRange(10, "Gotania", [77, 100]),
+            ChapterRange(11, "The Adventurers Guild", [101, 132]),
+            ChapterRange(12, "The Fall of Starvake", [133, 156]),
+            ChapterRange(13, "Reasons", [157, 182]),
+            ChapterRange(13.5, "Cleria's Conversation With the Spirits", [183], True),
+        ],
+        "expects": [
+            "Captain Corinth - c007 (v02) - p000 [Cover] [dig] [The Village of Talas] [One Peace Books] [nao]",
+            "Captain Corinth - c008 (v02) - p027 [dig] [Escort, Part 1] [One Peace Books] [nao]",
+            "Captain Corinth - c009 (v02) - p051 [dig] [Escort, Part 2] [One Peace Books] [nao]",
+            "Captain Corinth - c010 (v02) - p077 [dig] [Gotania] [One Peace Books] [nao]",
+            "Captain Corinth - c011 (v02) - p101 [dig] [The Adventurers Guild] [One Peace Books] [nao]",
+            "Captain Corinth - c012 (v02) - p133 [dig] [The Fall of Starvake] [One Peace Books] [nao]",
+            "Captain Corinth - c013 (v02) - p157 [dig] [Reasons] [One Peace Books] [nao]",
+            "Captain Corinth - c013x1 (v02) - p183 [dig] [Cleria's Conversation With the Spirits] [One Peace Books] [nao]",  # noqa
+        ],
+        "extra": {0: "Cover"},
+    }
+
     def _make_packing_extra(self):
         packing_extra: Dict[int, List[ChapterRange]] = {}
         for key in self.__dir__():
@@ -518,3 +546,39 @@ class TestFormatDaizLikeFilename:
         )
 
         assert filename == "Test Title - c002x2 (OShot) - p115 [dig] [Split D] [Real Publisher] [nao]"
+
+    def test_real_world_use_case_a(self):
+        title: str = self._REAL_WORLD_MAPPING_CASE_A["title"]
+        publisher: str = self._REAL_WORLD_MAPPING_CASE_A["publisher"]
+        ripper: str = self._REAL_WORLD_MAPPING_CASE_A["ripper"]
+        volume: int = self._REAL_WORLD_MAPPING_CASE_A["volume"]
+        chapters: List[ChapterRange] = self._REAL_WORLD_MAPPING_CASE_A["chapters"]
+        expects: List[str] = self._REAL_WORLD_MAPPING_CASE_A["expects"]
+        extra: Dict[int, str] = self._REAL_WORLD_MAPPING_CASE_A["extra"]
+
+        packing_extra = {}
+        for chapter in chapters:
+            if chapter.base not in packing_extra:
+                packing_extra[chapter.base] = []
+            packing_extra[chapter.base].append(chapter)
+
+        for chapter, expect in zip(chapters, expects):
+            pg_num = chapter.range[0]
+            pg_extra = extra.get(pg_num, None)
+            filename, _ = format_daiz_like_filename(
+                manga_title=title,
+                manga_publisher=publisher,
+                manga_year=self._YEAR,
+                chapter_info=chapter,
+                page_number=f"{pg_num:03d}",
+                bracket_type=self._BRACKET,
+                manga_volume=volume,
+                extra_metadata=pg_extra,
+                publication_type=self._PUB_TYPE,
+                ripper_credit=ripper,
+                image_quality=None,
+                rls_revision=1,
+                chapter_extra_maps=packing_extra,
+            )
+
+            assert filename == expect

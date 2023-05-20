@@ -408,7 +408,7 @@ def format_daiz_like_filename(
         pack_data = chapter_extra_maps[chapter_info.base]
         pack_data.sort(key=lambda x: x.number)
         if len(pack_data) > 1:
-            smallest = pack_data[0].floating
+            smallest = pack_data[1].floating
             for pack in pack_data:
                 if pack.floating is not None and pack.floating < smallest:
                     smallest = pack.floating
