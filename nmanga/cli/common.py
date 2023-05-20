@@ -77,7 +77,7 @@ class PseudoChapterMatch:
 
 
 class ChapterRange:
-    def __init__(self, number: int, name: Optional[str], range: List[int], is_single: bool = False):
+    def __init__(self, number: Union[int, float], name: Optional[str], range: List[int], is_single: bool = False):
         self.number = number
         self.name = name
         self.range = range
@@ -408,7 +408,7 @@ def format_daiz_like_filename(
         pack_data = chapter_extra_maps[chapter_info.base]
         pack_data.sort(key=lambda x: x.number)
         if len(pack_data) > 1:
-            smallest = pack_data[1].floating
+            smallest = pack_data[0].floating
             for pack in pack_data:
                 if pack.floating is not None and pack.floating < smallest:
                     smallest = pack.floating
@@ -421,7 +421,7 @@ def format_daiz_like_filename(
                 else:
                     idx = pack_data.index(chapter_info)
                     chapter_ex_data = f" (c{chapter_num}.{chapter_info.floating})"
-                    chapter_num += f"x{idx}"
+                    chapter_num += f"x{idx + 1}"
         else:
             floaty = chapter_info.floating
             if floaty is not None:
@@ -430,14 +430,26 @@ def format_daiz_like_filename(
                 else:
                     chapter_ex_data = f" (c{chapter_num}.{floaty})"
                     chapter_num += "x1"
+    else:
+        if chapter_info.floating is not None:
+            if chapter_info.floating >= 5:
+                chapter_num += f"x{chapter_info.floating - 4}"
+            else:
+                chapter_ex_data = f" (c{chapter_num}.{chapter_info.floating})"
+                chapter_num += "x1"
 
     act_vol = fallback_volume_name
     if manga_volume is not None:
-        act_vol = f"v{act_vol:02d}"
+        act_vol = f"v{manga_volume:02d}"
 
     extra_name = " "
     if extra_metadata is not None:
         extra_name = f" [{extra_metadata}]"
+
+    if not pub_type and not extra_name.strip():
+        extra_name = ""
+    elif pub_type and extra_name.strip():
+        pub_type = f" {pub_type}"
 
     image_filename = TARGET_FORMAT_ALT.format(
         mt=manga_title,
