@@ -31,15 +31,14 @@ from typing import Literal, Optional, Union
 
 import click
 
-from .. import config, term
+from .. import term
+from ..common import format_archive_filename, format_volume_text, inject_metadata
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_exiftool
-from .common import format_archive_filename, inject_metadata
 from .constants import MangaPublication
 
 console = term.get_console()
-conf = config.get_config()
 TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 
 
@@ -79,7 +78,7 @@ def image_tagging(
     rls_revision: int,
     bracket_type: Literal["square", "round", "curly"],
     exiftool_path: str,
-):
+):  # pragma: no cover
     """
     Tag images with metadata
     """
@@ -99,23 +98,7 @@ def image_tagging(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
-    tag_sep = conf.defaults.ch_special_tag
-
-    volume_text: Optional[str] = None
-    if manga_chapter is not None:
-        if isinstance(manga_chapter, float):
-            float_string = str(manga_chapter)
-            base_float, decimal_float = float_string.split(".")
-            dec_float = int(decimal_float)
-            if dec_float - 4 > 0:
-                dec_float -= 4
-            volume_text = f"{int(base_float):03d}{tag_sep}{dec_float}"
-        else:
-            volume_text = f"{manga_chapter:03d}"
-        if conf.defaults.ch_add_c_prefix:
-            volume_text = f"c{volume_text}"
-    if manga_volume is not None:
-        volume_text = f"v{manga_volume:02d}"
+    volume_text = format_volume_text(manga_volume, manga_chapter)
     if volume_text is None:
         raise click.BadParameter(
             "Please provide either a chapter or a volume number.",

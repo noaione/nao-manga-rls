@@ -8,6 +8,8 @@ source =
 [report]
 omit =
 	nmanga/**/__init__.py
-	nmanga/cli/_deco.py
+	nmanga/cli/*.py
 	nmanga/_ntypes.py
+	nmanga/cmd.py
 	tests/*
+	nmanga/**/constants.py

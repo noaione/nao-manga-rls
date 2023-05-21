@@ -23,12 +23,13 @@ SOFTWARE.
 """
 
 import os
-import re
 import subprocess as sp
 import sys
 import traceback
+import warnings
 from functools import partial
-from typing import TYPE_CHECKING, List, Optional, Pattern, Tuple, Union, cast, overload
+from re import Pattern
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union, cast, overload
 
 import click
 from click.core import Context
@@ -36,6 +37,7 @@ from click.parser import Option as ParserOption
 from click.parser import OptionParser
 
 from .. import term
+from ..common import RegexCollection as _RegexCollection  # noqa: F401
 
 if TYPE_CHECKING:
     from click.parser import ParsingState
@@ -43,7 +45,6 @@ if TYPE_CHECKING:
 console = term.get_console()
 __all__ = (
     "NMangaCommandHandler",
-    "RegexCollection",
     "UnrecoverableNMangaError",
     "test_or_find_magick",
     "test_or_find_exiftool",
@@ -237,46 +238,46 @@ class NMangaCommandHandler(click.Command):
 
 
 class RegexCollection:
-    _VolumeRegex = r"CHANGETHIS v(\d+).*"
-    _OneShotRegex = r"CHANGETHIS .*"
-    # fmt: off
-    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
-                      r"[\d]? .*\[(?:dig|web|c2c|mag|scan|paper)] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"
-    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
-                      r"[\d]?.*"
-    # fmt: on
-
     @classmethod
     def volume_re(cls, title: str, limit_credit: Optional[str] = None) -> Pattern[str]:
-        re_fmt = cls._VolumeRegex.replace("CHANGETHIS", re.escape(title))
-        if limit_credit is not None:
-            re_fmt += r"[\[\(]" + limit_credit + r".*"
-        return re.compile(re_fmt)
+        warnings.warn(
+            "nmanga.cli.base.RegexCollection.volume_re is deprecated, "
+            "use nmanga.common.RegexCollection.volume_re instead",
+            DeprecationWarning,
+        )
+        return _RegexCollection.volume_re(title, limit_credit)
 
     @overload
-    def chapter_re(self, title: str) -> Pattern[str]:
+    @classmethod
+    def chapter_re(cls, title: str) -> Pattern[str]:
         ...
 
     @overload
-    def chapter_re(self, title: str, publisher: str) -> Pattern[str]:
+    @classmethod
+    def chapter_re(cls, title: str, publisher: str) -> Pattern[str]:
         ...
 
     @classmethod
     def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
-        if publisher is None:
-            return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", re.escape(title)))
-        return re.compile(
-            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title)).replace("CHANGEPUBLISHER", re.escape(publisher))
+        warnings.warn(
+            "nmanga.cli.base.RegexCollection.chapter_re is deprecated, "
+            "use nmanga.common.RegexCollection.chapter_re instead",
+            DeprecationWarning,
         )
+        return _RegexCollection.chapter_re(title, publisher)
 
     @classmethod
     def cmx_re(cls) -> Pattern[str]:
-        return re.compile(
-            r"(?P<t>[\w\W\D\d\S\s]+?)(?:\- (?P<vol>v[\d]{1,3}))? \- p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?"
+        warnings.warn(
+            "nmanga.cli.base.RegexCollection.cmx_re is deprecated, use nmanga.common.RegexCollection.cmx_re instead",
+            DeprecationWarning,
         )
+        return _RegexCollection.cmx_re()
 
     @classmethod
     def page_re(cls) -> Pattern[str]:
-        return re.compile(r"(?P<any>.*)p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?(?P<anyback>.*)")
+        warnings.warn(
+            "nmanga.cli.base.RegexCollection.page_re is deprecated, use nmanga.common.RegexCollection.cmx_re instead",
+            DeprecationWarning,
+        )
+        return _RegexCollection.page_re()

@@ -54,7 +54,7 @@ def _check_defaults_inquire_validator(text: str):
     return True
 
 
-def _loop_defaults_bracket_type(config: config.Config) -> config.Config:
+def _loop_defaults_bracket_type(config: config.Config) -> config.Config:  # pragma: no cover
     choice_round = term.ConsoleChoice("round", "Round bracket type -> (nao)")
     choice_square = term.ConsoleChoice("square", "Square bracket type -> [nao]")
     choice_curly = term.ConsoleChoice("curly", "Curly bracket type -> {nao}")
@@ -72,7 +72,7 @@ def _loop_defaults_bracket_type(config: config.Config) -> config.Config:
     return config
 
 
-def _loop_defaults_ripper_credit(config: config.Config) -> config.Config:
+def _loop_defaults_ripper_credit(config: config.Config) -> config.Config:  # pragma: no cover
     ripper_name = console.inquire(
         "Ripper credit name",
         validation=_check_defaults_inquire_validator,
@@ -83,7 +83,7 @@ def _loop_defaults_ripper_credit(config: config.Config) -> config.Config:
     return config
 
 
-def _loop_defaults_ripper_email(config: config.Config) -> config.Config:
+def _loop_defaults_ripper_email(config: config.Config) -> config.Config:  # pragma: no cover
     ripper_email = console.inquire(
         "Ripper credit email",
         validation=_check_defaults_inquire_validator,
@@ -94,7 +94,7 @@ def _loop_defaults_ripper_email(config: config.Config) -> config.Config:
     return config
 
 
-def _loop_defaults_chapter_prefixed(config: config.Config) -> config.Config:
+def _loop_defaults_chapter_prefixed(config: config.Config) -> config.Config:  # pragma: no cover
     CHOICE_ENABLE = term.ConsoleChoice("yes_add", "Enable")
     CHOICE_DISABLE = term.ConsoleChoice("no_yeet", "Disable")
 
@@ -115,7 +115,7 @@ def _loop_defaults_chapter_prefixed(config: config.Config) -> config.Config:
     return config
 
 
-def _loop_defaults_chapter_special_tag(config: config.Config) -> config.Config:
+def _loop_defaults_chapter_special_tag(config: config.Config) -> config.Config:  # pragma: no cover
     CHOICE_ENABLE = term.ConsoleChoice("use_hashtag", "Use `#`")
     CHOICE_DISABLE = term.ConsoleChoice("use_xmark", "Use `x`")
 
@@ -136,7 +136,7 @@ def _loop_defaults_chapter_special_tag(config: config.Config) -> config.Config:
     return config
 
 
-def _loop_defaults_release_publication_type(config: config.Config, default_now: str) -> str:
+def _loop_defaults_release_publication_type(config: config.Config, default_now: str) -> str:  # pragma: no cover
     choices_raw: List[term.ConsoleChoice] = []
     selected_choice = 0
     for idx, (key_name, key_value) in enumerate(MANGA_PUBLICATION_TYPES.items()):
@@ -154,7 +154,7 @@ def _loop_defaults_release_publication_type(config: config.Config, default_now: 
     return select_option.name
 
 
-def _loop_defaults_sections(config: config.Config) -> config.Config:
+def _loop_defaults_sections(config: config.Config) -> config.Config:  # pragma: no cover
     while True:
         select_option = console.choice(
             "Select what you want to do for defaults section",
@@ -198,7 +198,9 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:
 # --- Executables --- #
 
 
-def _check_executables_inquire_validation(text: str, validator_func: Callable[[str, bool], Optional[str]]):
+def _check_executables_inquire_validation(
+    text: str, validator_func: Callable[[str, bool], Optional[str]]
+):  # pragma: no cover
     if not _check_defaults_inquire_validator(text):
         return False
 
@@ -214,7 +216,7 @@ def _loop_executables_check_single(
     executable: str,
     default: str,
     validator_func: Callable[[str, bool], Optional[str]],
-) -> Optional[str]:
+) -> Optional[str]:  # pragma: no cover
     console.info(f"Configuring executable `{executable}`")
     console.info("You can skip or cancel this by typing `skip this` (without the backticks)")
     console.info("This section will check if the executable is valid or not")
@@ -230,7 +232,7 @@ def _loop_executables_check_single(
     return executable_path if executable_path.lower() != "skip this" else None
 
 
-def _loop_executables_sections(config: config.Config):
+def _loop_executables_sections(config: config.Config):  # pragma: no cover
     while True:
         select_option = console.choice(
             "Select what you want to do for executables section",
@@ -266,7 +268,7 @@ def _loop_executables_sections(config: config.Config):
 # --- Main --- #
 
 
-def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:
+def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:  # pragma: no cover
     while True:
         select_option = console.choice(
             "Select what you want to configure",
@@ -293,7 +295,7 @@ def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:
 
 
 @click.command("config", help="Configure nmanga CLI", cls=NMangaCommandHandler)
-def cli_config():
+def cli_config():  # pragma: no cover
     config = cfhandler.config
 
     do_save, config = _loop_main_sections(config)

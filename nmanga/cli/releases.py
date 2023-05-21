@@ -31,23 +31,23 @@ from typing import Dict, List, Literal, Optional, Union
 import click
 
 from .. import config, file_handler, term
-from . import options
-from ._deco import check_config_first, time_program
-from .base import (
-    NMangaCommandHandler,
-    RegexCollection,
-    WithDeprecatedOption,
-    is_executeable_global_path,
-    test_or_find_exiftool,
-    test_or_find_pingo,
-)
-from .common import (
+from ..common import (
     ChapterRange,
+    RegexCollection,
     format_daiz_like_filename,
     inject_metadata,
     inquire_chapter_ranges,
     optimize_images,
     safe_int,
+)
+from . import options
+from ._deco import check_config_first, time_program
+from .base import (
+    NMangaCommandHandler,
+    WithDeprecatedOption,
+    is_executeable_global_path,
+    test_or_find_exiftool,
+    test_or_find_pingo,
 )
 from .constants import MangaPublication
 
@@ -133,7 +133,7 @@ def prepare_releases(
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
-):
+):  # pragma: no cover
     """
     Prepare a release of a manga series.
     """
@@ -360,7 +360,7 @@ def prepare_releases_chapter(
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
-):
+):  # pragma: no cover
     """
     Prepare a release of a manga chapter.
     """

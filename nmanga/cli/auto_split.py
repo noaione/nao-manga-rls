@@ -35,10 +35,10 @@ from typing import Dict, List, Optional
 import click
 
 from .. import exporter, file_handler, term, utils
+from ..common import RegexCollection, check_cbz_exist, create_chapter
 from . import options
 from ._deco import time_program
-from .base import NMangaCommandHandler, RegexCollection
-from .common import check_cbz_exist, create_chapter
+from .base import NMangaCommandHandler
 
 console = term.get_console()
 

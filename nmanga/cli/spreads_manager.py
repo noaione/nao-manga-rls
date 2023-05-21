@@ -35,9 +35,10 @@ from typing import Dict, List, Optional, TypedDict
 import click
 
 from .. import file_handler, term
+from ..common import RegexCollection
 from . import options
 from ._deco import time_program
-from .base import NMangaCommandHandler, RegexCollection, test_or_find_magick
+from .base import NMangaCommandHandler, test_or_find_magick
 
 console = term.get_console()
 _SpreadsRe = re.compile(r"[\d]{1,3}(-[\d]{1,3}){1,}")

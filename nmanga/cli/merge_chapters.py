@@ -69,7 +69,7 @@ def _clean_filename(output_name: Optional[str]) -> Optional[str]:
     help="Override the output file, will default to first input if not provided!",
 )
 @time_program
-def merge_chapters(archives: List[Path], output_file: Optional[str] = None):
+def merge_chapters(archives: List[Path], output_file: Optional[str] = None):  # pragma: no cover
     if len(archives) < 2:
         console.error("You must provide at least two archives to merge!")
         return 1

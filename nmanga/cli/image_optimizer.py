@@ -30,10 +30,10 @@ from pathlib import Path
 import click
 
 from .. import term
+from ..common import optimize_images
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_pingo
-from .common import optimize_images
 
 console = term.get_console()
 
@@ -58,7 +58,7 @@ def image_optimizer(
     path_or_archive: Path,
     aggresive_mode: bool,
     pingo_path: str,
-):
+):  # pragma: no cover
     """
     Optimize images with pingo
     """

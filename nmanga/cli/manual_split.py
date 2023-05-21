@@ -35,10 +35,7 @@ from typing import Dict, List, Optional, Pattern, Union
 import click
 
 from .. import exporter, file_handler, term, utils
-from . import options
-from ._deco import time_program
-from .base import NMangaCommandHandler
-from .common import (
+from ..common import (
     ChapterRange,
     PseudoChapterMatch,
     check_cbz_exist,
@@ -46,6 +43,9 @@ from .common import (
     inquire_chapter_ranges,
     safe_int,
 )
+from . import options
+from ._deco import time_program
+from .base import NMangaCommandHandler
 
 console = term.get_console()
 
@@ -76,7 +76,7 @@ def coerce_number_page(number: Union[int, float]) -> str:
     return f"{int(base):03d}.{floating}"
 
 
-def _collect_custom_page():
+def _collect_custom_page():  # pragma: no cover
     custom_data: Dict[str, int] = {}
     console.enter()
     console.info("Please input the custom page mapping:")
@@ -101,7 +101,7 @@ def _collect_archive_to_chapters(
     volume_num: Optional[int] = None,
     custom_data: Dict[str, int] = {},
     regex_data: Optional[Pattern[str]] = None,
-):
+):  # pragma: no cover
     console.info(f"Collecting chapters from {archive_file.name}")
 
     collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
@@ -159,7 +159,9 @@ def _collect_archive_to_chapters(
     console.enter()
 
 
-def _handle_page_number_mode(archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False):
+def _handle_page_number_mode(
+    archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False
+):  # pragma: no cover
     console.info(f"Handling in page number mode (custom enabled? {custom_mode_enabled!r})")
 
     custom_data: Dict[str, int] = {}
@@ -182,7 +184,9 @@ def _handle_page_number_mode(archive_file: Path, volume_num: Optional[int], cust
     _collect_archive_to_chapters(TARGET_DIR, archive_file, split_chapter_ranges, volume_num, custom_data)
 
 
-def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False):
+def _handle_regex_mode(
+    archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False
+):  # pragma: no cover
     console.info(f"Handling in regex mode (custom enabled? {custom_mode_enabled!r})")
 
     default_regex = r"p(?:([\d]{1,4})(?:-)?([\d]{1,4})?).*"
@@ -227,7 +231,7 @@ def _handle_regex_mode(archive_file: Path, volume_num: Optional[int], custom_mod
     default=None,
 )
 @time_program
-def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):
+def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):  # pragma: no cover
     """
     Manually split volumes into chapters using multiple modes
     """

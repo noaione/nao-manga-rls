@@ -22,8 +22,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from pathlib import Path
 from typing import Dict, List
-from nmanga.cli.common import ChapterRange, format_daiz_like_filename
+from nmanga.common import (
+    ChapterRange,
+    PseudoChapterMatch,
+    actual_or_fallback,
+    check_cbz_exist,
+    format_daiz_like_filename,
+    format_archive_filename,
+    int_or_float,
+    parse_ch_ranges,
+    safe_int,
+    validate_ch_ranges,
+)
 from nmanga.cli.constants import MANGA_PUBLICATION_TYPES
 
 
@@ -582,3 +594,167 @@ class TestFormatDaizLikeFilename:
             )
 
             assert filename == expect
+
+
+class TestFormatArchiveFilename:
+    _TITLE = "Test Title"
+    _YEAR = 2023
+    _PUB_TYPE = MANGA_PUBLICATION_TYPES["digital"]
+    _PUB_TYPE_SCAN = MANGA_PUBLICATION_TYPES["scan"]
+    _RIPPER = "nao"
+    _BRACKET = "square"
+
+    def test_no_volume_text(self):
+        filename = format_archive_filename(
+            manga_title=self._TITLE,
+            manga_year=self._YEAR,
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+        )
+
+        assert filename == f"Test Title ({self._YEAR}) (Digital) [{self._RIPPER}]"
+
+    def test_no_volume_text_with_scan(self):
+        filename = format_archive_filename(
+            manga_title=self._TITLE,
+            manga_year=self._YEAR,
+            publication_type=self._PUB_TYPE_SCAN,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+        )
+
+        assert filename == f"Test Title ({self._YEAR}) (c2c) [{self._RIPPER}]"
+
+    def test_with_volume_text(self):
+        filename = format_archive_filename(
+            manga_title=self._TITLE,
+            manga_year=self._YEAR,
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            manga_volume_text="v01",
+        )
+
+        assert filename == f"Test Title v01 ({self._YEAR}) (Digital) [{self._RIPPER}]"
+
+    def test_with_volume_text_with_scan(self):
+        filename = format_archive_filename(
+            manga_title=self._TITLE,
+            manga_year=self._YEAR,
+            publication_type=self._PUB_TYPE_SCAN,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            manga_volume_text="v01",
+        )
+
+        assert filename == f"Test Title v01 ({self._YEAR}) (c2c) [{self._RIPPER}]"
+
+
+class TestValidateChapterRange:
+    def test_multi_length(self):
+        assert validate_ch_ranges("1-3")
+
+    def test_single_length(self):
+        assert validate_ch_ranges("1")
+
+    def test_single_length_float(self):
+        assert not validate_ch_ranges("1.5")
+
+    def test_multi_length_float(self):
+        assert not validate_ch_ranges("1.5-3.5")
+
+
+class TestRangeParsing:
+    def test_single_length(self):
+        r_num, is_single = parse_ch_ranges("1")
+        assert r_num == [1] and is_single
+
+    def test_multi_length(self):
+        r_num, is_single = parse_ch_ranges("1-3")
+        assert r_num == [1, 2, 3] and not is_single
+
+
+class TestNumberConverter:
+    def test_safe_int(self):
+        assert safe_int("1") == 1
+
+    def test_safe_int_null(self):
+        assert safe_int("1.2") is None
+
+    def test_int_or_float(self):
+        assert int_or_float("1.2") == 1.2
+
+    def test_int_or_float_int(self):
+        assert int_or_float("1") == 1
+
+    def test_int_or_float_null(self):
+        assert int_or_float("a") is None
+
+
+class TestPseudoChapterMatch:
+    def test_set_and_get(self):
+        match = PseudoChapterMatch()
+        match.set("title", "test")
+        assert match.get("title") == "test"
+
+    def test_get_none(self):
+        match = PseudoChapterMatch()
+        assert match.get("title") is None
+
+    def test_get_group(self):
+        match = PseudoChapterMatch()
+        match.set("title", "test")
+        match.set("group", "test group")
+
+        assert match.group(0) == "test"
+        assert match.group(1) == "test group"
+        assert match.group(2) is None
+        assert match.group("title") == "test"
+        assert match.group("group") == "test group"
+        assert match.group("notexist") is None
+
+
+class TestChapterRange:
+    _CHAPTER = TestFormatDaizLikeFilename._CURRENT
+    _CHAPTER_EXTRA = TestFormatDaizLikeFilename._CURRENT_EXTRA
+    _CHAPTER_SPLIT = TestFormatDaizLikeFilename._CURRENT_SPLIT_A
+
+    def test_repr(self):
+        assert repr(self._CHAPTER) == "<ChapterRange c001 - Introduction>"
+
+    def test_repr_extra(self):
+        assert repr(self._CHAPTER_EXTRA) == "<ChapterRange c1.5 - Extra Story>"
+
+    def test_eq(self):
+        _CHAPTER_ONE = ChapterRange(1, "Unknown", [0, 41], True)
+        assert self._CHAPTER != self._CHAPTER_EXTRA
+        assert self._CHAPTER == _CHAPTER_ONE
+
+        assert self._CHAPTER == 1
+
+    def test_bnum_attr(self):
+        assert self._CHAPTER.bnum == "001"
+
+    def test_bnum_extra_attr(self):
+        assert self._CHAPTER_EXTRA.bnum == "001x1"
+        assert self._CHAPTER_SPLIT.bnum == "002x1"
+
+
+def test_cbz_check():
+    assert not check_cbz_exist(Path.cwd(), "test")
+
+
+class TestActualOrFallback:
+    def test_valid_chapter(self):
+        assert actual_or_fallback("2", 1) == "002"
+
+    def test_invalid_chapter(self):
+        assert actual_or_fallback(None, 1) == "001"
+        assert actual_or_fallback("xxxx", 2) == "002"
+
+    def test_valid_chapter_float(self):
+        assert actual_or_fallback("2.5", 1) == "002.5"
+
+    def test_invalid_chapter_float(self):
+        assert actual_or_fallback("2.x", 1) == "001"
