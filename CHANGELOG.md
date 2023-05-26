@@ -26,6 +26,7 @@
   - [v0.8.1](#081)
   - [v0.8.2](#082)
 - [v0.9.0](#090)
+  - [v0.9.1](#091)
 
 ## 0.1.0
 
@@ -177,4 +178,12 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - Publication type not being written
 - Extra mapping is now gated behind empty check before processing
-- Fix typo when it should use `manga_volume_text` instead of `manga_volume`
+- Fix typo when it should use `manga_volume_text` instead of `manga_volume
+
+### 0.9.1
+**Refactor**
+- Restructure the module structure
+- Add initial tests file
+
+**Fixes**
+- More filename format fix
