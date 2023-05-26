@@ -187,3 +187,4 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Fixes**
 - More filename format fix
+- Wrong typing

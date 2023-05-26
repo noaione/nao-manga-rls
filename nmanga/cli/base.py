@@ -28,8 +28,7 @@ import sys
 import traceback
 import warnings
 from functools import partial
-from re import Pattern
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union, cast, overload
+from typing import TYPE_CHECKING, List, Optional, Pattern, Tuple, Union, cast, overload
 
 import click
 from click.core import Context
