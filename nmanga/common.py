@@ -529,13 +529,31 @@ def format_daiz_like_filename(
     )
 
 
+_PublicationRegexMatch = [
+    "dig",
+    "web",
+    "c2c",
+    "mag",
+    "scan",
+    "paper",
+    "raw",
+    # Exist on danke-repack
+    "raw-d",
+    "raw-dig",
+    "raw-digital",
+    "raw-m",
+    "raw-mag",
+    "raw-magazine",
+]
+
+
 class RegexCollection:
     _VolumeRegex = r"CHANGETHIS v(\d+).*"  # pragma: no cover
     _OneShotRegex = r"CHANGETHIS .*"  # pragma: no cover
     # fmt: off
     _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
                       r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
-                      r"[\d]? .*\[(?:dig|web|c2c|mag|scan|paper)] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"  # pragma: no cover # noqa: E501
+                      r"[\d]? .*\[(?:PUBREPLACE)] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"  # pragma: no cover # noqa: E501
     _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
                       r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
                       r"[\d]?.*"  # pragma: no cover
@@ -563,7 +581,9 @@ class RegexCollection:
         if publisher is None:
             return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", re.escape(title)))
         return re.compile(
-            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title)).replace("CHANGEPUBLISHER", re.escape(publisher))
+            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title))
+            .replace("CHANGEPUBLISHER", re.escape(publisher))
+            .replace("PUBREPLACE", "|".join(_PublicationRegexMatch))
         )
 
     @classmethod

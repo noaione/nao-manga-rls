@@ -89,7 +89,8 @@ def test_chapter_regex_with_publisher():
     assert (
         remedy.pattern == r"Real\ Manga - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]"
         r"{1,3})?\)? ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]? "
-        r".*\[(?:dig|web|c2c|mag|scan|paper)] (?:\[(?P<title>.*)\] )?\[Kodansha.*"
+        r".*\[(?:dig|web|c2c|mag|scan|paper|raw|raw-d|raw-dig|raw-digital|raw-m|raw-mag|raw-magazine)] "
+        r"(?:\[(?P<title>.*)\] )?\[Kodansha.*"
     )
 
 
