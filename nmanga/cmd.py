@@ -28,6 +28,7 @@ from pathlib import Path
 
 import click
 
+from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
 from .cli.config import cli_config
@@ -37,7 +38,6 @@ from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.spreads_manager import spreads
-from ._metadata import __author__, __name__, __version__
 from .term import get_console
 
 console = get_console()
