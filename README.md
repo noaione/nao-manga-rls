@@ -530,3 +530,43 @@ For `--volume` and `--chapter`, provide one of them and the packed zip will be a
 - `--chapter`: `Manga Title XXX (20xx) (Digital) (XXX)`
 
 For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
+
+## API Usage
+
+You can use this module as an API too, if you want to follow what the CLI doing you can view the code and implement your own version.
+
+For example, optimizing images in a folder:
+
+```py
+from pathlib import Path
+
+from nmanga.common import optimize_images
+
+target_dir = Path("target")
+pingo_path = "pingo"
+
+optimize_images(pingo_path, target_dir)
+# Or aggresive: optimize_images(pingo_path, target_dir, True)
+```
+
+Creating Daiz-like filename formatting for archive/image filename
+
+```py
+from nmanga.common import ChapterRange, format_daiz_like_filename
+
+filename, archive_name = format_daiz_like_filename(
+    manga_title="Manga Title",
+    manga_publisher="Real Publisher",
+    manga_year=2023,
+    chapter_info=ChapterRange(1, "Chapter 1", [0]),
+    page_number="001",
+    publication_type="digital",
+    ripper_credit="nao",
+    bracket_type="round",
+    manga_volume="v01",
+    extra_metadata="Cover",
+    image_quality="HQ",
+    rls_revision=2,
+    fallback_volume_name="NA",
+)
+```
