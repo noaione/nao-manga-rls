@@ -161,14 +161,13 @@ def auto_split(
                     continue
 
                 if chapter_data not in collected_chapters:
-                    if check_cbz_exist(target_path, utils.secure_filename(chapter_data)):
+                    target_archive = utils.unsecure_filename(utils.secure_filename(chapter_data))
+                    if check_cbz_exist(target_path, target_archive):
                         console.warning(f"[{volume}][?] Skipping chapter: {chapter_data}")
                         skipped_chapters.append(chapter_data)
                         continue
                     console.info(f"[{volume}][+] Creating chapter: {chapter_data}")
-                    collected_chapters[chapter_data] = exporter.CBZMangaExporter(
-                        utils.secure_filename(chapter_data), target_path
-                    )
+                    collected_chapters[chapter_data] = exporter.CBZMangaExporter(target_archive, target_path)
 
                 image_bita = archive.read(image)
                 collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)

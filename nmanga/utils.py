@@ -23,10 +23,12 @@ SOFTWARE.
 """
 
 import re
+import sys
 from typing import Optional, Union
 
 __all__ = (
     "secure_filename",
+    "unsecure_filename",
     "clean_title",
     "is_oneshot",
     "decode_or",
@@ -66,6 +68,31 @@ def secure_filename(fn: str):
         "])"
     )
     fn = re.sub(EMOJI_PATTERN, "_", fn)
+    return fn
+
+
+def unsecure_filename(fn: str):
+    # Remap back to original.
+    # Only works on Linux-based OS.
+    replacement = {
+        "：": ":",
+        "＜": "<",
+        "＞": ">",
+        "”": '"',
+        "“": '"',
+        "’": "'",
+        "‘": "'",
+        "＼": "\\",
+        "？": "?",
+        "⋆": "*",
+        "｜": "|",
+    }
+
+    if sys.platform == "win32":
+        return fn
+
+    for k, v in replacement.items():
+        fn = fn.replace(k, v)
     return fn
 
 

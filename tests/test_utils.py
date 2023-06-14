@@ -22,7 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from nmanga.utils import secure_filename, clean_title, is_oneshot, decode_or, encode_or
+import sys
+
+import pytest
+from nmanga.utils import secure_filename, clean_title, is_oneshot, decode_or, encode_or, unsecure_filename
 
 
 class TestSecureFilename:
@@ -37,6 +40,22 @@ class TestSecureFilename:
     def test_emoji(self):
         safe_fn = secure_filename("test: test 🤔")
         assert safe_fn == "test： test _"
+
+
+class TestUnsecureFilename:
+    def test_no_changes(self):
+        safe_fn = unsecure_filename("test")
+        assert safe_fn == "test"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="The following works only on POSIX")
+    def test_replacement(self):
+        unsafe_fn = unsecure_filename("test： test")
+        assert unsafe_fn == "test: test"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="The following works only on POSIX")
+    def test_replacement_but_no_changes(self):
+        unsafe_fn = unsecure_filename("test／ test")
+        assert unsafe_fn == "test／ test"
 
 
 class TestCleanTitle:

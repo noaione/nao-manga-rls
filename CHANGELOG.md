@@ -192,3 +192,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 ## 0.10.0
 **Refactor**
 - Move `nmanga.cli.constants` to `nmanga.constants` and move the original into `nmanga._metadata`
+
+**New Features**
+- Allow the "unsecure" characters back on Linux
