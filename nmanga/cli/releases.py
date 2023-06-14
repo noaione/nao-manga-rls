@@ -40,6 +40,7 @@ from ..common import (
     optimize_images,
     safe_int,
 )
+from ..constants import MangaPublication
 from . import options
 from ._deco import check_config_first, time_program
 from .base import (
@@ -49,7 +50,6 @@ from .base import (
     test_or_find_exiftool,
     test_or_find_pingo,
 )
-from .constants import MangaPublication
 
 console = term.get_console()
 conf = config.get_config()

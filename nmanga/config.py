@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Optional
 
 from ._ntypes import BracketTypeT, ConfigT, _ConfigDefaultsT, _ConfigExecutableT
-from .cli.constants import MANGA_PUBLICATION_TYPES
+from .constants import MANGA_PUBLICATION_TYPES
 
 __all__ = (
     "get_config",

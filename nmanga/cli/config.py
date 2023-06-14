@@ -28,8 +28,8 @@ from typing import Callable, List, Optional, Tuple
 import click
 
 from .. import config, term
+from ..constants import MANGA_PUBLICATION_TYPES
 from .base import NMangaCommandHandler, test_or_find_exiftool, test_or_find_magick, test_or_find_pingo
-from .constants import MANGA_PUBLICATION_TYPES
 
 __all__ = ("cli_config",)
 cfhandler = config.get_config_handler()

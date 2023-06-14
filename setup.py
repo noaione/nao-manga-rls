@@ -18,7 +18,7 @@ def clean_requirements(requirements: List[str]) -> List[str]:
 version = None
 author = None
 author_email = None
-with open("nmanga/constants.py") as f:
+with open("nmanga/_metadata.py") as f:
     for line in f:
         if line.find("__version__") >= 0 and version is None:
             version = line.split("=")[1].strip()

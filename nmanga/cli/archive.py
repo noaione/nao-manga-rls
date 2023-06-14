@@ -33,10 +33,10 @@ import click
 
 from .. import exporter, file_handler, term
 from ..common import format_archive_filename, format_volume_text
+from ..constants import MangaPublication
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler
-from .constants import MangaPublication
 
 console = term.get_console()
 

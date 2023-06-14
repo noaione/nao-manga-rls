@@ -22,9 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import warnings
+__name__ = "nmanga"
+__author__ = "noaione"
+__author_email__ = "noaione@n4o.xyz"
+__version__ = "0.9.1"
+__license__ = "MIT"
+__copyright__ = "Copyright (c) 2022-present noaione"
 
-# reexport
-from nmanga.constants import *  # noqa: F401, F403
-
-warnings.warn("nmanga.cli.constants is deprecated, use nmanga.constants instead", DeprecationWarning)
+__all__ = ("__name__", "__author__", "__version__", "__license__", "__copyright__")

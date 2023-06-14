@@ -28,8 +28,8 @@ from typing import Optional
 import click
 
 from ..config import get_config
+from ..constants import MANGA_PUBLICATION_TYPES
 from ..exporter import ExporterType
-from .constants import MANGA_PUBLICATION_TYPES
 
 config = get_config()
 

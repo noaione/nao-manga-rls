@@ -33,10 +33,10 @@ import click
 
 from .. import term
 from ..common import format_archive_filename, format_volume_text, inject_metadata
+from ..constants import MangaPublication
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_exiftool
-from .constants import MangaPublication
 
 console = term.get_console()
 TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"

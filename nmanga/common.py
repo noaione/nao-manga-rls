@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Dict, List, Match, Optional, Pattern, Tuple, Union, overload
 
 from . import config, term, utils
-from .cli.constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
+from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
 
 __all__ = (
     "BRACKET_MAPPINGS",

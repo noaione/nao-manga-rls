@@ -188,3 +188,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - More filename format fix
 - Wrong typing
+
+## 0.10.0
+**Refactor**
+- Move `nmanga.cli.constants` to `nmanga.constants` and move the original into `nmanga._metadata`
