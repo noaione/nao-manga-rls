@@ -34,7 +34,9 @@ from .. import config, file_handler, term
 from ..common import (
     ChapterRange,
     RegexCollection,
+    format_archive_filename,
     format_daiz_like_filename,
+    format_volume_text,
     inject_metadata,
     inquire_chapter_ranges,
     optimize_images,
@@ -438,6 +440,16 @@ def prepare_releases_chapter(
         image.rename(new_name)
         console.status(f"Processing: {current}/{total_img}")
         current += 1
+        if image_titling is None:
+            image_titling = format_archive_filename(
+                manga_title=manga_title,
+                manga_year=current_year,
+                publication_type=manga_publication_type,
+                ripper_credit=rls_credit,
+                bracket_type=bracket_type,
+                manga_volume_text=format_volume_text(manga_volume, manga_chapter),
+                rls_revision=rls_revision,
+            )
     console.stop_status(f"Processed {current - 1} images!")
 
     if pingo_exe is not None and do_img_optimize:

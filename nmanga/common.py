@@ -524,7 +524,7 @@ def format_daiz_like_filename(
         publication_type=publication_type,
         ripper_credit=ripper_credit,
         bracket_type=bracket_type,
-        manga_volume_text=f"v{manga_volume:02d}" if manga_volume is not None else None,
+        manga_volume_text=format_volume_text(manga_volume, chapter_info.number),
         rls_revision=rls_revision,
     )
 

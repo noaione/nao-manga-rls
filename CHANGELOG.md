@@ -27,6 +27,8 @@
   - [v0.8.2](#082)
 - [v0.9.0](#090)
   - [v0.9.1](#091)
+- [v0.10.0](#0100)
+  - [v0.10.1](#0101)
 
 ## 0.1.0
 
@@ -195,3 +197,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **New Features**
 - Allow the "unsecure" characters back on Linux
+
+### 0.10.1
+**Fixes**
+- Tagging for chapter release is incorrect
