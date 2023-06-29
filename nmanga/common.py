@@ -577,7 +577,7 @@ _PublicationRegexMatch = [
 
 
 class RegexCollection:
-    _VolumeRegex = r"CHANGETHIS v(\d+).*"  # pragma: no cover
+    _VolumeRegex = r"CHANGETHIS v(\d+\.?[\d]{1,2}?).*"  # pragma: no cover
     _OneShotRegex = r"CHANGETHIS .*"  # pragma: no cover
     # fmt: off
     _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \

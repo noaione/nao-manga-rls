@@ -32,7 +32,7 @@ def test_volume_regex():
     assert remedy.match("Real Manga v01") is not None
     assert remedy.match("Real Manga v01 (2023) (Digital) (nao)") is not None
 
-    assert remedy.pattern == r"Real\ Manga v(\d+).*"
+    assert remedy.pattern == r"Real\ Manga v(\d+\.?[\d]{1,2}?).*"
 
 
 def test_volume_regex_with_limiter():
@@ -44,7 +44,7 @@ def test_volume_regex_with_limiter():
     assert remedy.match("Real Manga v01 (2023) (Digital) (danke)") is not None
     assert remedy.match("Real Manga v01 (2023) (Digital) (danke-Empire)") is not None
 
-    assert remedy.pattern == r"Real\ Manga v(\d+).*[\[\(]danke.*"
+    assert remedy.pattern == r"Real\ Manga v(\d+\.?[\d]{1,2}?).*[\[\(]danke.*"
 
 
 def test_chapter_regex():
