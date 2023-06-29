@@ -69,7 +69,7 @@ TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 def image_tagging(
     path_or_archive: Path,
     manga_title: str,
-    manga_volume: Optional[int],
+    manga_volume: Optional[Union[int, float]],
     manga_chapter: Optional[Union[int, float]],
     manga_year: int,
     manga_publication_type: MangaPublication,

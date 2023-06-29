@@ -210,3 +210,4 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Inject metadata to PNG via bytes injection
   - To enable, use `nmanga config` and configure the experimental part
 - Raw tagging with provided metadata instead of custom metadata formatting we use
+- Add support for special numbered volume (v01.5) etc.

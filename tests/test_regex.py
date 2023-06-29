@@ -65,7 +65,8 @@ def test_chapter_regex():
 
     assert (
         remedy.pattern == r"Real\ Manga - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})"
-        r"?\)? ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
+        r"?\)? ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- "
+        r"p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"
     )
 
 
@@ -88,8 +89,9 @@ def test_chapter_regex_with_publisher():
 
     assert (
         remedy.pattern == r"Real\ Manga - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]"
-        r"{1,3})?\)? ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]? "
-        r".*\[(?:dig|web|c2c|mag|scan|paper|raw|raw-d|raw-dig|raw-digital|raw-m|raw-mag|raw-magazine)] "
+        r"{1,3})?\)? ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- "
+        r"p[\d]+x?[\d]?\-?[\d]+x?[\d]?.* "
+        r"\[(?:dig|web|c2c|mag|scan|paper|raw|raw-d|raw-dig|raw-digital|raw-m|raw-mag|raw-magazine)] "
         r"(?:\[(?P<title>.*)\] )?\[Kodansha.*"
     )
 

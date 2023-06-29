@@ -85,8 +85,23 @@ class PseudoChapterMatch:
         return self.get(key)
 
 
+def format_daiz_like_numbering(
+    number: Union[int, float], digit: int = 3, use_minus: bool = True, separator: str = conf.defaults.ch_special_tag
+):
+    if isinstance(number, int):
+        return f"{int(number):0{digit}d}"
+    base, floating = str(number).split(".")
+    floating = int(floating)
+    if floating - 4 >= 1 and use_minus:
+        # Handle split chapter (.1, .2, etc)
+        floating -= 4
+    return f"{int(base):0{digit}d}{separator}{floating}"
+
+
 class ChapterRange:
-    def __init__(self, number: Union[int, float], name: Optional[str], range: List[int], is_single: bool = False):
+    def __init__(
+        self, number: Union[int, float], name: Optional[str] = None, range: List[int] = list(), is_single: bool = False
+    ):
         self.number = number
         self.name = name
         self.range = range
@@ -104,14 +119,7 @@ class ChapterRange:
 
     @property
     def bnum(self):
-        if isinstance(self.number, int):
-            return f"{self.number:03d}"
-        base, floating = str(self.number).split(".")
-        floating = int(floating)
-        if floating - 4 >= 1:
-            # Handle split chapter (.1, .2, etc)
-            floating -= 4
-        return f"{int(base):03d}{conf.defaults.ch_special_tag}{floating}"
+        return format_daiz_like_numbering(self.number)
 
     @property
     def base(self):
@@ -157,24 +165,30 @@ def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: 
     chapter_extra = match.group("ex")
     chapter_vol = match.group("vol")
     chapter_actual = match.group("actual")
+    chapter_vol_ex = match.group("volex")
     if chapter_vol is not None:
         if utils.is_oneshot(chapter_vol):
             chapter_vol = 0
         else:
-            chapter_vol = int(chapter_vol[1:])
+            if chapter_vol_ex is not None:
+                chapter_vol = chapter_vol.replace(chapter_vol_ex, "")
+                chapter_vol_ex = int(chapter_vol_ex[1:]) + 4
+                chapter_vol = float(f"{chapter_vol[1:]}.{chapter_vol_ex}")
+            else:
+                chapter_vol = int(chapter_vol[1:])
 
     chapter_title: Optional[str] = None
     try:
         chapter_title = match.group("title")
         if chapter_title is not None:
             chapter_title = utils.clean_title(chapter_title)
-    except IndexError:
+    except IndexError:  # pragma: no cover (unreachable)
         pass
 
     act_ch_num = actual_or_fallback(chapter_actual, chapter_num)
 
     if chapter_vol is not None:
-        chapter_data = f"{chapter_vol:02d}.{act_ch_num}"
+        chapter_data = f"{format_daiz_like_numbering(chapter_vol, 2, False, '.')}.{act_ch_num}"
     else:
         chapter_data = act_ch_num
     if chapter_extra is not None and chapter_actual is None:
@@ -186,8 +200,6 @@ def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: 
         chapter_data += f" - {chapter_title}"
     if chapter_title is None and has_publisher and chapter_extra is not None:
         ch_ex = int(chapter_extra[1:])
-        if "." in chapter_extra:
-            ch_ex -= 4
         chapter_data += f" - Extra {ch_ex}"
 
     return chapter_data
@@ -264,7 +276,9 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
     resolve_dir = current_directory.resolve()
     any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_tiff = len(list(resolve_dir.glob("*.tiff"))) > 0
-    if not any_jpg and not any_tiff:
+    png_files = list(resolve_dir.glob("*.png"))
+    any_png = len(png_files) > 0
+    if not any_jpg and not any_tiff and not any_png:
         console.warning("No valid images found in directory, skipping metadata injection")
         return
     base_cmd = [exiftool_dir]
@@ -293,6 +307,21 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
         console.info("Injecting metadata into TIFF files...")
         proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait()
+    # Use text injection to the end of PNG file.
+    # This is not ideal, but it's the only way to inject metadata into PNG files.
+    # Format: "Title (email)"
+    encoded_data = f"{image_title} ({image_email})".encode("ascii")
+    if any_png and conf.experimentals.png_tag:
+        console.warning("PNG files will use experimental metadata injection, please report any issues")
+        console.status("Injecting metadata into PNG files...")
+        for idx, png_img in enumerate(png_files, 1):
+            console.status(f"Injecting metadata into ({idx}/{len(png_files)})...")
+            with png_img.open("ab") as af:
+                # Write pad data
+                af.write(b"\x00" * 4)
+                af.write(encoded_data)
+                af.write(b"\x00" * 4)
+        console.stop_status("Injected metadata into PNG files")
 
 
 def _run_pingo_and_verify(pingo_cmd: List[str]):  # pragma: no cover
@@ -393,7 +422,7 @@ def format_archive_filename(
 
 
 def format_volume_text(
-    manga_volume: Optional[int] = None,
+    manga_volume: Optional[Union[int, float]] = None,
     manga_chapter: Optional[Union[int, float]] = None,
 ) -> Optional[str]:
     tag_sep = conf.defaults.ch_special_tag
@@ -409,10 +438,10 @@ def format_volume_text(
             volume_text = f"{int(base_float):03d}{tag_sep}{dec_float}"
         else:
             volume_text = f"{manga_chapter:03d}"
-        if conf.defaults.ch_add_c_prefix:
-            volume_text = f"c{volume_text}"
+        if conf.defaults.ch_add_c_prefix:  # pragma: no cover
+            volume_text = f"c{volume_text}"  # pragma: no cover
     if manga_volume is not None:
-        volume_text = f"v{manga_volume:02d}"
+        volume_text = f"v{format_daiz_like_numbering(manga_volume, 2, False, '.')}"
 
     return volume_text
 
@@ -426,7 +455,7 @@ def format_daiz_like_filename(
     publication_type: MangaPublication,
     ripper_credit: str,
     bracket_type: str,
-    manga_volume: Optional[int] = None,
+    manga_volume: Optional[Union[int, float]] = None,
     extra_metadata: Optional[str] = None,
     image_quality: Optional[str] = None,  # {HQ}/{LQ} thing
     rls_revision: Optional[int] = None,
@@ -476,7 +505,7 @@ def format_daiz_like_filename(
 
     act_vol = fallback_volume_name
     if manga_volume is not None:
-        act_vol = f"v{manga_volume:02d}"
+        act_vol = f"v{format_daiz_like_numbering(manga_volume, 2, separator='x')}"
 
     extra_name = " "
     if extra_metadata is not None:
@@ -552,11 +581,12 @@ class RegexCollection:
     _OneShotRegex = r"CHANGETHIS .*"  # pragma: no cover
     # fmt: off
     _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
-                      r"[\d]? .*\[(?:PUBREPLACE)] (?:\[(?P<title>.*)\] )?\[CHANGEPUBLISHER.*"  # pragma: no cover # noqa: E501
+                      r" ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)?" \
+                      r" ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.* \[(?:PUBREPLACE)] (?:\[(?P<title>.*)\] )" \
+                      r"?\[CHANGEPUBLISHER.*"  # pragma: no cover
     _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\(?(?P<vol>v[\d]+|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- p[\d]+x?[\d]?\-?[\d]+x?" \
-                      r"[\d]?.*"  # pragma: no cover
+                      r" ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)?" \
+                      r" ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"  # pragma: no cover
     # fmt: on
 
     @classmethod
@@ -568,12 +598,12 @@ class RegexCollection:
 
     @overload
     @classmethod
-    def chapter_re(cls, title: str) -> Pattern[str]:
+    def chapter_re(cls, title: str) -> Pattern[str]:  # pragma: no cover
         ...
 
     @overload
     @classmethod
-    def chapter_re(cls, title: str, publisher: str) -> Pattern[str]:
+    def chapter_re(cls, title: str, publisher: str) -> Pattern[str]:  # pragma: no cover
         ...
 
     @classmethod
@@ -589,7 +619,8 @@ class RegexCollection:
     @classmethod
     def cmx_re(cls) -> Pattern[str]:
         return re.compile(
-            r"(?P<t>[\w\W\D\d\S\s]+?)(?:\- (?P<vol>v[\d]{1,3}))? \- p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?"
+            r"(?P<t>[\w\W\D\d\S\s]+?)(?:\- (?P<vol>v[\d]{1,3}))?(?P<volex>\.[\d]{1,2})? \- "
+            r"p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?"
         )
 
     @classmethod

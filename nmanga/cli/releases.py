@@ -211,8 +211,10 @@ def prepare_releases(
         p01_copy = int(title_match.group("a"))
         p02 = title_match.group("b")
         vol = title_match.group("vol")
+        vol_ex = title_match.group("volex")
         if p02 is not None:
             p01 = f"{p01}-{p02}"
+        vol_act: Optional[Union[int, float]]
         if vol is None:
             vol_act = None
             if not vol_oshot_warn:
@@ -224,6 +226,11 @@ def prepare_releases(
             if vol.startswith("v"):
                 vol = vol[1:]
             vol_act = int(vol)
+
+        if vol_act is not None and vol_ex is not None:
+            if vol_ex.startswith("."):
+                vol_ex = vol_ex[1:]
+            vol_act = float(f"{vol_act}.{int(vol_ex)}")
 
         selected_range: ChapterRange = None
         for rls_info in rls_information:

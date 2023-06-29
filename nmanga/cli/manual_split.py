@@ -40,6 +40,7 @@ from ..common import (
     PseudoChapterMatch,
     check_cbz_exist,
     create_chapter,
+    format_daiz_like_numbering,
     inquire_chapter_ranges,
     safe_int,
 )
@@ -98,7 +99,7 @@ def _collect_archive_to_chapters(
     target_path: Path,
     archive_file: Path,
     chapters_mapping: List[ChapterRange],
-    volume_num: Optional[int] = None,
+    volume_num: Optional[Union[int, float]] = None,
     custom_data: Dict[str, int] = {},
     regex_data: Optional[Pattern[str]] = None,
 ):  # pragma: no cover
@@ -133,7 +134,7 @@ def _collect_archive_to_chapters(
             if len(as_bnum) > 1:
                 chapter_info.set("ex", "x" + as_bnum[1])
             if volume_num is not None:
-                chapter_info.set("vol", f"v{volume_num:02d}")
+                chapter_info.set("vol", f"v{format_daiz_like_numbering(volume_num, 2, False, '.')}")
             if selected_chapter.name is not None:
                 chapter_info.set("title", selected_chapter.name)
 

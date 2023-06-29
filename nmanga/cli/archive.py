@@ -71,7 +71,7 @@ def pack_releases(
     path_or_archive: Path,
     manga_title: str,
     manga_year: Optional[int],
-    manga_volume: Optional[int],
+    manga_volume: Optional[Union[int, float]],
     manga_chapter: Optional[Union[int, float]],
     manga_publication_type: MangaPublication,
     rls_credit: str,
@@ -163,7 +163,7 @@ def pack_releases_epub_mode(
     path_or_archive: Path,
     epub_title: str,
     epub_source: str,
-    manga_volume: Optional[int],
+    manga_volume: Optional[Union[int, float]],
     rls_credit: str,
 ):
     """

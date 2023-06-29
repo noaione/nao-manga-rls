@@ -23,20 +23,25 @@ SOFTWARE.
 """
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+from nmanga.constants import MANGA_PUBLICATION_TYPES
 from nmanga.common import (
     ChapterRange,
     PseudoChapterMatch,
     actual_or_fallback,
     check_cbz_exist,
-    format_daiz_like_filename,
+    create_chapter,
     format_archive_filename,
+    format_daiz_like_filename,
+    format_daiz_like_numbering,
+    format_volume_text,
     int_or_float,
     parse_ch_ranges,
     safe_int,
     validate_ch_ranges,
 )
-from nmanga.cli.constants import MANGA_PUBLICATION_TYPES
+from nmanga.config import get_config
 
 
 class TestFormatDaizLikeFilename:
@@ -651,6 +656,125 @@ class TestFormatArchiveFilename:
         assert filename == f"Test Title v01 ({self._YEAR}) (c2c) [{self._RIPPER}]"
 
 
+class TestFormatDaizLikeNumbering:
+    def test_int(self):
+        assert format_daiz_like_numbering(1, separator="x") == "001"
+
+    def test_int_volume(self):
+        assert format_daiz_like_numbering(1, digit=2, separator="x") == "01"
+
+    def test_float(self):
+        assert format_daiz_like_numbering(1.5, separator="x") == "001x1"
+
+    def test_float_no_minus(self):
+        assert format_daiz_like_numbering(1.5, digit=2, use_minus=False, separator=".") == "01.5"
+
+    def test_float_split(self):
+        assert format_daiz_like_numbering(1.3, digit=2, separator="x") == "01x3"
+
+
+class TestFormatVolumeText:
+    # Make a with statement to mock the config
+    conf = get_config()
+
+    def test_manga_volume_int(self):
+        assert format_volume_text(manga_volume=1) == "v01"
+
+    def test_manga_volume_float(self):
+        assert format_volume_text(manga_volume=1.5) == "v01.5"
+
+    def test_manga_chapter_int(self):
+        pre = "c" if self.conf.defaults.ch_add_c_prefix else ""
+        assert format_volume_text(manga_chapter=1) == f"{pre}001"
+
+    def test_manga_chapter_float(self):
+        pre = "c" if self.conf.defaults.ch_add_c_prefix else ""
+        sep = self.conf.defaults.ch_special_tag
+        assert format_volume_text(manga_chapter=1.5) == f"{pre}001{sep}1"
+
+
+class _MissingT:
+    __slots__ = ()
+
+    def __eq__(self, other) -> bool:
+        return False
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __hash__(self) -> int:
+        return 0
+
+    def __repr__(self):
+        return "..."
+
+
+MISSING = _MissingT()
+
+
+class TestCreateChapter:
+    def _mock_match(
+        self,
+        ch_num: str,
+        ch_title: Optional[str] = MISSING,
+        ch_actual: Optional[str] = MISSING,
+        ch_extra: Optional[str] = MISSING,
+        vol_num: Optional[str] = MISSING,
+        vol_extra: Optional[str] = MISSING,
+    ):
+        match = PseudoChapterMatch()
+        match.set("ch", str(ch_num))
+        if ch_title is not MISSING:
+            match.set("title", ch_title)
+        if ch_actual is not MISSING:
+            match.set("actual", ch_actual)
+        if ch_extra is not MISSING:
+            match.set("ex", ch_extra)
+        if vol_num is not MISSING:
+            match.set("vol", vol_num)
+        if vol_extra is not MISSING:
+            match.set("volex", vol_extra)
+        return match
+
+    def test_basic_match(self):
+        assert create_chapter(self._mock_match("1")) == "001"
+
+    def test_with_volume(self):
+        assert create_chapter(self._mock_match("1", vol_num="v01")) == "01.001"
+
+    def test_with_volume_oneshot(self):
+        assert create_chapter(self._mock_match("1", vol_num="OShot")) == "00.001"
+
+    def test_with_volume_extra(self):
+        assert create_chapter(self._mock_match("1", vol_num="v01", vol_extra="x1")) == "01.5.001"
+
+    def test_with_chapter_extra(self):
+        assert create_chapter(self._mock_match("1", ch_extra="x1")) == "001.5"
+        assert create_chapter(self._mock_match("1", ch_extra=".1")) == "001.1"
+
+    def test_with_chapter_extra_and_volume(self):
+        assert create_chapter(self._mock_match("1", ch_extra="x1", vol_num="v01")) == "01.001.5"
+
+    def test_with_chapter_extra_and_volume_extra(self):
+        assert create_chapter(self._mock_match("1", ch_extra="x1", vol_num="v01", vol_extra="x1")) == "01.5.001.5"
+
+    def test_with_chapter_actual(self):
+        assert create_chapter(self._mock_match("1", ch_actual="1.1")) == "001.1"
+
+    def test_with_chapter_actual_and_volume(self):
+        assert create_chapter(self._mock_match("1", ch_actual="1.1", vol_num="v01")) == "01.001.1"
+
+    def test_with_chapter_actual_and_volume_extra(self):
+        assert create_chapter(self._mock_match("1", ch_actual="1.1", vol_num="v01", vol_extra="x1")) == "01.5.001.1"
+
+    def test_with_chapter_title(self):
+        assert create_chapter(self._mock_match("1", ch_title="Test")) == "001 - Test"
+
+    def test_with_chapter_pub_no_title(self):
+        assert create_chapter(self._mock_match("1", ch_extra="x1"), True) == "001.5 - Extra 1"
+        assert create_chapter(self._mock_match("1", ch_extra=".1"), True) == "001.1 - Extra 1"
+
+
 class TestValidateChapterRange:
     def test_multi_length(self):
         assert validate_ch_ranges("1-3")
@@ -690,6 +814,9 @@ class TestNumberConverter:
 
     def test_int_or_float_null(self):
         assert int_or_float("a") is None
+
+    def test_int_or_float_fail(self):
+        assert int_or_float("1.2.3") is None
 
 
 class TestPseudoChapterMatch:
