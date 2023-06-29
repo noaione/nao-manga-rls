@@ -265,6 +265,49 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
         console.enter()
 
 
+# --- Experimentals --- #
+
+
+def _loop_experimental_disable_enable(experiment: str, current: bool) -> config.Config:  # pragma: no cover
+    CHOICE_ENABLE = term.ConsoleChoice("yes_add", "Enable")
+    CHOICE_DISABLE = term.ConsoleChoice("no_yeet", "Disable")
+
+    message = f"Enable or disable `{experiment}`?"
+    message += f" [Current: {current}]"
+
+    select_option = console.choice(
+        message=message,
+        choices=[CHOICE_ENABLE, CHOICE_DISABLE],
+        default=CHOICE_ENABLE if current else CHOICE_DISABLE,
+    )
+
+    option = select_option.name
+    return option == CHOICE_ENABLE.name
+
+
+def _loop_experimental_sections(config: config.Config):  # pragma: no cover
+    while True:
+        select_option = console.choice(
+            "Select what you want to do for experimentals section",
+            choices=[
+                term.ConsoleChoice("png_tag", "PNG Tagging"),
+                SAVE_CHOICE,
+            ],
+        )
+
+        option = select_option.name
+        if option == SAVE_CHOICE.name:
+            return config
+        elif option == "png_tag":
+            config.experimentals.png_tag = _loop_experimental_disable_enable(
+                "PNG Tagging", config.experimentals.png_tag
+            )
+        else:
+            console.warning("Invalid option selected")
+            console.sleep(2)
+        console.enter()
+
+
 # --- Main --- #
 
 
@@ -275,6 +318,7 @@ def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:  #
             choices=[
                 term.ConsoleChoice("defaults", "Configure defaults"),
                 term.ConsoleChoice("executables", "Configure executables"),
+                term.ConsoleChoice("experimentals", "Configure experimentals"),
                 SAVE_CHOICE,
                 CANCEL_CHOICE,
             ],
@@ -291,6 +335,9 @@ def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:  #
         elif option == "executables":
             console.enter()
             config = _loop_executables_sections(config)
+        elif option == "experimentals":
+            console.enter()
+            config = _loop_experimental_sections(config)
         console.enter()
 
 

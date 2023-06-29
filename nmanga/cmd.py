@@ -33,7 +33,7 @@ from .cli.archive import pack_releases, pack_releases_comment_archive, pack_rele
 from .cli.auto_split import auto_split
 from .cli.config import cli_config
 from .cli.image_optimizer import image_optimizer
-from .cli.image_tagging import image_tagging
+from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.releases import prepare_releases, prepare_releases_chapter
@@ -88,6 +88,7 @@ main.add_command(prepare_releases)
 main.add_command(prepare_releases_chapter)
 main.add_command(spreads)
 main.add_command(image_tagging)
+main.add_command(image_tagging_raw)
 main.add_command(image_optimizer)
 
 

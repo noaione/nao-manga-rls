@@ -29,6 +29,8 @@
   - [v0.9.1](#091)
 - [v0.10.0](#0100)
   - [v0.10.1](#0101)
+  - [v0.10.2](#0102)
+
 
 ## 0.1.0
 
@@ -201,3 +203,10 @@ Rewritten every thing as a module with `nmanga` namespace.
 ### 0.10.1
 **Fixes**
 - Tagging for chapter release is incorrect
+
+
+### 0.10.2
+**New Features**
+- Inject metadata to PNG via bytes injection
+  - To enable, use `nmanga config` and configure the experimental part
+- Raw tagging with provided metadata instead of custom metadata formatting we use

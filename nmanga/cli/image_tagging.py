@@ -117,3 +117,46 @@ def image_tagging(
 
     console.info("Tagging images with exif metadata...")
     inject_metadata(exiftool_exe, path_or_archive, archive_filename, rls_email)
+
+
+@click.command(
+    name="rawtag",
+    help="Tag images with provided metadata",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-t",
+    "--title",
+    "manga_title",
+    required=True,
+    help="The title of the series",
+)
+@options.rls_email
+@options.exiftool_path
+@check_config_first
+@time_program
+def image_tagging_raw(
+    path_or_archive: Path,
+    manga_title: str,
+    rls_email: str,
+    exiftool_path: str,
+):  # pragma: no cover
+    """
+    Tag images with metadata
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    force_search = not is_executeable_global_path(exiftool_path, "exiftool")
+    exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
+    if exiftool_exe is None:
+        console.error("Exiftool not found, unable to tag image with exif metadata!")
+        raise click.exceptions.Exit(1)
+
+    console.info("Tagging images with exif metadata...")
+    inject_metadata(exiftool_exe, path_or_archive, manga_title, rls_email)

@@ -176,7 +176,7 @@ manga_volume = click.option(
     "-vol",
     "--volume",
     "manga_volume",
-    type=int,
+    type=FLOAT_INT,
     help="The volume of the series release",
     default=None,
 )

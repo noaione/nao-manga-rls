@@ -49,6 +49,16 @@ else:
 
 
 @dataclass
+class _ConfigExperiments:
+    png_tag: bool = field(default=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "png_tag": self.png_tag,
+        }
+
+
+@dataclass
 class _ConfigExecutable:
     magick_path: str = field(default="magick")
     pingo_path: str = field(default="pingo")
@@ -93,11 +103,13 @@ class _ConfigDefaults:
 class Config:
     defaults: _ConfigDefaults = field(default_factory=_ConfigDefaults)
     executables: _ConfigExecutable = field(default_factory=_ConfigExecutable)
+    experimentals: _ConfigExperiments = field(default_factory=_ConfigExperiments)
 
     def to_dict(self) -> ConfigT:
         return {
             "defaults": self.defaults.to_dict(),
             "executables": self.executables.to_dict(),
+            "experimentals": self.experimentals.to_dict(),
         }
 
 
@@ -118,11 +130,14 @@ class ConfigHandler:
     def _parse_config(self, json_data: ConfigT) -> Config:
         defaults = json_data.get("defaults", {})
         executables = json_data.get("executables", {})
+        experimentals = json_data.get("experimentals", {})
 
         if not isinstance(defaults, dict):
             raise ConfigError("`defaults` must be a dict")
         if not isinstance(executables, dict):
             raise ConfigError("`executables` must be a dict")
+        if not isinstance(experimentals, dict):
+            raise ConfigError("`experimentals` must be a dict")
 
         config = Config()
 
@@ -170,6 +185,7 @@ class ConfigHandler:
             rls_ch_pub_type=rls_ch_pub_type,
         )
 
+        # Parse executables
         magick_path = executables.get("magick_path", "magick")
         if not isinstance(magick_path, str):
             raise ConfigError("`executables.magick_path` must be a string")
@@ -183,8 +199,17 @@ class ConfigHandler:
             raise ConfigError("`executables.exiftool_path` must be a string")
 
         config.executables = _ConfigExecutable(
-            magick_path=magick_path, pingo_path=pingo_path, exiftool_path=exiftool_path
+            magick_path=magick_path,
+            pingo_path=pingo_path,
+            exiftool_path=exiftool_path,
         )
+
+        # Parse experimentals
+        png_tag = experimentals.get("png_tag", False)
+        if not isinstance(png_tag, bool):
+            raise ConfigError("`experimentals.png_tag` must be a bool")
+
+        config.experimentals = _ConfigExperiments(png_tag=png_tag)
 
         is_first_time = bool(json_data.get("_is_first_time", False))
         self._is_first_time_warn = is_first_time
