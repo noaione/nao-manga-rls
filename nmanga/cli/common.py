@@ -25,6 +25,6 @@ SOFTWARE.
 import warnings
 
 # reexport
-from nmanga.common import *  # noqa: F401, F403
+from nmanga.common import *  # noqa: F401, RUF100
 
 warnings.warn("nmanga.cli.common is deprecated, use nmanga.common instead", DeprecationWarning)

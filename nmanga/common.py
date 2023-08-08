@@ -272,7 +272,9 @@ def inquire_chapter_ranges(
     return chapter_ranges
 
 
-def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):  # pragma: no cover
+def inject_metadata(
+    exiftool_dir: str, current_directory: Path, image_title: str, image_email: str, *, enable_png_tag: bool = False
+):  # pragma: no cover
     resolve_dir = current_directory.resolve()
     any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_tiff = len(list(resolve_dir.glob("*.tiff"))) > 0
@@ -311,7 +313,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
     # This is not ideal, but it's the only way to inject metadata into PNG files.
     # Format: "Title (email)"
     encoded_data = f"{image_title} ({image_email})".encode("ascii")
-    if any_png and conf.experimentals.png_tag:
+    if any_png and (conf.experimentals.png_tag or enable_png_tag):
         console.warning("PNG files will use experimental metadata injection, please report any issues")
         console.status("Injecting metadata into PNG files...")
         for idx, png_img in enumerate(png_files, 1):
@@ -348,17 +350,44 @@ def _run_pingo_and_verify(pingo_cmd: List[str]):  # pragma: no cover
     return None  # unknown result
 
 
+def _is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
+    console.info("Checking if pingo is alpha version...")
+    proc = sp.Popen([pingo_path, "-help"], stdout=sp.PIPE, stderr=sp.PIPE)
+    proc.wait()
+
+    stdout = proc.stdout.read().decode("utf-8")
+    stderr = proc.stderr.read().decode("utf-8")
+    # Merge both stdout and stderr
+    output = stdout + stderr
+
+    # The output for help format is like this:
+    # -----------------------------------------------------------------
+    # pingo aXX (v1) - experimental web image optimizer (64-bit)
+    # -----------------------------------------------------------------
+
+    is_alpha_ver = "bad command. type 'pingo' for help" in output.casefold()
+    console.info(f"Using {'alpha' if is_alpha_ver else 'stable'} version of pingo")
+    return is_alpha_ver
+
+
 def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = False):  # pragma: no cover
+    alpha_ver = _is_pingo_alpha(pingo_path)
     resolve_dir = target_directory.resolve()
     any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_png = len(list(resolve_dir.glob("*.png"))) > 0
     any_webp = len(list(resolve_dir.glob("*.webp"))) > 0
 
-    base_cmd = [pingo_path, "-strip"]
+    base_cmd = [pingo_path, "-strip"] if alpha_ver else [
+        pingo_path, "-notrans", "-notime", "-lossless", "-s4"
+    ]
     if any_jpg:
-        pingo_cmd = base_cmd[:] + ["-s0"]
+        pingo_cmd = base_cmd[:] + ["-s4"]
         if aggresive:
-            pingo_cmd.append("-jpgtype=1")
+            if alpha_ver:
+                pingo_cmd.append("-jpgtype=1")
+            else:
+                pingo_cmd.remove("-lossless")
+                pingo_cmd.append("-q=97")
         pingo_cmd.append(str(resolve_dir / "*.jpg"))
         console.status("Optimizing JP(e)G files...")
         proc = _run_pingo_and_verify(pingo_cmd)
@@ -369,7 +398,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
         console.enter()
 
     if any_png:
-        pingo_cmd = base_cmd[:] + ["-sb"]
+        pingo_cmd = base_cmd[:]
         pingo_cmd.append(str(resolve_dir / "*.png"))
         console.status("Optimizing PNG files...")
         proc = _run_pingo_and_verify(pingo_cmd)
@@ -380,7 +409,10 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
         console.enter()
 
     if any_webp:
-        pingo_cmd = base_cmd[:] + ["-s9"]
+        pingo_cmd = base_cmd[:]
+        if aggresive and not alpha_ver:
+            pingo_cmd.remove("-lossless")
+            pingo_cmd.append("-webp")
         pingo_cmd.append(str(resolve_dir / "*.webp"))
         console.status("Optimizing WEBP files...")
         proc = _run_pingo_and_verify(pingo_cmd)

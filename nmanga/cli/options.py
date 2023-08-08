@@ -244,3 +244,10 @@ rls_revision = click.option(
     default=1,
     show_default=True,
 )
+png_tagging = click.option(
+    "--png-tag/--no-png-tag",
+    "do_png_tagging",
+    default=False,
+    show_default=True,
+    help="Enable or disable png tagging",
+)

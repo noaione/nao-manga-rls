@@ -63,6 +63,7 @@ TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 @options.rls_email
 @options.rls_revision
 @options.use_bracket_type
+@options.png_tagging
 @options.exiftool_path
 @check_config_first
 @time_program
@@ -77,6 +78,7 @@ def image_tagging(
     rls_email: str,
     rls_revision: int,
     bracket_type: Literal["square", "round", "curly"],
+    do_png_tagging: bool,
     exiftool_path: str,
 ):  # pragma: no cover
     """
@@ -116,7 +118,13 @@ def image_tagging(
     )
 
     console.info("Tagging images with exif metadata...")
-    inject_metadata(exiftool_exe, path_or_archive, archive_filename, rls_email)
+    inject_metadata(
+        exiftool_exe,
+        path_or_archive,
+        archive_filename,
+        rls_email,
+        enable_png_tag=do_png_tagging,
+    )
 
 
 @click.command(
@@ -133,6 +141,7 @@ def image_tagging(
     help="The title of the series",
 )
 @options.rls_email
+@options.png_tagging
 @options.exiftool_path
 @check_config_first
 @time_program
@@ -140,10 +149,11 @@ def image_tagging_raw(
     path_or_archive: Path,
     manga_title: str,
     rls_email: str,
+    do_png_tagging: bool,
     exiftool_path: str,
 ):  # pragma: no cover
     """
-    Tag images with metadata
+    Tag images with anything provided by user.
     """
 
     if not path_or_archive.is_dir():
@@ -159,4 +169,10 @@ def image_tagging_raw(
         raise click.exceptions.Exit(1)
 
     console.info("Tagging images with exif metadata...")
-    inject_metadata(exiftool_exe, path_or_archive, manga_title, rls_email)
+    inject_metadata(
+        exiftool_exe,
+        path_or_archive,
+        manga_title,
+        rls_email,
+        enable_png_tag=do_png_tagging,
+    )

@@ -28,7 +28,7 @@ import sys
 import traceback
 import warnings
 from functools import partial
-from typing import TYPE_CHECKING, List, Optional, Pattern, Tuple, Union, cast, overload
+from typing import TYPE_CHECKING, Callable, List, Optional, Pattern, Tuple, Union, cast, overload
 
 import click
 from click.core import Context
@@ -36,7 +36,7 @@ from click.parser import Option as ParserOption
 from click.parser import OptionParser
 
 from .. import term
-from ..common import RegexCollection as _RegexCollection  # noqa: F401
+from ..common import RegexCollection as _RegexCollection  # noqa: F401, RUF100
 
 if TYPE_CHECKING:
     from click.parser import ParsingState
@@ -52,17 +52,32 @@ __all__ = (
 )
 
 
-def _test_exec(arguments: list):
+def _test_exec(
+    arguments: list,
+    *,
+    extra_check: Optional[Callable[[str, str], bool]] = None,
+):
     try:
-        exc = sp.check_call(arguments, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
-        if exc != 0:
+        proc = sp.Popen(arguments, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait(5.0)
+        if proc.returncode != 0:
+            if callable(extra_check):
+                return bool(extra_check(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8")))
             return False
+        return True
+    except TimeoutError:
+        # Pingo 1.x will hang if no -help parameter is given
         return True
     except OSError:
         return False
 
 
-def _find_exec_path(exec_name: Union[str, List[str]], test_cmd: Optional[str] = None) -> str:
+def _find_exec_path(
+    exec_name: Union[str, List[str]],
+    test_cmd: Optional[str] = None,
+    *,
+    extra_check: Optional[Callable[[str, str], bool]] = None
+) -> str:
     if isinstance(exec_name, str):
         exec_name = [exec_name]
     path_env = os.environ.get("PATH", "")
@@ -71,11 +86,11 @@ def _find_exec_path(exec_name: Union[str, List[str]], test_cmd: Optional[str] = 
     for path in path_env.split(os.pathsep):
         path = path.strip('"')
         for exec in exec_name:
-            exec_path = os.path.join(path, exec)
+            exec_path = os.path.join(path, exec)  # noqa: PTH118
             exec_cmd = [exec_path]
             if test_cmd is not None:
                 exec_cmd.append(test_cmd)
-            if _test_exec(exec_cmd):
+            if _test_exec(exec_cmd, extra_check=extra_check):
                 console.stop_status()
                 return exec_path
     console.stop_status()
@@ -101,14 +116,28 @@ def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Opti
         return None if not force_search else _find_exec_path("exiftool")
 
 
+def _is_pingo_validity_check(stdout: str, stderr: str):
+    if "bad command. type 'pingo'" in (stdout := stdout.strip().lower()):
+        return True
+    if "bad command. type 'pingo'" in (stderr := stderr.strip().lower()):
+        return True
+    return False
+
+
 def test_or_find_pingo(pingo_path: str, force_search: bool = True) -> Optional[str]:
     try:
-        success = _test_exec([pingo_path])
+        success = _test_exec([pingo_path, "-help"], extra_check=_is_pingo_validity_check)
         if not success:
-            return None if not force_search else _find_exec_path("pingo")
-        return pingo_path or (None if not force_search else _find_exec_path("pingo"))
+            return None if not force_search else _find_exec_path(
+                "pingo", ["-help"], extra_check=_is_pingo_validity_check
+            )
+        return pingo_path or (None if not force_search else _find_exec_path(
+            "pingo", ["-help"], extra_check=_is_pingo_validity_check
+        ))
     except OSError:
-        return None if not force_search else _find_exec_path("pingo")
+        return None if not force_search else _find_exec_path(
+            "pingo", ["-help"], extra_check=_is_pingo_validity_check
+        )
 
 
 def is_executeable_global_path(path: str, executable: str) -> bool:
