@@ -32,6 +32,7 @@
   - [v0.10.2](#0102)
   - [v0.10.3](#0103)
 - [v0.11.0](#0110)
+  - [v0.11.1](#0111)
 
 
 ## 0.1.0
@@ -218,7 +219,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - Properly support special volume scanning/collection
 
-### 0.11.0
+## 0.11.0
 **New Features**
 - Support pingo 1.x
   - Default main command are: `pingo -notrans -notime -lossless -s4`
@@ -227,3 +228,6 @@ Rewritten every thing as a module with `nmanga` namespace.
       - WEBP: Remove `-lossless` and add `-webp`
 - Enable PNG tagging via command option
 
+### 0.11.1
+**Fixes**
+- Re-add missing parameters for old alpha version of `pingo`

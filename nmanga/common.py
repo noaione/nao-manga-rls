@@ -381,7 +381,9 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
         pingo_path, "-notrans", "-notime", "-lossless", "-s4"
     ]
     if any_jpg:
-        pingo_cmd = base_cmd[:] + ["-s4"]
+        pingo_cmd = base_cmd[:]
+        if alpha_ver:
+            pingo_cmd.append("-s0")
         if aggresive:
             if alpha_ver:
                 pingo_cmd.append("-jpgtype=1")
@@ -399,6 +401,8 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
 
     if any_png:
         pingo_cmd = base_cmd[:]
+        if alpha_ver:
+            pingo_cmd.append("-sb")
         pingo_cmd.append(str(resolve_dir / "*.png"))
         console.status("Optimizing PNG files...")
         proc = _run_pingo_and_verify(pingo_cmd)
@@ -410,6 +414,8 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
 
     if any_webp:
         pingo_cmd = base_cmd[:]
+        if alpha_ver:
+            pingo_cmd.append("-s9")
         if aggresive and not alpha_ver:
             pingo_cmd.remove("-lossless")
             pingo_cmd.append("-webp")
