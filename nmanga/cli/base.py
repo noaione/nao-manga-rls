@@ -65,7 +65,7 @@ def _test_exec(
                 return bool(extra_check(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8")))
             return False
         return True
-    except TimeoutError:
+    except sp.TimeoutExpired:
         # Pingo 1.x will hang if no -help parameter is given
         return True
     except OSError:
@@ -108,12 +108,12 @@ def test_or_find_magick(magick_path: str, force_search: bool = True) -> Optional
 
 def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Optional[str]:
     try:
-        success = _test_exec([exiftool_path])
+        success = _test_exec([exiftool_path, "-ver"])
         if not success:
-            return None if not force_search else _find_exec_path("exiftool")
-        return exiftool_path or (None if not force_search else _find_exec_path("exiftool"))
+            return None if not force_search else _find_exec_path("exiftool", ["-ver"])
+        return exiftool_path or (None if not force_search else _find_exec_path("exiftool", ["-ver"]))
     except OSError:
-        return None if not force_search else _find_exec_path("exiftool")
+        return None if not force_search else _find_exec_path("exiftool", ["-ver"])
 
 
 def _is_pingo_validity_check(stdout: str, stderr: str):

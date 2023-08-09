@@ -162,12 +162,17 @@ def prepare_releases(
 
     cmx_re = RegexCollection.cmx_re()
     console.status("Checking folder contents...")
+    _temp_image_count = 0
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = cmx_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
             return 1
+        _temp_image_count += 1
     console.stop_status("Checking folder contents... done!")
+    if _temp_image_count < 1:
+        console.error("No image found in the folder!")
+        return 1
 
     has_ch_title = console.confirm("Does this release have chapter titles?")
     rls_information = inquire_chapter_ranges(
@@ -410,12 +415,17 @@ def prepare_releases_chapter(
 
     page_re = RegexCollection.page_re()
     console.status("Checking folder contents...")
+    _temp_image_count = 0
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = page_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
             return 1
+        _temp_image_count += 1
     console.stop_status("Checking folder contents... done!")
+    if _temp_image_count < 1:
+        console.error("No image found in the folder!")
+        return 1
 
     console.info("Preparing release...")
     current = 1

@@ -33,6 +33,7 @@
   - [v0.10.3](#0103)
 - [v0.11.0](#0110)
   - [v0.11.1](#0111)
+  - [v0.11.2](#0112)
 
 
 ## 0.1.0
@@ -231,3 +232,9 @@ Rewritten every thing as a module with `nmanga` namespace.
 ### 0.11.1
 **Fixes**
 - Re-add missing parameters for old alpha version of `pingo`
+
+### 0.11.2
+**Fixes**
+- exiftool not detected properly
+- Fix wrong exception catch for catching command timeout
+- Do an image count check when checking for all image filename validity on `releases` and `releasesch`
