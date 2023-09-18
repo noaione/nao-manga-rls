@@ -378,7 +378,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
     any_webp = len(list(resolve_dir.glob("*.webp"))) > 0
 
     base_cmd = [pingo_path, "-strip"] if alpha_ver else [
-        pingo_path, "-notrans", "-notime", "-lossless", "-s4"
+        pingo_path, "-notime", "-lossless", "-s4"
     ]
     if any_jpg:
         pingo_cmd = base_cmd[:]

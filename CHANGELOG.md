@@ -238,3 +238,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 - exiftool not detected properly
 - Fix wrong exception catch for catching command timeout
 - Do an image count check when checking for all image filename validity on `releases` and `releasesch`
+
+### 0.11.3
+**Fixes**
+- Do not remove transparency on PNG
