@@ -1,0 +1,31 @@
+﻿<ImageProcessor>
+	<version>1</version>
+	<useopen>false</useopen>
+	<includesub>true</includesub>
+	<source>I:\Manga\Creation Witch\source</source>
+	<open>false</open>
+	<saveinsame>false</saveinsame>
+	<dest>I:\Manga\Creation Witch\demangle</dest>
+	<jpeg>false</jpeg>
+	<psd>false</psd>
+	<tiff>true</tiff>
+	<lzw>true</lzw>
+	<converticc>false</converticc>
+	<q>5</q>
+	<max>true</max>
+	<jpegresize>false</jpegresize>
+	<jpegw>1</jpegw>
+	<jpegh>1</jpegh>
+	<psdresize>false</psdresize>
+	<psdw>1</psdw>
+	<psdh>1</psdh>
+	<tiffresize>false</tiffresize>
+	<tiffw>1</tiffw>
+	<tiffh>1</tiffh>
+	<runaction>false</runaction>
+	<actionset>Default Actions</actionset>
+	<action>Vignette (selection)</action>
+	<info></info>
+	<icc>false</icc>
+	<keepstructure>true</keepstructure>
+</ImageProcessor>

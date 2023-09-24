@@ -76,7 +76,7 @@ def _find_exec_path(
     exec_name: Union[str, List[str]],
     test_cmd: Optional[str] = None,
     *,
-    extra_check: Optional[Callable[[str, str], bool]] = None
+    extra_check: Optional[Callable[[str, str], bool]] = None,
 ) -> str:
     if isinstance(exec_name, str):
         exec_name = [exec_name]
@@ -128,16 +128,14 @@ def test_or_find_pingo(pingo_path: str, force_search: bool = True) -> Optional[s
     try:
         success = _test_exec([pingo_path, "-help"], extra_check=_is_pingo_validity_check)
         if not success:
-            return None if not force_search else _find_exec_path(
-                "pingo", ["-help"], extra_check=_is_pingo_validity_check
+            return (
+                None if not force_search else _find_exec_path("pingo", ["-help"], extra_check=_is_pingo_validity_check)
             )
-        return pingo_path or (None if not force_search else _find_exec_path(
-            "pingo", ["-help"], extra_check=_is_pingo_validity_check
-        ))
-    except OSError:
-        return None if not force_search else _find_exec_path(
-            "pingo", ["-help"], extra_check=_is_pingo_validity_check
+        return pingo_path or (
+            None if not force_search else _find_exec_path("pingo", ["-help"], extra_check=_is_pingo_validity_check)
         )
+    except OSError:
+        return None if not force_search else _find_exec_path("pingo", ["-help"], extra_check=_is_pingo_validity_check)
 
 
 def is_executeable_global_path(path: str, executable: str) -> bool:
