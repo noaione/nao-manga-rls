@@ -8,7 +8,7 @@ lxml==4.9.2
 Pillow==9.5.0
 
 # rararchive
-unrar-cffi==0.2.2
+unrar2-cffi==0.3.0
 
 # 7-zip
 py7zr==0.20.5
