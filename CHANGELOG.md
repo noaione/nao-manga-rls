@@ -242,3 +242,8 @@ Rewritten every thing as a module with `nmanga` namespace.
 ### 0.11.3
 **Fixes**
 - Do not remove transparency on PNG
+
+### 0.12.0
+**New Support/BREAKING CHANGES**
+- Use `unrar2-cffi` for modern Python
+- Drop Python <3.9
