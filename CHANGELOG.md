@@ -247,3 +247,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 **New Support/BREAKING CHANGES**
 - Use `unrar2-cffi` for modern Python
 - Drop Python <3.9
+
+### 0.13.0
+**New Features**
+- Modify file timestamp with `nmanga timewizard`
