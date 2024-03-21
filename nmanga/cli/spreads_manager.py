@@ -27,7 +27,6 @@ SOFTWARE.
 import re
 import subprocess as sp
 from dataclasses import dataclass
-from os import path
 from pathlib import Path
 from shutil import move as mv
 from typing import Dict, List, Optional, TypedDict
@@ -56,7 +55,7 @@ def _is_default_path(path: str) -> bool:
 
 
 def make_prefix_convert(magick_exe: str):
-    name = path.splitext(path.basename(magick_exe))[0]
+    name = Path(magick_exe).name
     if name.lower() == "convert":
         return ["convert"]
     return ["magick", "convert"]
@@ -258,7 +257,7 @@ def spreads_join(
         pre_t = first_img.prefix or ""
         post_t = first_img.postfix or ""
 
-        extension = path.splitext(temp_output)[1]
+        extension = Path(temp_output).suffix
         final_filename = f"{pre_t}p{first_val:03d}-{last_val:03d}{post_t}"
         final_filename += extension
         final_path = path_or_archive / final_filename
@@ -273,7 +272,7 @@ def spreads_join(
     for img_data in exported_imgs.values():
         for image in img_data["imgs"]:
             try:
-                mv(image.path, BACKUP_DIR / path.basename(image.path.name))
+                mv(image.path, BACKUP_DIR / Path(image.path.name).name)
             except FileNotFoundError:
                 pass
 
@@ -342,7 +341,9 @@ def spreads_split(
             image_fmt,
         )
 
-        output_fn, output_fmt = path.splitext(output_name)
+        output_path = Path(output_name)
+
+        output_fn, output_fmt = output_path.stem, output_path.suffix
         first_img = output_fn + "-0" + output_fmt
         second_img = output_fn + "-1" + output_fmt
 
@@ -362,6 +363,6 @@ def spreads_split(
     BACKUP_DIR.mkdir(exist_ok=True)
     for image in image_list:
         try:
-            mv(image.img.path, BACKUP_DIR / path.basename(image.img.path.name))
+            mv(image.img.path, BACKUP_DIR / Path(image.img.path.name).name)
         except FileNotFoundError:
             pass

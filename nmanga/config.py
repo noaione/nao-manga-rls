@@ -80,8 +80,8 @@ class _ConfigDefaults:
     ch_add_c_prefix: bool = field(default=False)
     ch_special_tag: str = field(default="x")
 
-    rls_pub_type: str = field(default=list(MANGA_PUBLICATION_TYPES.keys())[0])
-    rls_ch_pub_type: str = field(default=list(MANGA_PUBLICATION_TYPES.keys())[0])
+    rls_pub_type: str = field(default=next(iter(MANGA_PUBLICATION_TYPES.keys())))
+    rls_ch_pub_type: str = field(default=next(iter(MANGA_PUBLICATION_TYPES.keys())))
 
     def to_dict(self) -> _ConfigDefaultsT:
         return {
@@ -162,11 +162,11 @@ class ConfigHandler:
         if not isinstance(ch_special_tag, str):
             raise ConfigError("`defaults.chapter_special_tag` must be a string")
 
-        rls_pub_type = defaults.get("release_publication_type", list(MANGA_PUBLICATION_TYPES.keys())[0])
+        rls_pub_type = defaults.get("release_publication_type", next(iter(MANGA_PUBLICATION_TYPES.keys())))
         if not isinstance(rls_pub_type, str):
             raise ConfigError("`defaults.release_publication_type` must be a string")
 
-        rls_ch_pub_type = defaults.get("release_chapter_publication_type", list(MANGA_PUBLICATION_TYPES.keys())[0])
+        rls_ch_pub_type = defaults.get("release_chapter_publication_type", next(iter(MANGA_PUBLICATION_TYPES.keys())))
         if not isinstance(rls_ch_pub_type, str):
             raise ConfigError("`defaults.release_chapter_publication_type` must be a string")
 

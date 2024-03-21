@@ -38,16 +38,16 @@ __all__ = (
 
 def secure_filename(fn: str):
     replacement = {
-        "/": "／",
-        ":": "：",
-        "<": "＜",
-        ">": "＞",
+        "/": "／",  # noqa: RUF001
+        ":": "：",  # noqa: RUF001
+        "<": "＜",  # noqa: RUF001
+        ">": "＞",  # noqa: RUF001
         '"': "”",
-        # "'": "’",
-        "\\": "＼",
-        "?": "？",
+        # "'": "’",  # noqa: RUF003
+        "\\": "＼",  # noqa: RUF001
+        "?": "？",  # noqa: RUF001
         "*": "⋆",
-        "|": "｜",
+        "|": "｜",  # noqa: RUF001
         "#": "",
     }
     for k, v in replacement.items():
@@ -75,17 +75,17 @@ def unsecure_filename(fn: str):
     # Remap back to original.
     # Only works on Linux-based OS.
     replacement = {
-        "：": ":",
-        "＜": "<",
-        "＞": ">",
+        "：": ":",  # noqa: RUF001
+        "＜": "<",  # noqa: RUF001
+        "＞": ">",  # noqa: RUF001
         "”": '"',
         "“": '"',
-        "’": "'",
-        "‘": "'",
-        "＼": "\\",
-        "？": "?",
+        "’": "'",  # noqa: RUF001
+        "‘": "'",  # noqa: RUF001
+        "＼": "\\",  # noqa: RUF001
+        "？": "?",  # noqa: RUF001
         "⋆": "*",
-        "｜": "|",
+        "｜": "|",  # noqa: RUF001
     }
 
     if sys.platform == "win32":

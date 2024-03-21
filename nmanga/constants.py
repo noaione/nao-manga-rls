@@ -54,6 +54,6 @@ MANGA_PUBLICATION_TYPES = {
     "none": MangaPublication("", "Digital", "No publication type used in image filename, Digital in archive filename"),
 }
 
-TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{t}] [{pb}] [{c}]"  # noqa
-TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{pb}] [{c}]"  # noqa
+TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{t}] [{pb}] [{c}]"
+TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{pb}] [{c}]"
 TARGET_TITLE = "{mt}{vol} ({year}) ({pt}) {cpa}{c}{cpb}"

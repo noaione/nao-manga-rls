@@ -227,7 +227,7 @@ def prepare_releases(
             if not vol_oshot_warn:
                 vol_oshot_warn = True
                 console.warning(
-                    "Volume is not specified, using OShot (Oneshot) as default for image and empty for archive name!"  # noqa: E501
+                    "Volume is not specified, using OShot (Oneshot) as default for image and empty for archive name!"
                 )
         else:
             if vol.startswith("v"):

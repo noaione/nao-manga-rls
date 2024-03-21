@@ -37,6 +37,8 @@ try:
 except (ImportError, AttributeError, OSError, ValueError):
     IS_WINDOWS_CTIME_SUPPORTED = False
 
+__all__ = ("modify_filetimestamp",)
+
 
 def modify_filetimestamp(file_path: Path, epoch: int) -> None:
     """Modify the timestamp of a file to the given epoch time.

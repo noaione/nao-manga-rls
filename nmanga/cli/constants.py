@@ -25,6 +25,6 @@ SOFTWARE.
 import warnings
 
 # reexport
-from nmanga.constants import *  # noqa: F401, F403
+from nmanga.constants import *
 
 warnings.warn("nmanga.cli.constants is deprecated, use nmanga.constants instead", DeprecationWarning)
