@@ -25,7 +25,8 @@ SOFTWARE.
 import sys
 
 import pytest
-from nmanga.utils import secure_filename, clean_title, is_oneshot, decode_or, encode_or, unsecure_filename
+
+from nmanga.utils import clean_title, decode_or, encode_or, is_oneshot, secure_filename, unsecure_filename
 
 
 class TestSecureFilename:
@@ -35,11 +36,11 @@ class TestSecureFilename:
 
     def test_replacement(self):
         safe_fn = secure_filename("test: test")
-        assert safe_fn == "test： test"
+        assert safe_fn == "test： test"  # noqa: RUF001
 
     def test_emoji(self):
         safe_fn = secure_filename("test: test 🤔")
-        assert safe_fn == "test： test _"
+        assert safe_fn == "test： test _"  # noqa: RUF001
 
 
 class TestUnsecureFilename:
@@ -49,13 +50,13 @@ class TestUnsecureFilename:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="The following works only on POSIX")
     def test_replacement(self):
-        unsafe_fn = unsecure_filename("test： test")
+        unsafe_fn = unsecure_filename("test： test")  # noqa: RUF001
         assert unsafe_fn == "test: test"
 
     @pytest.mark.skipif(sys.platform == "win32", reason="The following works only on POSIX")
     def test_replacement_but_no_changes(self):
-        unsafe_fn = unsecure_filename("test／ test")
-        assert unsafe_fn == "test／ test"
+        unsafe_fn = unsecure_filename("test／ test")  # noqa: RUF001
+        assert unsafe_fn == "test／ test"  # noqa: RUF001
 
 
 class TestCleanTitle:

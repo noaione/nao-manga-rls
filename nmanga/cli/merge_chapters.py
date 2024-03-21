@@ -26,7 +26,6 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from os import path
 from pathlib import Path
 from typing import List, Optional
 
@@ -87,7 +86,7 @@ def merge_chapters(archives: List[Path], output_file: Optional[str] = None):  # 
         console.info(f"[+] Merging: {archive.stem}")
         with file_handler.MangaArchive(archive) as archive_file:
             for image, _ in archive_file:
-                image_name = path.basename(getattr(image, "name", getattr(image, "filename")))
+                image_name = Path(getattr(image, "name", getattr(image, "filename"))).name
                 target_cbz.add_image(image_name, archive_file.read(image))
         console.info(f"[+] Merged: {archive.stem}")
         archive.unlink(missing_ok=True)

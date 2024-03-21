@@ -23,9 +23,8 @@ SOFTWARE.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
-from nmanga.constants import MANGA_PUBLICATION_TYPES
 from nmanga.common import (
     ChapterRange,
     PseudoChapterMatch,
@@ -42,6 +41,7 @@ from nmanga.common import (
     validate_ch_ranges,
 )
 from nmanga.config import get_config
+from nmanga.constants import MANGA_PUBLICATION_TYPES
 
 
 class TestFormatDaizLikeFilename:
@@ -62,7 +62,7 @@ class TestFormatDaizLikeFilename:
     _PUB_TYPE = MANGA_PUBLICATION_TYPES["digital"]
     _PUB_TYPE_NONE = MANGA_PUBLICATION_TYPES["none"]
 
-    _REAL_WORLD_MAPPING_CASE_A = {
+    _REAL_WORLD_MAPPING_CASE_A: ClassVar[Dict[str, Any]] = {
         "title": "Captain Corinth",
         "publisher": "One Peace Books",
         "ripper": "nao",

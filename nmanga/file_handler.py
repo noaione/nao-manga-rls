@@ -29,7 +29,6 @@ import zipfile
 from copy import deepcopy
 from enum import Enum
 from mimetypes import types_map
-from os import path
 from pathlib import Path
 from string import ascii_letters, digits
 from typing import Generator, List, Optional, Tuple, Union
@@ -97,13 +96,13 @@ class WrappedRarFile(rarfile.RarFile):
 
 
 def is_image(file_name: str) -> bool:
-    return extended_types_map.get(path.splitext(file_name)[-1], "").startswith("image/")
+    return extended_types_map.get(Path(file_name).suffix.lower(), "").startswith("image/")
 
 
 def collect_image_from_cbz(cbz_file: zipfile.ZipFile):
     all_contents = cbz_file.filelist.copy()
     valid_images = [x for x in all_contents if not x.is_dir() and is_image(x.filename)]
-    valid_images.sort(key=lambda x: path.basename(x.filename))
+    valid_images.sort(key=lambda x: Path(x.filename).name)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, cbz_file, total_count, YieldType.CBZ
@@ -112,7 +111,7 @@ def collect_image_from_cbz(cbz_file: zipfile.ZipFile):
 def collect_image_from_rar(rar_file: rarfile.RarFile):
     all_contents: List[rarfile.RarInfo] = rar_file.infolist()
     valid_images = [x for x in all_contents if not x.is_dir() and is_image(x.filename)]
-    valid_images.sort(key=lambda x: path.basename(x.filename))
+    valid_images.sort(key=lambda x: Path(x.filename).name)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, rar_file, total_count, YieldType.RAR
@@ -121,7 +120,7 @@ def collect_image_from_rar(rar_file: rarfile.RarFile):
 def collect_image_from_7z(sevenzip_file: py7zr.SevenZipFile):
     all_contents = sevenzip_file.list()
     valid_images = [x for x in all_contents if not x.is_directory and is_image(x.filename)]
-    valid_images.sort(key=lambda x: path.basename(x.filename))
+    valid_images.sort(key=lambda x: Path(x.filename).name)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, sevenzip_file, total_count, YieldType.SEVENZIP
@@ -130,7 +129,7 @@ def collect_image_from_7z(sevenzip_file: py7zr.SevenZipFile):
 def collect_image_from_tar(tararchive_file: tarfile.TarFile):
     all_contents = tararchive_file.getmembers()
     valid_images = [x for x in all_contents if not x.isdir() and is_image(x.name)]
-    valid_images.sort(key=lambda x: path.basename(x.name))
+    valid_images.sort(key=lambda x: Path(x.filename).name)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, tararchive_file, total_count, YieldType.CBZ
@@ -139,7 +138,7 @@ def collect_image_from_tar(tararchive_file: tarfile.TarFile):
 def collect_image_from_folder(folder_path: Path):
     all_contents = list(folder_path.glob("*"))
     valid_images = [x for x in all_contents if is_image(x.name)]
-    valid_images.sort(key=lambda x: path.basename(x.name))
+    valid_images.sort(key=lambda x: Path(x.filename).name)
     total_count = len(valid_images)
     for file in valid_images:
         yield file, folder_path, total_count, YieldType.FOLDER
@@ -226,13 +225,13 @@ class MangaImage:
         Will include the extension.
         """
         if isinstance(self.__accessor, zipfile.ZipInfo):
-            return path.basename(self.__accessor.filename)
+            return Path(self.__accessor.filename).name
         elif isinstance(self.__accessor, py7zr.FileInfo):
-            return path.basename(self.__accessor.filename)
+            return Path(self.__accessor.filename).name
         elif isinstance(self.__accessor, rarfile.RarInfo):
-            return path.basename(self.__accessor.filename)
+            return Path(self.__accessor.filename).name
         elif isinstance(self.__accessor, tarfile.TarInfo):
-            return path.basename(self.__accessor.name)
+            return Path(self.__accessor.name).name
         elif isinstance(self.__accessor, Path):
             return self.__accessor.name
         else:
@@ -255,7 +254,7 @@ class MangaImage:
         """Return the final component of the image filename without the extension."""
         if isinstance(self.__accessor, Path):
             return self.__accessor.stem
-        return path.splitext(self.filename)[0]
+        return Path(self.filename).stem
 
     @property
     def suffix(self):
@@ -265,8 +264,8 @@ class MangaImage:
         """
         if isinstance(self.__accessor, Path):
             return self.__accessor.suffix
-        extension = path.splitext(self.filename)[-1]
-        return extension if extension.startswith(".") else f".{extension}"
+        extension = Path(self.filename).suffix
+        return extension.lower()
 
     def access(self):
         """Return the accessor or internal file object."""
@@ -337,7 +336,7 @@ class MangaArchive:
         if isinstance(file, py7zr.FileInfo) and isinstance(self.__accessor, py7zr.SevenZipFile):
             file_data = self.__accessor.read([file.filename])
             self.__accessor.reset()
-            return list(file_data.values())[0].read()
+            return next(iter(file_data.values())).read()
         elif isinstance(file, tarfile.TarInfo) and isinstance(self.__accessor, tarfile.TarFile):
             file_data = self.__accessor.extractfile(file)
             file_data.seek(0)

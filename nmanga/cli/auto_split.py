@@ -28,7 +28,6 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from os import path
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -155,7 +154,7 @@ def auto_split(
         with file_handler.MangaArchive(file_path) as archive:
             for image, _ in archive:
                 filename = image.filename
-                match_re = chapter_re.match(path.basename(filename))
+                match_re = chapter_re.match(Path(filename).name)
                 if not match_re:
                     console.error(f"[{volume}][!] Unable to match chapter: {filename}")
                     console.error(f"[{volume}][!] Exiting...")
@@ -174,7 +173,7 @@ def auto_split(
                     collected_chapters[chapter_data] = exporter.CBZMangaExporter(target_archive, target_path)
 
                 image_bita = archive.read(image)
-                collected_chapters[chapter_data].add_image(path.basename(filename), image_bita)
+                collected_chapters[chapter_data].add_image(Path(filename).name, image_bita)
 
         for chapter, cbz_export in collected_chapters.items():
             console.info(f"[{volume}][+] Finishing chapter: {chapter}")

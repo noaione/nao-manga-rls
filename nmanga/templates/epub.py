@@ -30,7 +30,7 @@ EPUB_CONTAINER = """<?xml version="1.0" encoding="UTF-8"?>
         <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
     </rootfiles>
 </container>
-"""  # noqa
+"""
 
 EPUB_CONTENT = """<?xml version='1.0' encoding='utf-8'?>
 <package version="3.0" xml:lang="en" xmlns="http://www.idpf.org/2007/opf" prefix="rendition: http://www.idpf.org/vocab/rendition/# fixed-layout-jp: http://www.digital-comic.jp ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/" unique-identifier="pub-id" dir="rtl">
@@ -85,4 +85,4 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-size: 0; }
 svg { margin: 0; padding: 0; }
 img { margin: 0; padding: 0; border: 0; }
 p { display: none; }
-"""  # noqa
+"""
