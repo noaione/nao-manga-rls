@@ -23,7 +23,7 @@ Anything in Dropped means I already ripped it once, but I dropped it.
 You can find it on a certain cat website.
 
 ## Requirements
-- Python 3.7+
+- Python 3.9+
 - imagemagick (for `spreads join` and `spreads split` command)
 - exiftool (for `releases` and `tag`, optional)
 - pingo (for `releases` and `optimize`, optional)
