@@ -257,3 +257,8 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Bump all dependencies
   - Also fix problem with unrar2 failed to install
 - Lint code with ruff
+
+### 0.14.1
+**Changes**
+- Fix `filename` attribute missing
+- Refactor a bit more on `pathlib.Path` usages
