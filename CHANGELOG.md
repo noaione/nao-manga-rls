@@ -251,3 +251,9 @@ Rewritten every thing as a module with `nmanga` namespace.
 ### 0.13.0
 **New Features**
 - Modify file timestamp with `nmanga timewizard`
+
+### 0.14.0
+**Changes**
+- Bump all dependencies
+  - Also fix problem with unrar2 failed to install
+- Lint code with ruff
