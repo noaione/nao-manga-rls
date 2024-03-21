@@ -129,16 +129,16 @@ def collect_image_from_7z(sevenzip_file: py7zr.SevenZipFile):
 def collect_image_from_tar(tararchive_file: tarfile.TarFile):
     all_contents = tararchive_file.getmembers()
     valid_images = [x for x in all_contents if not x.isdir() and is_image(x.name)]
-    valid_images.sort(key=lambda x: Path(x.filename).name)
+    valid_images.sort(key=lambda x: Path(x.name).name)
     total_count = len(valid_images)
     for content in valid_images:
-        yield content, tararchive_file, total_count, YieldType.CBZ
+        yield content, tararchive_file, total_count, YieldType.TAR
 
 
 def collect_image_from_folder(folder_path: Path):
     all_contents = list(folder_path.glob("*"))
     valid_images = [x for x in all_contents if is_image(x.name)]
-    valid_images.sort(key=lambda x: Path(x.filename).name)
+    valid_images.sort(key=lambda x: Path(x.name).name)
     total_count = len(valid_images)
     for file in valid_images:
         yield file, folder_path, total_count, YieldType.FOLDER

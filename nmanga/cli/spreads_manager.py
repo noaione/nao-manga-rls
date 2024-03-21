@@ -363,6 +363,6 @@ def spreads_split(
     BACKUP_DIR.mkdir(exist_ok=True)
     for image in image_list:
         try:
-            mv(image.img.path, BACKUP_DIR / Path(image.img.path.name).name)
+            mv(image.img.path, BACKUP_DIR / image.img.path.name)
         except FileNotFoundError:
             pass

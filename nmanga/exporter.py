@@ -123,10 +123,11 @@ class CBZMangaExporter(ArchiveMangaExporter):
         return False
 
     def add_image(self, image_name: str, image_data: Union[bytes, Path]):
+        base_name = Path(image_name).name
         if isinstance(image_data, bytes):
-            self._target_cbz.writestr(Path(image_name).name, image_data)
+            self._target_cbz.writestr(base_name, image_data)
         else:
-            self._target_cbz.write(str(image_data), Path(image_name).name)
+            self._target_cbz.write(str(image_data), base_name)
 
     def set_comment(self, comment: Union[str, bytes]):
         self._target_cbz.comment = encode_or(comment) or b""
@@ -151,10 +152,11 @@ class CB7MangaExporter(ArchiveMangaExporter):
         return False
 
     def add_image(self, image_name: str, image_data: Union[bytes, Path]):
+        base_name = Path(image_name).name
         if isinstance(image_data, bytes):
-            self._target_cb7.writestr(image_data, Path(image_name).name)
+            self._target_cb7.writestr(image_data, base_name)
         else:
-            self._target_cb7.write(str(image_data), Path(image_name).name)
+            self._target_cb7.write(str(image_data), base_name)
 
     def close(self):
         self._target_cb7.close()
@@ -292,7 +294,8 @@ class EPUBMangaExporter(ArchiveMangaExporter):
 
     def add_image(self, image_name: str, image_data: Union[bytes, Path]):
         self._initialize_meta()
-        image = f"OEBPS/Images/{Path(image_name).name}"
+        base_name = Path(image_name).name
+        image = f"OEBPS/Images/{base_name}"
 
         if isinstance(image_data, bytes):
             self._target_epub.writestr(image, image_data)
@@ -312,7 +315,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         if width > base_target:
             # Double spread mode
             self._mark_center_spread = True
-        self._inject_meta(self._page_counter, Path(image_name).name, width, height)
+        self._inject_meta(self._page_counter, base_name, width, height)
         mimetype, _ = guess_type(image)
         mimetype = mimetype or "application/octet-stream"
         if self._page_counter == 1:
