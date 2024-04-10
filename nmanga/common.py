@@ -428,15 +428,20 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
 
 
 def format_archive_filename(
+    *,
     manga_title: int,
     manga_year: int,
     publication_type: MangaPublication,
     ripper_credit: str,
     bracket_type: str,
     manga_volume_text: Optional[str] = None,
+    extra_metadata: Optional[str] = None,
     rls_revision: Optional[int] = None,
 ):
     pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
+
+    if extra_metadata is not None:
+        extra_metadata = "(" + extra_metadata.strip() + ") "
 
     act_vol = ""
     if manga_volume_text is not None:
@@ -449,6 +454,7 @@ def format_archive_filename(
         c=ripper_credit,
         cpa=pair_left,
         cpb=pair_right,
+        ex=extra_metadata or "",
     )
 
     if rls_revision is not None and rls_revision > 1:
@@ -483,6 +489,7 @@ def format_volume_text(
 
 
 def format_daiz_like_filename(
+    *,
     manga_title: str,
     manga_publisher: str,
     manga_year: int,
@@ -496,6 +503,7 @@ def format_daiz_like_filename(
     image_quality: Optional[str] = None,  # {HQ}/{LQ} thing
     rls_revision: Optional[int] = None,
     chapter_extra_maps: Dict[int, List[ChapterRange]] = dict(),
+    extra_archive_metadata: Optional[str] = None,
     fallback_volume_name: str = "OShot",
 ):
     pub_type = ""
@@ -591,6 +599,7 @@ def format_daiz_like_filename(
         bracket_type=bracket_type,
         manga_volume_text=format_volume_text(manga_volume, chapter_info.number),
         rls_revision=rls_revision,
+        extra_metadata=extra_archive_metadata,
     )
 
 
