@@ -220,9 +220,9 @@ Usage: nmanga pack [OPTIONS] FOLDER_PATH
 Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
-  -vol, --volume INTEGER          The volume of the series release
+  -vol, --volume INT_OR_FLOAT     The volume of the series release
   -ch, --chapter INT_OR_FLOAT     The chapter of the series release
-  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+  -pt, --publication-type [digital|magazine|scan|web|digital-raw|magazine-raw|mix|none]
                                   The publication type for this series, use
                                   none to remove it from image filename
                                   [default: digital]
@@ -233,6 +233,7 @@ Options:
   -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
+  -ex, --extra-meta TEXT          Extra metadata to add to the pack filename
   -br, --bracket-type [square|round|curly]
                                   Bracket to use to surround the ripper name
                                   [default: square]
@@ -246,10 +247,11 @@ Options:
 `--year`, the series year (will be used for exif tagging)<br />
 `--volume`, the volume number<br />
 `--chapter`, the chapter number<br />
-`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
+`--publication-type`, the publication type (`digital`, `magazine`, `scan`, `web`, `digital-raw`, `magazine-raw`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
+`--extra-meta`, used in the archive filename before the publication type<br />
 `--bracket-type`, the bracket to be used.<br />
 `--mode`, the output for archive output, `folder` will be ignored in this case.
 
@@ -264,6 +266,9 @@ If you provide both, `--volume` will take priority.
 
 For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
 
+For `--extra-meta`, this will add before any publication type so it will be like this:
+- `Manga Title vXX (20xx) (EXTRA META HERE) (Digital) (XXX)`
+
 #### `releases`
 Create a release from `comix` formatted filename.
 
@@ -276,7 +281,7 @@ Options:
   -t, --title TEXT                The title of the series  [required]
   -y, --year INTEGER              The year of the series release
   -pub, --publisher TEXT          The publisher of the series  [required]
-  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+  -pt, --publication-type [digital|magazine|scan|web|digital-raw|magazine-raw|mix|none]
                                   The publication type for this series, use
                                   none to remove it from image filename
                                   [default: digital]
@@ -287,6 +292,7 @@ Options:
   -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
+  -ex, --extra-meta TEXT          Extra metadata to add to the pack filename
   -hq, --is-high-quality          (DEPRECATED) Whether this is a high quality
                                   release
   -mq, --quality [LQ|HQ]          Image quality of this release.
@@ -294,6 +300,8 @@ Options:
                                   [default: tag]
   --optimize / --no-optimize      Optimize the images using pingo.  [default:
                                   no-optimize]
+  --png-tag / --no-png-tag        Enable or disable png tagging  [default: no-
+                                  png-tag]
   -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
                                   exiftool]
   -pe, --pingo-exec TEXT          Path to the pingo executable  [default:
@@ -307,10 +315,11 @@ Options:
 `--title`, the series title<br />
 `--year`, the series year (will be used for exif tagging)<br />
 `--publisher`, the publisher<br />
-`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
+`--publication-type`, the publication type (`digital`, `magazine`, `scan`, `web`, `digital-raw`, `magazine-raw`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
+`--extra-meta`, used in the archive filename before the publication type<br />
 **[DEPRECATED]** `--is-high-quality`, mark the release as HQ (add `{HQ}` to filename)<br />
 `--quality`, the image quality of this release (optional, add `{HQ}` or `{LQ}` to filename)<br />
 `--tag/--no-tag`, do exif tagging.<br />
@@ -326,6 +335,9 @@ The filename also must match something like this:
 - `Manga Title - vXX - pXXX`
 
 For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
+
+For `--extra-meta`, this will add before any publication type so it will be like this:
+- `Manga Title vXX (20xx) (EXTRA META HERE) (Digital) (XXX)`
 
 #### `releasesch`
 Create a release for a single chapter, this will format the filename into the formatting we wanted.
@@ -343,7 +355,7 @@ Options:
   -vol, --volume INTEGER          The volume of the series release
   -cht, --chapter-title TEXT      Chapter title that will be included between
                                   the publication type and publisher
-  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+  -pt, --publication-type [digital|magazine|scan|web|digital-raw|magazine-raw|mix|none]
                                   The publication type for this series, use
                                   none to remove it from image filename
                                   [default: web]
@@ -377,7 +389,7 @@ Options:
 `--chapter`, the chapter number<br />
 `--chapter-title`, the chapter title, same formatting if you use with chapter title mode on `releases`<br />
 `--volume`, the chapter associated volume, if not provided it will use `(NA)`<br />
-`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
+`--publication-type`, the publication type (`digital`, `magazine`, `scan`, `web`, `digital-raw`, `magazine-raw`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
@@ -491,10 +503,10 @@ Usage: nmanga tag [OPTIONS] FOLDER_PATH
 
 Options:
   -t, --title TEXT                The title of the series  [required]
-  -vol, --volume INTEGER          The volume of the series release
+  -vol, --volume INT_OR_FLOAT     The volume of the series release
   -ch, --chapter INT_OR_FLOAT     The chapter of the series release
   -y, --year INTEGER              The year of the series release
-  -pt, --publication-type [digital|magazine|scan|web|mix|none]
+  -pt, --publication-type [digital|magazine|scan|web|digital-raw|magazine-raw|mix|none]
                                   The publication type for this series, use
                                   none to remove it from image filename
                                   [default: digital]
@@ -505,9 +517,12 @@ Options:
   -r, --revision INTEGER RANGE    The revision of the release, if the number 1
                                   provided it will not put in the filename
                                   [default: 1; x>=1]
+  -ex, --extra-meta TEXT          Extra metadata to add to the pack filename
   -br, --bracket-type [square|round|curly]
                                   Bracket to use to surround the ripper name
                                   [default: square]
+  --png-tag / --no-png-tag        Enable or disable png tagging  [default: no-
+                                  png-tag]
   -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
                                   exiftool]
   -h, --help                      Show this message and exit.
@@ -517,10 +532,11 @@ Options:
 `--year`, the series year (will be used for exif tagging)<br />
 `--volume`, the volume number<br />
 `--chapter`, the chapter number<br />
-`--publication-type`, the publicatino type (`digital`, `magazine`, `scan`, `web`, or `mix`)<br />
+`--publication-type`, the publication type (`digital`, `magazine`, `scan`, `web`, `digital-raw`, `magazine-raw`, or `mix`)<br />
 `--credit`, the ripped/group name<br />
 `--email`, will be used for exif tagging<br />
 `--revision`, the revision number of the releases.<br />
+`--extra-meta`, used in the archive filename before the publication type<br />
 `--bracket-type`, the bracket to be used.
 
 This will automatically find any valid images that can be tagged with exif metadata and apply it!
@@ -530,6 +546,9 @@ For `--volume` and `--chapter`, provide one of them and the packed zip will be a
 - `--chapter`: `Manga Title XXX (20xx) (Digital) (XXX)`
 
 For `--publication-type`, if you don't want the `[dig]` thing to be added, you can remove it by selecting `none` type.
+
+For `--extra-meta`, this will add before any publication type so it will be like this:
+- `Manga Title vXX (20xx) (EXTRA META HERE) (Digital) (XXX)`
 
 ## API Usage
 
