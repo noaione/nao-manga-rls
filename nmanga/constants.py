@@ -50,10 +50,11 @@ MANGA_PUBLICATION_TYPES = {
     "web": MangaPublication(
         "web", "Digital", "Webcomic release, from many kind of website that are not using volume format."
     ),
+    "digital-raw": MangaPublication("raw-d", "Digital", "Digital raw release, from Amazon.co.jp, etc."),
     "mix": MangaPublication("mix", "Digital", "Mixed release format"),
     "none": MangaPublication("", "Digital", "No publication type used in image filename, Digital in archive filename"),
 }
 
 TARGET_FORMAT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{t}] [{pb}] [{c}]"
 TARGET_FORMAT_ALT = "{mt} - c{ch}{chex} ({vol}) - p{pg}{ex}{pt} [{pb}] [{c}]"
-TARGET_TITLE = "{mt}{vol} ({year}) ({pt}) {cpa}{c}{cpb}"
+TARGET_TITLE = "{mt}{vol} ({year}) {ex}({pt}) {cpa}{c}{cpb}"

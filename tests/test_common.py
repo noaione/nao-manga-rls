@@ -106,14 +106,14 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter(self):
         sel = self._CURRENT
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert filename == f"Test Title - c001 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -121,15 +121,15 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_with_volume(self):
         sel = self._CURRENT
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            1,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            manga_volume=1,
         )
 
         assert filename == f"Test Title - c001 (v01) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -137,17 +137,15 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_with_quality_mark(self):
         sel = self._CURRENT
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            None,
-            "HQ",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            image_quality="HQ",
         )
 
         expect = f"Test Title - c001 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -157,18 +155,15 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_with_revision(self):
         sel = self._CURRENT
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            None,
-            None,
-            2,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            rls_revision=2,
         )
 
         expect = f"Test Title - c001 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -178,18 +173,16 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_with_quality_mark_and_revision(self):
         sel = self._CURRENT
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            None,
-            "HQ",
-            2,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            image_quality="HQ",
+            rls_revision=2,
         )
 
         expect = f"Test Title - c001 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -199,14 +192,14 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_no_title(self):
         sel = self._CURRENT_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert filename == f"Test Title - c001 (OShot) - p000 [dig] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -214,14 +207,14 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_pub_type_none(self):
         sel = self._CURRENT_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE_NONE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE_NONE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert filename == f"Test Title - c001 (OShot) - p000 [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -229,16 +222,15 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_with_extra(self):
         sel = self._CURRENT
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            "Cover",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
         )
 
         assert (
@@ -249,16 +241,15 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_no_title_with_extra(self):
         sel = self._CURRENT_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            "Cover",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
         )
 
         assert filename == f"Test Title - c001 (OShot) - p000 [Cover] [dig] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -266,16 +257,15 @@ class TestFormatDaizLikeFilename:
     def test_normal_chapter_pub_type_none_with_extra(self):
         sel = self._CURRENT_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE_NONE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            "Cover",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE_NONE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
         )
 
         assert filename == f"Test Title - c001 (OShot) - p000 [Cover] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -283,14 +273,14 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter(self):
         sel = self._CURRENT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert filename == f"Test Title - c001x1 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -298,14 +288,14 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_less_than_5(self):
         sel = self._CURRENT_SPLIT_A
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert (
@@ -316,15 +306,15 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_with_volume(self):
         sel = self._CURRENT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            1,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            manga_volume=1,
         )
 
         assert filename == f"Test Title - c001x1 (v01) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -332,17 +322,15 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_with_quality_mark(self):
         sel = self._CURRENT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            None,
-            "HQ",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            image_quality="HQ",
         )
 
         expect = f"Test Title - c001x1 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -352,18 +340,15 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_with_revision(self):
         sel = self._CURRENT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            None,
-            None,
-            2,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            rls_revision=2,
         )
 
         expect = f"Test Title - c001x1 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -373,18 +358,16 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_with_quality_mark_and_revision(self):
         sel = self._CURRENT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            None,
-            "HQ",
-            2,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            image_quality="HQ",
+            rls_revision=2,
         )
 
         expect = f"Test Title - c001x1 (OShot) - p000 [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -394,14 +377,14 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_no_title(self):
         sel = self._CURRENT_EXTRA_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert filename == f"Test Title - c001x1 (OShot) - p000 [dig] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -409,14 +392,14 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_pub_type_none(self):
         sel = self._CURRENT_EXTRA_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE_NONE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE_NONE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
         )
 
         assert filename == f"Test Title - c001x1 (OShot) - p000 [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -424,16 +407,15 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_with_extra(self):
         sel = self._CURRENT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            "Cover",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
         )
 
         assert (
@@ -444,16 +426,15 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_no_title_with_extra(self):
         sel = self._CURRENT_EXTRA_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            "Cover",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
         )
 
         assert filename == f"Test Title - c001x1 (OShot) - p000 [Cover] [dig] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -461,16 +442,15 @@ class TestFormatDaizLikeFilename:
     def test_extra_chapter_pub_type_none_with_extra(self):
         sel = self._CURRENT_EXTRA_NO_TITLE
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE_NONE,
-            self._RIPPER,
-            self._BRACKET,
-            None,
-            "Cover",
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE_NONE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
         )
 
         assert filename == f"Test Title - c001x1 (OShot) - p000 [Cover] [{self._PUBLISHER}] [{self._RIPPER}]"
@@ -478,14 +458,14 @@ class TestFormatDaizLikeFilename:
     def test_split_chapter_part_a(self):
         sel = self._CURRENT_SPLIT_A
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
             chapter_extra_maps=self._make_packing_extra(),
         )
 
@@ -494,14 +474,14 @@ class TestFormatDaizLikeFilename:
     def test_split_chapter_part_b(self):
         sel = self._CURRENT_SPLIT_B
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
             chapter_extra_maps=self._make_packing_extra(),
         )
 
@@ -513,14 +493,14 @@ class TestFormatDaizLikeFilename:
         }
         sel = self._CURRENT_SPLIT_A
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
             chapter_extra_maps=packing_extra,
         )
 
@@ -532,14 +512,14 @@ class TestFormatDaizLikeFilename:
         }
         sel = self._CURRENT_SPLIT_EXTRA
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
             chapter_extra_maps=packing_extra,
         )
 
@@ -551,14 +531,14 @@ class TestFormatDaizLikeFilename:
         }
         sel = self._CURRENT_SPLIT_EXTRA_TWO
         filename, _ = format_daiz_like_filename(
-            self._TITLE,
-            self._PUBLISHER,
-            self._YEAR,
-            sel,
-            f"{sel.range[0]:03d}",
-            self._PUB_TYPE,
-            self._RIPPER,
-            self._BRACKET,
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
             chapter_extra_maps=packing_extra,
         )
 
@@ -654,6 +634,19 @@ class TestFormatArchiveFilename:
         )
 
         assert filename == f"Test Title v01 ({self._YEAR}) (c2c) [{self._RIPPER}]"
+
+    def test_with_volume_text_and_extra(self) -> None:
+        filename = format_archive_filename(
+            manga_title=self._TITLE,
+            manga_year=self._YEAR,
+            publication_type=MANGA_PUBLICATION_TYPES["digital-raw"],
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            manga_volume_text="v01",
+            extra_metadata="(JPN)",
+        )
+
+        assert filename == f"Test Title v01 ({self._YEAR}) (JPN) (Digital) [{self._RIPPER}]"
 
 
 class TestFormatDaizLikeNumbering:

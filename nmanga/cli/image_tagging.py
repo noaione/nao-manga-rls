@@ -39,7 +39,6 @@ from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_exiftool
 
 console = term.get_console()
-TARGET_TITLE = "{mt} {vol} ({year}) ({pt}) {cpa}{c}{cpb}"
 
 
 @click.command(
