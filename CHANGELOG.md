@@ -34,6 +34,12 @@
 - [v0.11.0](#0110)
   - [v0.11.1](#0111)
   - [v0.11.2](#0112)
+  - [v0.11.3](#0113)
+- [v0.12.0](#0120)
+- [v0.13.0](#0130)
+- [v0.14.0](#0140)
+  - [v0.14.1](#0141)
+- [v0.15.0](#0150)
 
 
 ## 0.1.0
@@ -243,16 +249,16 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - Do not remove transparency on PNG
 
-### 0.12.0
+## 0.12.0
 **New Support/BREAKING CHANGES**
 - Use `unrar2-cffi` for modern Python
 - Drop Python <3.9
 
-### 0.13.0
+## 0.13.0
 **New Features**
 - Modify file timestamp with `nmanga timewizard`
 
-### 0.14.0
+## 0.14.0
 **Changes**
 - Bump all dependencies
   - Also fix problem with unrar2 failed to install
@@ -262,3 +268,13 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Changes**
 - Fix `filename` attribute missing
 - Refactor a bit more on `pathlib.Path` usages
+
+## 0.15.0
+**New Features**
+- Add new option `-ex/--extra-meta` to add extra text before publication type on the archive filename
+  - Use case: `Test Manga v01 (20xx) (Omnibus 2-in-1) (Digital) (nao)`
+  - Command used: `nmanga pack -t "Test Manga" -ex "Omnibus 2-in-1" -vol 1 -br round -c nao`
+- Added `digital-raw` publication type which will use `raw-d` in image filename and `Digital` in archive filename
+
+**Changes**
+- [BREAKING CHANGES] Make `format_archive_filename` and `format_daiz_like_filename` parameters to be all positional.
