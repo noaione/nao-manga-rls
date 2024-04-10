@@ -63,6 +63,7 @@ TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
+@options.rls_extra_metadata
 @options.use_bracket_type
 @options.output_mode
 @check_config_first
@@ -77,6 +78,7 @@ def pack_releases(
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
+    rls_extra_metadata: Optional[str],
     bracket_type: Literal["square", "round", "curly"],
     output_mode: exporter.ExporterType,
 ):
@@ -115,6 +117,7 @@ def pack_releases(
         bracket_type=bracket_type,
         manga_volume_text=volume_text,
         rls_revision=rls_revision,
+        extra_metadata=rls_extra_metadata,
     )
 
     parent_dir = path_or_archive.parent

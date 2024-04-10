@@ -81,6 +81,7 @@ class SpecialNaming:
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
+@options.rls_extra_metadata
 @click.option(
     "-hq",
     "--is-high-quality",
@@ -129,6 +130,7 @@ def prepare_releases(
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
+    rls_extra_metadata: Optional[str],
     is_high_quality: bool,
     image_quality: Optional[str],
     do_exif_tagging: bool,
@@ -276,6 +278,7 @@ def prepare_releases(
             image_quality=act_img_quality,
             rls_revision=rls_revision,
             chapter_extra_maps=packing_extra,
+            extra_archive_metadata=rls_extra_metadata,
         )
 
         if not image_titling:
@@ -325,6 +328,7 @@ def prepare_releases(
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
+@options.rls_extra_metadata
 @click.option(
     "-hq",
     "--is-high-quality",
@@ -376,6 +380,7 @@ def prepare_releases_chapter(
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
+    rls_extra_metadata: Optional[str],
     is_high_quality: bool,
     image_quality: Optional[str],
     do_exif_tagging: bool,
@@ -476,6 +481,7 @@ def prepare_releases_chapter(
                 bracket_type=bracket_type,
                 manga_volume_text=format_volume_text(manga_volume, manga_chapter),
                 rls_revision=rls_revision,
+                extra_metadata=rls_extra_metadata,
             )
     console.stop_status(f"Processed {current - 1} images!")
 

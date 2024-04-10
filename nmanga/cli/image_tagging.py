@@ -61,6 +61,7 @@ console = term.get_console()
 @options.rls_credit
 @options.rls_email
 @options.rls_revision
+@options.rls_extra_metadata
 @options.use_bracket_type
 @options.png_tagging
 @options.exiftool_path
@@ -76,6 +77,7 @@ def image_tagging(
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
+    rls_extra_metadata: Optional[str],
     bracket_type: Literal["square", "round", "curly"],
     do_png_tagging: bool,
     exiftool_path: str,
@@ -114,6 +116,7 @@ def image_tagging(
         bracket_type=bracket_type,
         manga_volume_text=volume_text,
         rls_revision=rls_revision,
+        extra_metadata=rls_extra_metadata,
     )
 
     console.info("Tagging images with exif metadata...")
