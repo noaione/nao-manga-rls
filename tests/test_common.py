@@ -643,7 +643,7 @@ class TestFormatArchiveFilename:
             ripper_credit=self._RIPPER,
             bracket_type=self._BRACKET,
             manga_volume_text="v01",
-            extra_metadata="(JPN)",
+            extra_metadata="JPN",
         )
 
         assert filename == f"Test Title v01 ({self._YEAR}) (JPN) (Digital) [{self._RIPPER}]"

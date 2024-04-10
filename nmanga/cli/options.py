@@ -244,6 +244,14 @@ rls_revision = click.option(
     default=1,
     show_default=True,
 )
+rls_extra_metadata = click.option(
+    "-ex",
+    "--extra-meta",
+    "rls_extra_metadata",
+    help="Extra metadata to add to the pack filename",
+    default=None,
+    required=False,
+)
 png_tagging = click.option(
     "--png-tag/--no-png-tag",
     "do_png_tagging",

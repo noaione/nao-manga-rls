@@ -51,6 +51,7 @@ MANGA_PUBLICATION_TYPES = {
         "web", "Digital", "Webcomic release, from many kind of website that are not using volume format."
     ),
     "digital-raw": MangaPublication("raw-d", "Digital", "Digital raw release, from Amazon.co.jp, etc."),
+    "magazine-raw": MangaPublication("raw-m", "c2c", "Magazine raw release, can be used for scanlation batch."),
     "mix": MangaPublication("mix", "Digital", "Mixed release format"),
     "none": MangaPublication("", "Digital", "No publication type used in image filename, Digital in archive filename"),
 }
