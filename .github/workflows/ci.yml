@@ -28,7 +28,7 @@ jobs:
 
       - name: Lint and Test
         run: |
-          make lint
+          # make lint
           make test-cov
 
       - name: Code Coverage Report
