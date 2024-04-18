@@ -272,9 +272,7 @@ def inquire_chapter_ranges(
     return chapter_ranges
 
 
-def inject_metadata(
-    exiftool_dir: str, current_directory: Path, image_title: str, image_email: str, *, enable_png_tag: bool = False
-):  # pragma: no cover
+def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):  # pragma: no cover
     resolve_dir = current_directory.resolve()
     any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_tiff = len(list(resolve_dir.glob("*.tiff"))) > 0
@@ -309,21 +307,12 @@ def inject_metadata(
         console.info("Injecting metadata into TIFF files...")
         proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait()
-    # Use text injection to the end of PNG file.
-    # This is not ideal, but it's the only way to inject metadata into PNG files.
-    # Format: "Title (email)"
-    encoded_data = f"{image_title} ({image_email})".encode("ascii")
-    if any_png and (conf.experimentals.png_tag or enable_png_tag):
-        console.warning("PNG files will use experimental metadata injection, please report any issues")
-        console.status("Injecting metadata into PNG files...")
-        for idx, png_img in enumerate(png_files, 1):
-            console.status(f"Injecting metadata into ({idx}/{len(png_files)})...")
-            with png_img.open("ab") as af:
-                # Write pad data
-                af.write(b"\x00" * 4)
-                af.write(encoded_data)
-                af.write(b"\x00" * 4)
-        console.stop_status("Injected metadata into PNG files")
+    if any_png:
+        full_dir = current_directory.resolve() / "*.png"
+        base_cmd.append(str(full_dir))
+        console.info("Injecting metadata into PNG files...")
+        proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.wait()
 
 
 def _run_pingo_and_verify(pingo_cmd: List[str]):  # pragma: no cover

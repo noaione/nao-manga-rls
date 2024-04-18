@@ -300,8 +300,6 @@ Options:
                                   [default: tag]
   --optimize / --no-optimize      Optimize the images using pingo.  [default:
                                   no-optimize]
-  --png-tag / --no-png-tag        Enable or disable png tagging  [default: no-
-                                  png-tag]
   -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
                                   exiftool]
   -pe, --pingo-exec TEXT          Path to the pingo executable  [default:
@@ -521,8 +519,6 @@ Options:
   -br, --bracket-type [square|round|curly]
                                   Bracket to use to surround the ripper name
                                   [default: square]
-  --png-tag / --no-png-tag        Enable or disable png tagging  [default: no-
-                                  png-tag]
   -ee, --exiftool-exec TEXT       Path to the exiftool executable  [default:
                                   exiftool]
   -h, --help                      Show this message and exit.

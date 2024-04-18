@@ -115,7 +115,6 @@ class SpecialNaming:
     show_default=True,
     help="Optimize the images using pingo.",
 )
-@options.png_tagging
 @options.exiftool_path
 @options.pingo_path
 @options.use_bracket_type
@@ -135,7 +134,6 @@ def prepare_releases(
     image_quality: Optional[str],
     do_exif_tagging: bool,
     do_img_optimize: bool,
-    do_png_tagging: bool,
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
@@ -301,7 +299,6 @@ def prepare_releases(
             path_or_archive,
             image_titling,
             rls_email,
-            enable_png_tag=do_png_tagging,
         )
 
 
@@ -362,7 +359,6 @@ def prepare_releases(
     show_default=True,
     help="Optimize the images using pingo.",
 )
-@options.png_tagging
 @options.exiftool_path
 @options.pingo_path
 @options.use_bracket_type
@@ -385,7 +381,6 @@ def prepare_releases_chapter(
     image_quality: Optional[str],
     do_exif_tagging: bool,
     do_img_optimize: bool,
-    do_png_tagging: bool,
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
@@ -495,5 +490,4 @@ def prepare_releases_chapter(
             path_or_archive,
             image_titling,
             rls_email,
-            enable_png_tag=do_png_tagging,
         )

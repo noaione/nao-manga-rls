@@ -63,7 +63,6 @@ console = term.get_console()
 @options.rls_revision
 @options.rls_extra_metadata
 @options.use_bracket_type
-@options.png_tagging
 @options.exiftool_path
 @check_config_first
 @time_program
@@ -79,7 +78,6 @@ def image_tagging(
     rls_revision: int,
     rls_extra_metadata: Optional[str],
     bracket_type: Literal["square", "round", "curly"],
-    do_png_tagging: bool,
     exiftool_path: str,
 ):  # pragma: no cover
     """
@@ -125,7 +123,6 @@ def image_tagging(
         path_or_archive,
         archive_filename,
         rls_email,
-        enable_png_tag=do_png_tagging,
     )
 
 
@@ -143,7 +140,6 @@ def image_tagging(
     help="The title of the series",
 )
 @options.rls_email
-@options.png_tagging
 @options.exiftool_path
 @check_config_first
 @time_program
@@ -151,7 +147,6 @@ def image_tagging_raw(
     path_or_archive: Path,
     manga_title: str,
     rls_email: str,
-    do_png_tagging: bool,
     exiftool_path: str,
 ):  # pragma: no cover
     """
@@ -176,5 +171,4 @@ def image_tagging_raw(
         path_or_archive,
         manga_title,
         rls_email,
-        enable_png_tag=do_png_tagging,
     )
