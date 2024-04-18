@@ -237,7 +237,10 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Changes**
 - [BREAKING CHANGES] Make `format_archive_filename` and `format_daiz_like_filename` parameters to be all positional.
 
-### 0.15.1
+## 0.16.0
+**New Features**
+- **[BREAKING CHANGES]** Remove `--png-tag` option, use `exiftool` instead to tag PNG images
+
 **Changes**
 - Apply `--extra-meta` or `extra_archive_metadata` to manga title
   - Before: `Test Title - cXXX (vXX) - pXXX [CH Extra] [dig] [Publisher] [Ripper]`
