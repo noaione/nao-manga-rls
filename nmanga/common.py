@@ -560,6 +560,9 @@ def format_daiz_like_filename(
     elif pub_type and extra_name.strip():
         pub_type = f" {pub_type}"
 
+    if extra_archive_metadata is not None:
+        manga_title = f"{manga_title} [{extra_archive_metadata.lower()}]"
+
     image_filename = TARGET_FORMAT_ALT.format(
         mt=manga_title,
         ch=chapter_num,

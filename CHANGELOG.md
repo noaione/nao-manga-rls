@@ -1,47 +1,5 @@
 # Changelog
 
-- [v0.1.0](#010)
-  - [v0.1.1](#011)
-- [v0.2.0](#020)
-  - [v0.2.1](#021)
-  - [v0.2.2](#022)
-  - [v0.2.3](#023)
-  - [v0.2.4](#024)
-- [v0.3.0](#030)
-  - [v0.3.1](#031)
-  - [v0.3.2](#032)
-  - [v0.3.3](#033)
-  - [v0.3.4](#034)
-- [v0.4.0](#040)
-  - [v0.4.1](#041)
-  - [v0.4.2](#042)
-  - [v0.4.3](#043)
-  - [v0.4.4](#044)
-- [v0.5.0](#050)
-- [v0.6.0](#060)
-- [v0.7.0](#070)
-  - [v0.7.1](#071)
-  - [v0.7.2](#072)
-- [v0.8.0](#080)
-  - [v0.8.1](#081)
-  - [v0.8.2](#082)
-- [v0.9.0](#090)
-  - [v0.9.1](#091)
-- [v0.10.0](#0100)
-  - [v0.10.1](#0101)
-  - [v0.10.2](#0102)
-  - [v0.10.3](#0103)
-- [v0.11.0](#0110)
-  - [v0.11.1](#0111)
-  - [v0.11.2](#0112)
-  - [v0.11.3](#0113)
-- [v0.12.0](#0120)
-- [v0.13.0](#0130)
-- [v0.14.0](#0140)
-  - [v0.14.1](#0141)
-- [v0.15.0](#0150)
-
-
 ## 0.1.0
 
 Rewritten every thing as a module with `nmanga` namespace.
@@ -278,3 +236,9 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Changes**
 - [BREAKING CHANGES] Make `format_archive_filename` and `format_daiz_like_filename` parameters to be all positional.
+
+### 0.15.1
+**Changes**
+- Apply `--extra-meta` or `extra_archive_metadata` to manga title
+  - Before: `Test Title - cXXX (vXX) - pXXX [CH Extra] [dig] [Publisher] [Ripper]`
+  - After: `Test Title [VOL Meta] - cXXX (vXX) - pXXX [CH Meta] [dig] [Publisher] [Ripper]`
