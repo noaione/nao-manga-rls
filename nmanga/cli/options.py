@@ -252,10 +252,3 @@ rls_extra_metadata = click.option(
     default=None,
     required=False,
 )
-png_tagging = click.option(
-    "--png-tag/--no-png-tag",
-    "do_png_tagging",
-    default=False,
-    show_default=True,
-    help="Enable or disable png tagging",
-)
