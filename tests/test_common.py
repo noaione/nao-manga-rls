@@ -544,6 +544,26 @@ class TestFormatDaizLikeFilename:
 
         assert filename == "Test Title - c002x2 (OShot) - p115 [dig] [Split D] [Real Publisher] [nao]"
 
+    def test_chapter_with_extra_archive_metadata(self):
+        sel = self._CURRENT
+        filename, _ = format_daiz_like_filename(
+            manga_title=self._TITLE,
+            manga_publisher=self._PUBLISHER,
+            manga_year=self._YEAR,
+            chapter_info=sel,
+            page_number=f"{sel.range[0]:03d}",
+            publication_type=self._PUB_TYPE,
+            ripper_credit=self._RIPPER,
+            bracket_type=self._BRACKET,
+            extra_metadata="Cover",
+            extra_archive_metadata="JPN",
+        )
+
+        assert (
+            filename
+            == f"Test Title [jpn] - c001 (OShot) - p000 [Cover] [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
+        )
+
     def test_real_world_use_case_a(self):
         title: str = self._REAL_WORLD_MAPPING_CASE_A["title"]
         publisher: str = self._REAL_WORLD_MAPPING_CASE_A["publisher"]
