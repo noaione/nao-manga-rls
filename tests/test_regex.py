@@ -75,15 +75,21 @@ def test_chapter_regex_with_publisher():
 
     backremedy = "[dig] [Kodansha Comics] [nao]"
     backremedytitle = "[dig] [Introduction] [Kodansha Comics] [nao]"
+    backremedydash = "[raw-d] [Kodansha] [nao]"
+    backremedytitledash = "[raw-d] [Introduction] [Kodansha] [nao]"
     invalidmatch = "[dig] [Seven Seas] [nao]"
     invalidmatchtitle = "[dig] [Introduction] [Seven Seas] [nao]"
 
     assert remedy.match(f"Real Manga - c001 (v01) - p001 {backremedy}") is not None
     assert remedy.match(f"Real Manga - c001 (v01) - p001-002 {backremedytitle}") is not None
+    assert remedy.match(f"Real Manga - c001 (v01) - p003 {backremedydash}") is not None
+    assert remedy.match(f"Real Manga - c001 (v01) - p004 {backremedytitledash}") is not None
     assert remedy.match(f"Real Manga - c001 (OShot) - p001 {backremedy}") is not None
     assert remedy.match(f"Real Manga - c001x1 (v01) - p001 {backremedy}") is not None
     assert remedy.match(f"Real Manga - c001x1 (c000.1) (v01) - p001 {backremedy}") is not None
     assert remedy.match(f"Real Manga - c001x1 (c000.1) (v01) - p001-002 {backremedytitle}") is not None
+    assert remedy.match(f"Real Manga - c001x1 (c000.1) (v01) - p001-002 {backremedydash}") is not None
+    assert remedy.match(f"Real Manga - c001x1 (c000.1) (v01) - p001-002 {backremedytitledash}") is not None
     assert remedy.match(f"Real Manga - c001 (v01) - p001-002 {invalidmatch}") is None
     assert remedy.match(f"Real Manga - c001 (v01) - p001-002 {invalidmatchtitle}") is None
 
@@ -91,7 +97,7 @@ def test_chapter_regex_with_publisher():
         remedy.pattern == r"Real\ Manga - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]"
         r"{1,3})?\)? ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)? ?- "
         r"p[\d]+x?[\d]?\-?[\d]+x?[\d]?.* "
-        r"\[(?:dig|web|c2c|mag|scan|paper|raw|raw-d|raw-dig|raw-digital|raw-m|raw-mag|raw-magazine)] "
+        r"\[(?:dig|web|c2c|mag|scan|paper|raw|raw\-d|raw\-dig|raw\-digital|raw\-m|raw\-mag|raw\-magazine)] "
         r"(?:\[(?P<title>.*)\] )?\[Kodansha.*"
     )
 

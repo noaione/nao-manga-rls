@@ -245,3 +245,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Apply `--extra-meta` or `extra_archive_metadata` to manga title
   - Before: `Test Title - cXXX (vXX) - pXXX [CH Extra] [dig] [Publisher] [Ripper]`
   - After: `Test Title [VOL Meta] - cXXX (vXX) - pXXX [CH Meta] [dig] [Publisher] [Ripper]`
+
+### 0.16.1
+**Fixes**
+- Regex escape publication type like `raw-d` and more

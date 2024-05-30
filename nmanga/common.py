@@ -604,12 +604,12 @@ _PublicationRegexMatch = [
     "paper",
     "raw",
     # Exist on danke-repack
-    "raw-d",
-    "raw-dig",
-    "raw-digital",
-    "raw-m",
-    "raw-mag",
-    "raw-magazine",
+    re.escape("raw-d"),
+    re.escape("raw-dig"),
+    re.escape("raw-digital"),
+    re.escape("raw-m"),
+    re.escape("raw-mag"),
+    re.escape("raw-magazine"),
 ]
 
 
