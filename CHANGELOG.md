@@ -249,3 +249,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 ### 0.16.1
 **Fixes**
 - Regex escape publication type like `raw-d` and more
+
+### 0.16.2
+**Fixes**
+- Use `.webp` extension on spreads join properly
