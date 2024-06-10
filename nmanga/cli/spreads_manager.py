@@ -80,6 +80,13 @@ def execute_spreads_join(
     select_ext = ".jpg"
     if ".png" in extensions:
         select_ext = ".png"
+    # Check if only webp
+    if all(".webp" in x for x in extensions):
+        select_ext = ".webp"
+    # Check if has webp and mix with other formats
+    if ".webp" in extensions and select_ext != ".webp":
+        console.warning("Mixed format detected, using png as output format")
+        select_ext = ".png"
     if output_fmt != "auto":
         select_ext = f".{output_fmt}"
     output_name = file_handler.random_name() + select_ext
@@ -105,7 +112,7 @@ def execute_spreads_split(
     output_fmt: str = "auto",
 ):
     select_ext = ".jpg"
-    if ".png" in input_img.path.suffix:
+    if ".png" in input_img.path.suffix or ".webp" in input_img.path.suffix:
         select_ext = ".png"
     if output_fmt != "auto":
         select_ext = f".{output_fmt}"
