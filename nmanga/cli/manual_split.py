@@ -107,9 +107,8 @@ def _collect_archive_to_chapters(
     skipped_chapters: List[str] = []
     with file_handler.MangaArchive(archive_file) as archive:
         for image, _ in archive:
-            filename = image.filename
-            filename_base = Path(filename).name
-            page_numbers = extract_page_num(filename_base, custom_data, regex_data)
+            filename = Path(image.filename)
+            page_numbers = extract_page_num(filename.stem, custom_data, regex_data)
 
             first_page = page_numbers[0]
             selected_chapter: ChapterRange = None
@@ -150,7 +149,7 @@ def _collect_archive_to_chapters(
                 console.info(f"[+] Creating chapter: {chapter_data}")
                 collected_chapters[chapter_data] = exporter.CBZMangaExporter(target_archive, target_path)
 
-            collected_chapters[chapter_data].add_image(filename_base, archive.read(image))
+            collected_chapters[chapter_data].add_image(filename.name, archive.read(image))
 
     for chapter, cbz_export in collected_chapters.items():
         console.info(f"[+] Finishing chapter: {chapter}")
