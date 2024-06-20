@@ -253,3 +253,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 ### 0.16.2
 **Fixes**
 - Use `.webp` extension on spreads join properly
+
+### 0.16.3
+**Fixes**
+- Manual split on page number mode not working as intended.
