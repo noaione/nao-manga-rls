@@ -259,5 +259,8 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Manual split on page number mode not working as intended.
 
 ### 0.16.4
+**Refactor**
+- Better handling of oneshot in `nmanga releases` command
+
 **Build**
 - Bump all dependencies
