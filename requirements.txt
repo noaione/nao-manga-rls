@@ -1,14 +1,14 @@
-rich==13.7.1
-inquirer==3.2.4
-click==8.1.7
-ftfy==6.2.0
+rich==14.0.0
+inquirer==3.4.0
+click==8.2.1
+ftfy==6.3.1
 
 # epub
-lxml==5.1.0
-Pillow==10.2.0
+lxml==5.4.0
+Pillow==11.2.1
 
 # rararchive
-unrar2-cffi==0.3.1
+unrar2-cffi==0.4.1
 
 # 7-zip
-py7zr==0.21.0
+py7zr==0.22.0
