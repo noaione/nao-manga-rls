@@ -82,6 +82,7 @@ class SpecialNaming:
 @options.rls_email
 @options.rls_revision
 @options.rls_extra_metadata
+@options.is_oneshot
 @click.option(
     "-hq",
     "--is-high-quality",
@@ -130,6 +131,7 @@ def prepare_releases(
     rls_email: str,
     rls_revision: int,
     rls_extra_metadata: Optional[str],
+    is_oneshot: bool,
     is_high_quality: bool,
     image_quality: Optional[str],
     do_exif_tagging: bool,
@@ -222,17 +224,25 @@ def prepare_releases(
         if p02 is not None:
             p01 = f"{p01}-{p02}"
         vol_act: Optional[Union[int, float]]
-        if vol is None:
+        if is_oneshot:
             vol_act = None
             if not vol_oshot_warn:
                 vol_oshot_warn = True
                 console.warning(
-                    "Volume is not specified, using OShot (Oneshot) as default for image and empty for archive name!"
+                    "Marked as OShot (Oneshot), using OShot as default for image and empty for archive name!"
                 )
         else:
-            if vol.startswith("v"):
-                vol = vol[1:]
-            vol_act = int(vol)
+            if vol is None:
+                vol_act = None
+                if not vol_oshot_warn:
+                    vol_oshot_warn = True
+                    console.warning(
+                        "Volume is not specified, using OShot (Oneshot) as default for image and empty for archive name!"
+                    )
+            else:
+                if vol.startswith("v"):
+                    vol = vol[1:]
+                vol_act = int(vol)
 
         if vol_act is not None and vol_ex is not None:
             if vol_ex.startswith("."):

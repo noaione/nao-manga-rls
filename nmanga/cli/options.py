@@ -252,3 +252,12 @@ rls_extra_metadata = click.option(
     default=None,
     required=False,
 )
+
+is_oneshot = click.option(
+    "-oshot",
+    "--is-oneshot",
+    "is_oneshot",
+    is_flag=True,
+    default=False,
+    help="Mark the series as oneshot, this will not add volume to the filename",
+)
