@@ -561,7 +561,7 @@ class TestFormatDaizLikeFilename:
 
         assert (
             filename
-            == f"Test Title [jpn] - c001 (OShot) - p000 [Cover] [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
+            == f"Test Title - c001 (OShot) - p000 [Cover] [dig] [{sel.name}] [{self._PUBLISHER}] [{self._RIPPER}]"
         )
 
     def test_real_world_use_case_a(self):
