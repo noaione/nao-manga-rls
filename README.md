@@ -8,20 +8,6 @@ All my release use one of the following tag:
 - `(oan)`, new tag for lower effort stuff that I use.
 - `(naoX)`, tag for upscaled stuff that I did.
 
-## Released Stuff
-See here: https://shigoto.n4o.xyz/manga
-
-**Dropped**
-- BAKEMONOGATARI (v13)
-- Chainsaw Man (v09)
-- Medaka Kuroiwa is Impervious to My Charms (v01)
-- My Deer Friend Nekotan (v01)
-- The Ice-Guy and His Cool Female Colleague (Taken over by someone else)
-
-Anything in Dropped means I already ripped it once, but I dropped it.
-
-You can find it on a certain cat website.
-
 ## Requirements
 - Python 3.9+
 - imagemagick (for `spreads join` and `spreads split` command)
