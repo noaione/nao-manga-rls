@@ -9,7 +9,7 @@ All my release use one of the following tag:
 - `(naoX)`, tag for upscaled stuff that I did.
 
 ## Requirements
-- Python 3.9+
+- Python 3.10+
 - imagemagick (for `spreads join` and `spreads split` command)
 - exiftool (for `releases` and `tag`, optional)
 - pingo (for `releases` and `optimize`, optional)
