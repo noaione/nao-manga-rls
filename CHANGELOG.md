@@ -264,3 +264,8 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Build**
 - Bump all dependencies
+
+### 0.16.5
+**Fixes**
+- Support 4-digits for page number, 4 digits for chapter, and 3 digits for volume
+- Fix weird volume number being used

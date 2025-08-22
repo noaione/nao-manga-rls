@@ -167,7 +167,7 @@ def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: 
     chapter_actual = match.group("actual")
     chapter_vol_ex = match.group("volex")
     if chapter_vol is not None:
-        if utils.is_oneshot(chapter_vol):
+        if utils.is_not_volume_number(chapter_vol):
             chapter_vol = 0
         else:
             if chapter_vol_ex is not None:
@@ -617,12 +617,12 @@ class RegexCollection:
     _VolumeRegex = r"CHANGETHIS v(\d+\.?[\d]{1,2}?).*"  # pragma: no cover
     _OneShotRegex = r"CHANGETHIS .*"  # pragma: no cover
     # fmt: off
-    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)?" \
+    _ChapterTitleRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,4}[\.][\d]{1,4})?\)?" \
+                      r" ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,3})?|[A-Za-z\-]+)?\)?" \
                       r" ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.* \[(?:PUBREPLACE)] (?:\[(?P<title>.*)\] )" \
                       r"?\[CHANGEPUBLISHER.*"  # pragma: no cover
-    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,3}[\.][\d]{1,3})?\)?" \
-                      r" ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,2})?|[Oo][Ss]hot|[Oo]ne[ -]?[Ss]hot|[Nn][Aa])?\)?" \
+    _ChapterBasicRe = r"CHANGETHIS - c(?P<ch>\d+)(?P<ex>[\#x.][\d]{1,2})? \(?c?(?P<actual>[\d]{1,4}[\.][\d]{1,4})?\)?" \
+                      r" ?\(?(?P<vol>v[\d]+(?P<volex>[\#x][\d]{1,3})?|[A-Za-z\-]+)?\)?" \
                       r" ?- p[\d]+x?[\d]?\-?[\d]+x?[\d]?.*"  # pragma: no cover
     # fmt: on
 
