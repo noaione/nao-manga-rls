@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict, Union
+from typing import Literal, Optional, TypedDict
 
 __all__ = (
     "BracketTypeT",
@@ -17,7 +17,7 @@ class _ConfigExecutableT(TypedDict, total=False):
     magick_path: str
     pingo_path: str
     exiftool_path: str
-    w2x_trt_path: Union[str, None]
+    w2x_trt_path: Optional[str]
 
 
 class ConfigT(TypedDict, total=False):

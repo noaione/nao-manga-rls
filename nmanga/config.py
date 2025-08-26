@@ -30,7 +30,7 @@ import os.path
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from ._ntypes import BracketTypeT, ConfigT, _ConfigDefaultsT, _ConfigExecutableT
 from .constants import MANGA_PUBLICATION_TYPES
@@ -63,7 +63,7 @@ class _ConfigExecutable:
     magick_path: str = field(default="magick")
     pingo_path: str = field(default="pingo")
     exiftool_path: str = field(default="exiftool")
-    w2x_trt_path: Union[str, None] = field(default=None)
+    w2x_trt_path: Optional[str] = field(default=None)
 
     def to_dict(self) -> _ConfigExecutableT:
         return {

@@ -29,7 +29,13 @@ import click
 
 from .. import config, term
 from ..constants import MANGA_PUBLICATION_TYPES
-from .base import NMangaCommandHandler, test_or_find_exiftool, test_or_find_magick, test_or_find_pingo
+from .base import (
+    NMangaCommandHandler,
+    test_or_find_exiftool,
+    test_or_find_magick,
+    test_or_find_pingo,
+    test_or_find_w2x_trt,
+)
 
 __all__ = ("cli_config",)
 cfhandler = config.get_config_handler()
@@ -240,6 +246,7 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
                 term.ConsoleChoice("pingo_path", "Configure `pingo` path"),
                 term.ConsoleChoice("exiftool_path", "Configure `exiftool` path"),
                 term.ConsoleChoice("magick_path", "Configure `magick` path"),
+                term.ConsoleChoice("w2x_trt_path", "Configure `waifu2x-tensorrt` path"),
                 SAVE_CHOICE,
             ],
         )
@@ -251,14 +258,20 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
             result = _loop_executables_check_single("pingo", config.executables.pingo_path, test_or_find_pingo)
             if result is not None:
                 config.executables.pingo_path = result
-        elif option == "ripper_credit":
+        elif option == "exiftool_path":
             result = _loop_executables_check_single("exiftool", config.executables.exiftool_path, test_or_find_exiftool)
             if result is not None:
                 config.executables.exiftool_path = result
-        elif option == "ripper_email":
+        elif option == "magick_path":
             result = _loop_executables_check_single("magick", config.executables.magick_path, test_or_find_magick)
             if result is not None:
                 config.executables.magick_path = result
+        elif option == "w2x_trt_path":
+            result = _loop_executables_check_single(
+                "waifu2x-tensorrt", config.executables.w2x_trt_path or "", test_or_find_w2x_trt
+            )
+            if result is not None:
+                config.executables.w2x_trt_path = result
         else:
             console.warning("Invalid option selected")
             console.sleep(2)
