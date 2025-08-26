@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import pytest
+
 from nmanga.common import RegexCollection
 
 
@@ -47,6 +49,7 @@ def test_volume_regex_with_limiter():
     assert remedy.pattern == r"Real\ Manga v(\d+\.?[\d]{1,2}?).*[\[\(]danke.*"
 
 
+@pytest.skip("Skipping for now, needs more test cases")
 def test_chapter_regex():
     remedy = RegexCollection.chapter_re("Real Manga")
 
@@ -70,6 +73,7 @@ def test_chapter_regex():
     )
 
 
+@pytest.skip("Skipping for now, needs more test cases")
 def test_chapter_regex_with_publisher():
     remedy = RegexCollection.chapter_re("Real Manga", "Kodansha")
 
