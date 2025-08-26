@@ -269,3 +269,8 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - Support 4-digits for page number, 4 digits for chapter, and 3 digits for volume
 - Fix weird volume number being used
+
+## 0.17.0
+**New Features**
+- Add `nmanga autolevel` command to auto-level images via ImageMagick
+  - Based on code by `anon`

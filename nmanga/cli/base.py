@@ -45,10 +45,10 @@ console = term.get_console()
 __all__ = (
     "NMangaCommandHandler",
     "UnrecoverableNMangaError",
-    "test_or_find_magick",
-    "test_or_find_exiftool",
-    "test_or_find_pingo",
     "is_executeable_global_path",
+    "test_or_find_exiftool",
+    "test_or_find_magick",
+    "test_or_find_pingo",
 )
 
 
