@@ -40,24 +40,24 @@ from unrar.cffi import rarfile
 from .utils import decode_or, encode_or
 
 __all__ = (
-    "YieldType",
     "MangaArchive",
-    "collect_image_from_cbz",
-    "collect_image_from_rar",
-    "collect_image_from_7z",
-    "collect_image_from_tar",
-    "collect_image_from_folder",
-    "is_cbz",
-    "is_rar",
-    "is_7zarchive",
-    "is_tararchive",
-    "is_archive",
+    "YieldType",
+    "collect_all_comics",
     "collect_image",
     "collect_image_archive",
-    "collect_all_comics",
+    "collect_image_from_7z",
+    "collect_image_from_cbz",
+    "collect_image_from_folder",
+    "collect_image_from_rar",
+    "collect_image_from_tar",
     "create_temp_dir",
-    "remove_folder_and_contents",
+    "is_7zarchive",
+    "is_archive",
+    "is_cbz",
+    "is_rar",
+    "is_tararchive",
     "random_name",
+    "remove_folder_and_contents",
 )
 extended_types_map = deepcopy(types_map)
 # modern image formats

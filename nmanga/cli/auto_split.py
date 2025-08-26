@@ -121,12 +121,12 @@ def auto_split(
                 if not all_comic_files:
                     next_key_data = "00"
                 else:
-                    _next_key = list(all_comic_files.keys())[-1]
-                    if "." in _next_key:
-                        _bk, _fk = _next_key.split(".")
-                        next_key_data = f"{(int(_bk) + 1):02d}.{_fk}"
+                    next_key = list(all_comic_files.keys())[-1]
+                    if "." in next_key:
+                        bk_key, fr_key = next_key.split(".")
+                        next_key_data = f"{(int(bk_key) + 1):02d}.{fr_key}"
                     else:
-                        next_key_data = f"{(int(_next_key) + 1):02d}"
+                        next_key_data = f"{(int(next_key) + 1):02d}"
                 console.info(f"Marking as oneshot (v{next_key_data}): {comic_file}")
                 all_comic_files[next_key_data] = comic_file
                 continue

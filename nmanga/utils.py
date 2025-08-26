@@ -54,7 +54,7 @@ def secure_filename(fn: str):
     for k, v in replacement.items():
         fn = fn.replace(k, v)
     EMOJI_PATTERN = re.compile(
-        "(["
+        "([" +
         "\U0001f1e0-\U0001f1ff"  # flags (iOS)
         "\U0001f300-\U0001f5ff"  # symbols & pictographs
         "\U0001f600-\U0001f64f"  # emoticons

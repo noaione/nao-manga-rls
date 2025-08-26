@@ -32,19 +32,19 @@ from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPubl
 
 __all__ = (
     "BRACKET_MAPPINGS",
-    "PseudoChapterMatch",
     "ChapterRange",
+    "PseudoChapterMatch",
     "RegexCollection",
-    "check_cbz_exist",
     "actual_or_fallback",
+    "check_cbz_exist",
     "create_chapter",
-    "inquire_chapter_ranges",
-    "safe_int",
-    "inject_metadata",
-    "optimize_images",
     "format_archive_filename",
-    "format_volume_text",
     "format_daiz_like_filename",
+    "format_volume_text",
+    "inject_metadata",
+    "inquire_chapter_ranges",
+    "optimize_images",
+    "safe_int",
 )
 
 

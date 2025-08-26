@@ -40,11 +40,11 @@ from .templates.epub import EPUB_CONTAINER, EPUB_CONTENT, EPUB_PAGE, EPUB_STYLES
 from .utils import encode_or
 
 __all__ = (
-    "MangaExporter",
-    "CBZMangaExporter",
     "CB7MangaExporter",
+    "CBZMangaExporter",
     "EPUBMangaExporter",
     "ExporterType",
+    "MangaExporter",
     "exporter_factory",
 )
 

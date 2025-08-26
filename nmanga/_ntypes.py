@@ -1,8 +1,8 @@
 from typing import Literal, TypedDict
 
 __all__ = (
-    "ConfigT",
     "BracketTypeT",
+    "ConfigT",
 )
 BracketTypeT = Literal["square", "round", "curly"]
 

@@ -36,10 +36,10 @@ from ._ntypes import BracketTypeT, ConfigT, _ConfigDefaultsT, _ConfigExecutableT
 from .constants import MANGA_PUBLICATION_TYPES
 
 __all__ = (
-    "get_config",
-    "ConfigHandler",
-    "ConfigError",
     "Config",
+    "ConfigError",
+    "ConfigHandler",
+    "get_config",
 )
 
 if sys.platform == "win32":

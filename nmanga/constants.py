@@ -25,11 +25,11 @@ SOFTWARE.
 from dataclasses import dataclass
 
 __all__ = (
-    "MangaPublication",
     "MANGA_PUBLICATION_TYPES",
     "TARGET_FORMAT",
     "TARGET_FORMAT_ALT",
     "TARGET_TITLE",
+    "MangaPublication",
 )
 
 

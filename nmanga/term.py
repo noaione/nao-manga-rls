@@ -33,7 +33,7 @@ from rich.theme import Theme as RichTheme
 if TYPE_CHECKING:
     from rich.status import Status as RichStatus
 
-__all__ = ("get_console", "ConsoleChoice")
+__all__ = ("ConsoleChoice", "get_console")
 
 rich_theme = RichTheme(
     {

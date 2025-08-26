@@ -164,15 +164,15 @@ def prepare_releases(
 
     cmx_re = RegexCollection.cmx_re()
     console.status("Checking folder contents...")
-    _temp_image_count = 0
+    temp_image_count = 0
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = cmx_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
             return 1
-        _temp_image_count += 1
+        temp_image_count += 1
     console.stop_status("Checking folder contents... done!")
-    if _temp_image_count < 1:
+    if temp_image_count < 1:
         console.error("No image found in the folder!")
         return 1
 
@@ -229,7 +229,7 @@ def prepare_releases(
             if not vol_oshot_warn:
                 vol_oshot_warn = True
                 console.warning(
-                    "Marked as OShot (Oneshot), using OShot as default for image and empty for archive name!"
+                    "Marked as Oneshot, using OShot as default for image and empty for archive name!"
                 )
         else:
             if vol is None:
@@ -237,7 +237,7 @@ def prepare_releases(
                 if not vol_oshot_warn:
                     vol_oshot_warn = True
                     console.warning(
-                        "Volume is not specified, using OShot (Oneshot) as default for image and empty for archive name!"
+                        "Volume is not specified, using Oneshot format as default for image and empty for archive name!"
                     )
             else:
                 if vol.startswith("v"):
@@ -425,15 +425,15 @@ def prepare_releases_chapter(
 
     page_re = RegexCollection.page_re()
     console.status("Checking folder contents...")
-    _temp_image_count = 0
+    temp_image_count = 0
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = page_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
             return 1
-        _temp_image_count += 1
+        temp_image_count += 1
     console.stop_status("Checking folder contents... done!")
-    if _temp_image_count < 1:
+    if temp_image_count < 1:
         console.error("No image found in the folder!")
         return 1
 
