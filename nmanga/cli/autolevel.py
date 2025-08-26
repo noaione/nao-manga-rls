@@ -74,7 +74,7 @@ def _autolevel_exec(command: List[str]) -> None:
 
 def determine_image_format(img_path: Path, prefer: str) -> str:
     if prefer != "auto":
-        return prefer
+        return f".{prefer}"
 
     ext = img_path.suffix.lower()
     if not ext.startswith("."):
