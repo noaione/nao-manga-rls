@@ -1,41 +1,20 @@
 """
-MIT License
+Original code by: anon
 
-Copyright (c) 2022-present noaione
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Adapted for nmanga
 """
 
 from __future__ import annotations
 
 import math
-import multiprocessing as mp
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
 __all__ = (
     "create_magick_params",
     "find_local_peak",
-    "find_local_peaks",
     "try_imports",
 )
-ALLOWED_EXTENSIONS: List[str] = [".jpg", ".jpeg", ".png", ".webp", ".jxl"]
 
 ImageLib = None
 NumpyLib = None
@@ -97,19 +76,6 @@ def find_local_peak(img_path: Path, upper_limit: int = 60) -> Tuple[int, Path, b
         black_level = math.ceil(binedges[result[0]])
         return black_level, img_path, force_gray
     return 0, img_path, force_gray
-
-
-def find_local_peaks(source_dir: Path, upper_limit: int = 60) -> List[Tuple[int, Path]]:
-    """
-    Find local peaks for all images in a directory.
-    """
-    if not source_dir.is_dir():
-        raise NotADirectoryError(f"{source_dir} is not a valid directory.")
-
-    files = {file for file in source_dir.glob("*") if file.suffix.lower() in ALLOWED_EXTENSIONS}
-    with mp.Pool(mp.cpu_count()) as pool:
-        results = pool.starmap(find_local_peak, [(file, upper_limit) for file in files])
-    return results
 
 
 def create_magick_params(black_level: int, peak_offset: int = 0) -> str:

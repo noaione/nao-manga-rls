@@ -127,7 +127,7 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
     "-t",
     "--threads",
     "threads",
-    type=click.IntRange(1, 32),
+    type=options.POSITIVE_INT,
     default=mp.cpu_count(),
     show_default=True,
     help="The number of threads to use for processing",

@@ -80,7 +80,7 @@ def get_precision_enum(precision: str) -> str:
     "-b",
     "--batch-size",
     "batch_size",
-    type=int,
+    type=options.POSITIVE_INT,
     default=32,
     show_default=True,
     help="The batch size to use for processing images, higher values use more VRAM",
