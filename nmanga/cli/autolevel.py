@@ -39,7 +39,7 @@ import click
 from nmanga import file_handler
 
 from .. import term
-from ..autolevel import create_magick_params, find_local_peak
+from ..autolevel import create_magick_params, detect_grayscale_image, find_local_peak
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -245,3 +245,84 @@ def autolevel(
         pool.map(_autolevel_exec, commands)
 
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
+
+
+@click.command(
+    name="detect-grayscale",
+    help="Detect if an image is grayscale based on its saturation levels",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-st",
+    "--saturation-threshold",
+    "sat_threshold",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.08,
+    show_default=True,
+    help="The saturation threshold to consider an image as grayscale",
+)
+@click.option(
+    "-pt",
+    "--percent-threshold",
+    "percent_threshold",
+    type=click.FloatRange(0.0, 1.0),
+    default=0.98,
+    show_default=True,
+    help="The percentage of pixels below the saturation threshold to consider an image as grayscale",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    help="The output directory to move non-grayscale images to",
+    required=True,
+)
+@options.threads
+@time_program
+def detect_grayscale(
+    path_or_archive: Path,
+    sat_threshold: float,
+    percent_threshold: float,
+    output_dir: Path,
+    threads: int,
+):  # pragma: no cover
+    """
+    Detect if an image is grayscale based on its saturation levels.
+    """
+
+    if not path_or_archive.is_file():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a file. Please provide an image file.",
+            param_hint="path_or_archive",
+        )
+
+    console.status(f"Detecting if {path_or_archive} is grayscale...")
+
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        all_files: list[Path] = archive.contents()
+
+    if len(all_files) == 0:
+        console.error("No files found in the provided path.")
+        return 1
+
+    def _detect_wrapper(file: Path, sat_threshold: float, percent_threshold: float) -> tuple[Path, bool]:
+        result = detect_grayscale_image(file, sat_threshold, percent_threshold)
+        return file, result
+
+    console.status(f"Detecting grayscale images using {threads} threads...")
+    with mp.Pool(threads) as fpool:
+        results = fpool.starmap(
+            _detect_wrapper,
+            [(file, sat_threshold, percent_threshold) for file in all_files],
+        )
+    console.stop_status(f"Combed through all {len(results)} images.")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for file, is_gray in results:
+        if not is_gray:
+            console.warn(f"Moving non-grayscale image: {file} to {output_dir}")
+            dest_path = output_dir / file.name
+            file.rename(dest_path)
+    console.info("Done.")
