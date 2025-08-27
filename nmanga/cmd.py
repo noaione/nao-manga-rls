@@ -33,7 +33,7 @@ from .cli.archive import pack_releases, pack_releases_comment_archive, pack_rele
 from .cli.auto_split import auto_split
 from .cli.autolevel import autolevel, detect_grayscale
 from .cli.config import cli_config
-from .cli.denoiser import denoiser, identify_denoise_candidates
+from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.image_optimizer import image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
@@ -98,6 +98,7 @@ main.add_command(timewizard_modify)
 main.add_command(autolevel)
 main.add_command(detect_grayscale)
 main.add_command(denoiser)
+main.add_command(denoiser_trt)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 

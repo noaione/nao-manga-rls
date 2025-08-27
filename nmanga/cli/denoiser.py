@@ -22,8 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Bulk denoise images in a directory using Waifu2x-TensorRT
+# Bulk denoise images in a directory using Waifu2x-TensorRT or ONNX Runtime
 # https://github.com/z3lx/waifu2x-tensorrt
+# Part of the code is adapted from anon
 
 from __future__ import annotations
 
@@ -319,3 +320,242 @@ def identify_denoise_candidates(
             console.info(f"  Recommended denoise level: {den_level}")
         else:
             console.info("  No denoising recommended")
+
+
+@click.command(
+    name="denoise-trt",
+    help="(Experimental) Denoise all images using TensorRT/ONNX Runtime",
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-o",
+    "--output",
+    "dest_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    required=True,
+    help="The output directory to save the processed images",
+)
+@click.option(
+    "-m",
+    "--model",
+    "model_path",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    required=True,
+    help="The ONNX model file to use for denoising",
+)
+@click.option(
+    "-d",
+    "--device",
+    "device_id",
+    type=options.ZERO_POSITIVE_INT,
+    default=0,
+    show_default=True,
+    help="The GPU device ID to use for processing",
+)
+@click.option(
+    "-b",
+    "--batch-size",
+    "batch_size",
+    type=options.POSITIVE_INT,
+    default=64,
+    show_default=True,
+    help="The batch size to use for processing images, higher values use more VRAM",
+)
+@click.option(
+    "-t",
+    "--tile-size",
+    "tile_size",
+    type=options.POSITIVE_INT,
+    default=128,
+    show_default=True,
+    help="The tile size to use for processing images, higher values use more VRAM",
+)
+@click.option(
+    "-cs",
+    "--contrast-stretch",
+    "contrast_stretch",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Apply contrast stretch in pre-processing to improve results",
+)
+@click.option(
+    "-bg",
+    "--background",
+    "background",
+    type=click.Choice(["black", "white"], case_sensitive=True),
+    default="black",
+    show_default=True,
+    help="The background color to use for padding",
+)
+@check_config_first
+@time_program
+def denoiser_trt(
+    path_or_archive: Path,
+    dest_dir: Path,
+    model_path: Path,
+    device_id: int,
+    batch_size: int,
+    tile_size: int,
+    contrast_stretch: bool,
+    background: str,
+):
+    """
+    Denoise all images using TensorRT/ONNX Runtime (Experimental)
+
+    All of this code is originally created by anon.
+    Adapted to fit into nmanga by noaione
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        all_files: list[Path] = archive.contents()
+
+    # Try importing stuff here
+    console.info("Importing required packages...")
+    try:
+        import numpy as np
+        import onnxruntime as ort
+        from einops import rearrange
+        from PIL import Image
+    except ImportError as e:
+        console.error(f"Missing required package: {e.name}. Please install it first.")
+        return 1
+
+    console.info(f"Loading model: {model_path.name}...")
+
+    verbose_level = 3 if not console.debugged else 0
+    ort.set_default_logger_severity(verbose_level)
+    ort.set_default_logger_verbosity(verbose_level)
+
+    sess_opt = ort.SessionOptions()
+    sess = ort.InferenceSession(
+        model_path,
+        sess_options=sess_opt,
+        providers=[
+            (
+                # Force use of TensorRT if available
+                "TensorrtExecutionProvider",
+                {
+                    "device_id": device_id,
+                    "trt_fp16_enable": True,
+                    "trt_sparsity_enable": True,
+                },
+            ),
+        ],
+    )
+
+    total_files = len(all_files)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    console.status(f"Denoising images... [???/{total_files}]")
+    for idx, image_file in enumerate(all_files):
+        console.status(f"Denoising images... [{idx + 1}/{total_files}]")
+        output_path = dest_dir / f"{image_file.stem}.png"
+
+        img_file = Image.open(image_file)
+        orig_img_mode = img_file.mode
+        orig_palette = img_file.palette
+
+        img = img_file.convert("RGB")
+        source_width, source_height = img.size
+        # compute the new canvas size
+        tile_count_height = int(np.ceil((source_height / tile_size)))
+        tile_count_width = int(np.ceil((source_width / tile_size)))
+
+        padded_height = int(tile_count_height * tile_size)
+        padded_width = int(tile_count_width * tile_size)
+        background_tuple = (0, 0, 0) if background == "black" else (255, 255, 255)
+
+        new_padded_image = Image.new(
+            "RGB", (padded_width, padded_height), background_tuple
+        )
+        new_padded_image.paste(img, (0, 0))
+
+        # Pre-process
+        image_array = np.array(new_padded_image)
+        # contrast stretching: scaling the image based on its own darkest and brightest pixels.
+        # For example, a very dark photo (e.g., pixel values from 10 to 50) and a very bright photo (e.g., values
+        # from 200 to 250) will both be stretched to the full [0.0, 1.0] range.
+        # The model loses all information about the image's absolute brightness. Can be desirable with a white
+        # background to reverse CMYK shift in rare (color) images.
+        # Not desirable in general so the alternative path should be taken in the vast majority of cases.
+        # See also: https://en.wikipedia.org/wiki/Normalization_(image_processing)#Contrast_Stretching_for_Image_Enhancement
+        if contrast_stretch:
+            image_array = (image_array - np.min(image_array)) / np.ptp(image_array)
+        else:
+            image_array = image_array / 255.0
+        # Casting to FP16 since we use FP16 quantized models wherever possible
+        image_array = image_array.astype(np.float16)
+        # Rearranging (Width, Height, Channel) -> (Channel, Width, Height) to match the expected input shape
+        image_array = rearrange(image_array, "w h c -> c w h")
+
+        padded_tiles = rearrange(
+            image_array,
+            "c (h th) (w tw) -> (h w) c th tw",
+            th=tile_size,
+            tw=tile_size,
+        )
+
+        input_name = sess.get_inputs()[0].name
+        output_name = sess.get_outputs()[0].name
+
+        all_output_chunks = []
+        num_chunks = padded_tiles.shape[0]
+
+        for i in range(0, num_chunks, batch_size):
+            batch_of_chunks = padded_tiles[
+                i : (
+                    i + batch_size
+                    if i + batch_size < num_chunks
+                    else num_chunks
+                )
+            ]
+
+            # infer
+            model_output = sess.run([output_name], {input_name: batch_of_chunks})
+            # append the output
+            all_output_chunks.append(model_output[0])
+
+        # concat all chunks
+        tiled_output_image = np.concatenate(all_output_chunks, axis=0)
+
+        reconstructed_image_with_pad = rearrange(
+            tiled_output_image,
+            "(h w) c th tw -> (h th) (w tw) c",
+            h=tile_count_height,
+            w=tile_count_width,
+        )
+
+        # post process
+        if contrast_stretch:
+            postprocessed_array = reconstructed_image_with_pad.astype(np.float16)
+            postprocessed_array = (
+                postprocessed_array - np.min(postprocessed_array)
+            ) / np.ptp(postprocessed_array)
+        else:
+            postprocessed_array = np.clip(reconstructed_image_with_pad, 0.0, 1.0)
+
+        # scaling back to [0, 255] from [0.0, 1.0]
+        postprocessed_array = postprocessed_array * 255.0
+
+        # rounding and cast back to uint8
+        postprocessed_array = np.round(postprocessed_array)
+        postprocessed_array = postprocessed_array.astype(np.uint8)
+        output_image = Image.fromarray(postprocessed_array)
+
+        output_image = output_image.crop((0, 0, source_width, source_height))
+        if orig_palette:
+            palette_image = Image.new("P", (1, 1))
+            palette_image.putpalette(orig_palette)
+            output_image = output_image.convert("RGB").quantize(palette=palette_image, dither=Image.Dither.NONE)
+        else:
+            output_image = output_image.convert(orig_img_mode)
+
+        output_image.save(output_path, format="PNG")
+    console.stop_status(f"Denoised all {total_files} images.")

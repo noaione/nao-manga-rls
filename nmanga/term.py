@@ -71,6 +71,10 @@ class Console:
     def disable_debug(self):
         self.__debug_mode = False
 
+    @property
+    def debugged(self) -> bool:
+        return self.__debug_mode
+
     def __wrap_theme(self, text: str, theme: str):
         if self.__debug_mode:
             return f"[{text}]"
