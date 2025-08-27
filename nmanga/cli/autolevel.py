@@ -163,8 +163,11 @@ def autolevel(
         return 0
 
     console.status("Calculating black levels for images...")
-    with mp.Pool(threads) as pool:
-        results = pool.starmap(find_local_peak, [(file, upper_limit) for file in all_files])
+    if threads <= 1:
+        results = [find_local_peak(file, upper_limit) for file in all_files]
+    else:
+        with mp.Pool(threads) as pool:
+            results = pool.starmap(find_local_peak, [(file, upper_limit) for file in all_files])
     console.stop_status("Calculated black levels for images.")
 
     commands: List[str] = []
@@ -241,8 +244,12 @@ def autolevel(
     console.stop_status(f"Copied {len(to_be_copied)} images without autolevel.")
 
     console.status(f"Processing {len(commands)} images with autolevel...")
-    with mp.Pool(threads) as pool:
-        pool.map(_autolevel_exec, commands)
+    if threads <= 1:
+        for command in commands:
+            _autolevel_exec(command)
+    else:
+        with mp.Pool(threads) as pool:
+            pool.map(_autolevel_exec, commands)
 
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
@@ -312,11 +319,14 @@ def detect_grayscale(
         return file, result
 
     console.status(f"Detecting grayscale images using {threads} threads...")
-    with mp.Pool(threads) as fpool:
-        results = fpool.starmap(
-            _detect_wrapper,
-            [(file, sat_threshold, percent_threshold) for file in all_files],
-        )
+    if threads <= 1:
+        results = [_detect_wrapper(file, sat_threshold, percent_threshold) for file in all_files]
+    else:
+        with mp.Pool(threads) as fpool:
+            results = fpool.starmap(
+                _detect_wrapper,
+                [(file, sat_threshold, percent_threshold) for file in all_files],
+            )
     console.stop_status(f"Combed through all {len(results)} images.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
