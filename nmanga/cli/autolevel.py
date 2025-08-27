@@ -292,7 +292,7 @@ def detect_grayscale(
     Detect if an image is grayscale based on its saturation levels.
     """
 
-    if not path_or_archive.is_file():
+    if not path_or_archive.is_dir():
         raise click.BadParameter(
             f"{path_or_archive} is not a file. Please provide an image file.",
             param_hint="path_or_archive",
