@@ -91,7 +91,7 @@ def shift_renamer(
     total_rename = 0
     for idx, image_path in enumerate(all_images):
         console.status(f"Renaming images [{idx + 1}/{total_files}]...")
-        new_name = f"{str(start_index + idx).zfill(padding)}"
+        new_name = f"p{str(start_index + idx).zfill(padding)}"
 
         manga_title_join = manga_title
         if volume_text is not None and manga_title_join:
