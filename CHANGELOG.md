@@ -274,3 +274,11 @@ Rewritten every thing as a module with `nmanga` namespace.
 **New Features**
 - Add `nmanga autolevel` command to auto-level images via ImageMagick
   - Based on code by `anon`
+
+## Unreleased
+**New Features**
+- Add `nmanga denoise` command to denoise images via ImageMagick
+  - Also include `nmanga identify-quality` to identify image quality via ImageMagick
+
+**Fixes**
+- Fix `--format` option in `nmanga autolevel` command

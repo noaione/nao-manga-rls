@@ -241,6 +241,22 @@ class MangaImage:
         return self.filename
 
     @property
+    def path_obj(self) -> Path:
+        """Return the Path object of the image file."""
+        if isinstance(self.__accessor, zipfile.ZipInfo):
+            return Path(self.__accessor.filename)
+        elif isinstance(self.__accessor, py7zr.FileInfo):
+            return Path(self.__accessor.filename)
+        elif isinstance(self.__accessor, rarfile.RarInfo):
+            return Path(self.__accessor.filename)
+        elif isinstance(self.__accessor, tarfile.TarInfo):
+            return Path(self.__accessor.name)
+        elif isinstance(self.__accessor, Path):
+            return self.__accessor
+        else:
+            raise TypeError(f"Unknown type: {type(self.__accessor)}")
+
+    @property
     def filename(self):
         """Shortcut for the image filename."""
         try:

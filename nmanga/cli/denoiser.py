@@ -27,9 +27,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
-from typing import Union
+from typing import Optional
+from uuid import uuid4
 
 import click
 
@@ -38,7 +40,7 @@ from nmanga import file_handler
 from .. import term
 from . import options
 from ._deco import check_config_first, time_program
-from .base import NMangaCommandHandler, test_or_find_w2x_trt
+from .base import NMangaCommandHandler, test_or_find_magick, test_or_find_w2x_trt
 
 console = term.get_console()
 
@@ -79,7 +81,7 @@ def get_precision_enum(precision: str) -> str:
     "--batch-size",
     "batch_size",
     type=int,
-    default=80,
+    default=32,
     show_default=True,
     help="The batch size to use for processing images, higher values use more VRAM",
 )
@@ -87,8 +89,8 @@ def get_precision_enum(precision: str) -> str:
     "-t",
     "--tile-size",
     "tile_size",
-    type=click.IntRange(128, 4096),
-    default=128,
+    type=click.Choice([64, 128, 256, 400, 640], case_sensitive=False),
+    default=256,
     show_default=True,
     help="The tile size to use for processing images, higher values use more VRAM",
 )
@@ -121,7 +123,7 @@ def denoiser(
     tile_size: int,
     precision: str,
     tta: bool,
-    w2x_trt_path: Union[str, None],
+    w2x_trt_path: Optional[str],
 ):  # pragma: no cover
     """
     Automatically adjust the levels of all images in a directory based on local peaks in their histograms.
@@ -171,7 +173,7 @@ def denoiser(
         "--precision", str(precision_enum),
         "render",
     ]
-    final_params = ["--nosuffix", "-o", str(dest_dir)]
+    final_params = ["-o", str(dest_dir)]
 
     console.status("Denoising images...")
     errors = []
@@ -187,9 +189,14 @@ def denoiser(
         console.debug("Running command: {}".format(" ".join(params)))
         console.status(f"Denoising images... [{idx + 1}/{total_files}]")
         # silent output
-        result = subprocess.run(params, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(params, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
             console.error(f"Error denoising image: {image}, skipping...")
+            # get stderr output
+            console.debug("Error output:")
+            console.debug(result.stderr.decode("utf-8"))
+            console.debug("STDOUT output:")
+            console.debug(result.stdout.decode("utf-8"))
             errors.append(image)
             continue
     correct_amount = total_files - len(errors)
@@ -200,3 +207,112 @@ def denoiser(
             console.error(f"- {err}")
         return 1
     return 0
+
+
+def _is_default_path(path: str) -> bool:
+    path = path.lower()
+    if path == "magick":
+        return True
+    if path == "./magick":
+        return True
+    if path == ".\\magick":
+        return True
+    return False
+
+
+def make_prefix_identify(magick_exe: str):
+    name = Path(magick_exe).name
+    if name.lower() == "identify":
+        return ["identify"]
+    return ["magick", "identify"]
+
+
+def recommended_level(quality: int) -> int:
+    if quality > 95:
+        return -1
+    elif 95 > quality > 91:
+        return 0
+    elif 90 > quality > 80:
+        return 1
+    elif 79 > quality > 68:
+        return 2
+    elif quality < 68:
+        return 3
+
+
+@click.command(
+    name="identify-quality",
+    help="Identify images that may benefit from denoising using Waifu2x-TensorRT",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.magick_path
+@time_program
+def identify_denoise_candidates(
+    path_or_archive: Path,
+    magick_path: str,
+):
+    """
+    Identify images that may benefit from denoising using Waifu2x-TensorRT
+    """
+
+    force_search = not _is_default_path(magick_path)
+    magick_exe = test_or_find_magick(magick_path, force_search)
+    if magick_exe is None:
+        console.error("Could not find the magick executable")
+        return 1
+    console.info("Using magick executable: {}".format(magick_exe))
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    cwd = Path.cwd()
+    dump_data_path = f"{uuid4().hex.replace('-', '')}_identified.json"
+    dump_data = []
+
+    common_counters = {}
+    console.info("Scanning images for quality...")
+    for idx, (image, _, total_img, _) in enumerate(file_handler.collect_image_from_folder(path_or_archive)):
+        console.status(f"Scanning images for quality... [{idx + 1}/{total_img}]")
+        path_obj = image.resolve()
+        img_ext = path_obj.suffix.lower().strip(".")
+        if img_ext not in ["jpg", "jpeg"]:
+            console.debug(f"Skipping non-JPEG image: {path_obj}")
+            continue
+
+        params = [*make_prefix_identify(magick_exe), "-format", "%Q", str(path_obj)]
+        console.debug(f"Running command: {' '.join(params)}")
+        executed = subprocess.run(
+            params,
+            capture_output=True,
+            text=True,
+        )
+        if executed.returncode != 0:
+            console.error(f"Error identifying image: {path_obj}, skipping...")
+            continue
+        quality_str = executed.stdout.strip()
+        try:
+            quality = int(quality_str)
+            dump_data.append({"img": str(image), "q": quality})
+        except ValueError:
+            console.error(f"Error parsing quality for image: {path_obj}, got '{quality_str}', skipping...")
+            continue
+        common_counters[quality_str] = common_counters.get(quality_str, 0) + 1
+    console.stop_status("Scanned all images.")
+
+    # Save results to JSON file
+    dump_path = cwd / dump_data_path
+    dump_path.write_text(json.dumps(dump_data, indent=4), encoding="utf-8")
+
+    console.info("Image quality distribution:")
+    for quality, count in sorted(common_counters.items(), key=lambda x: int(x[0]) if x[0].isdigit() else -1):
+        console.info(f"- Quality {quality}: {count} images")
+        quality_int = int(quality) if quality.isdigit() else -1
+        den_level = recommended_level(quality_int)
+        if den_level >= 0:
+            console.info(f"  Recommended denoise level: {den_level}")
+        else:
+            console.info("  No denoising recommended")

@@ -33,7 +33,7 @@ from .cli.archive import pack_releases, pack_releases_comment_archive, pack_rele
 from .cli.auto_split import auto_split
 from .cli.autolevel import autolevel
 from .cli.config import cli_config
-from .cli.denoiser import denoiser
+from .cli.denoiser import denoiser, identify_denoise_candidates
 from .cli.image_optimizer import image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
@@ -96,6 +96,7 @@ main.add_command(image_optimizer)
 main.add_command(timewizard_modify)
 main.add_command(autolevel)
 main.add_command(denoiser)
+main.add_command(identify_denoise_candidates)
 
 
 if __name__ == "__main__":
