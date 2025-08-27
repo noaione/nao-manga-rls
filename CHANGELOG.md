@@ -275,10 +275,15 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Add `nmanga autolevel` command to auto-level images via ImageMagick
   - Based on code by `anon`
 
-## Unreleased
+## 0.18.0
 **New Features**
 - Add `nmanga denoise` command to denoise images via ImageMagick
   - Also include `nmanga identify-quality` to identify image quality via ImageMagick
+- Add `nmanga detect-grayscale` to detect grayscale images via HSV color space calculation
+  - Needs `scikit-image`, `numpy`, and `Pillow` installed
+- Add `nmanga shiftname` to bulk rename files with padded number
+  - Useful for renaming files like `img_1.jpg`, `img_2.jpg`, ... to `p000.jpg`, `p001.jpg`, ...
+  - Supports adding manga title and volume to the name.
 
 **Fixes**
 - Fix `--format` option in `nmanga autolevel` command
