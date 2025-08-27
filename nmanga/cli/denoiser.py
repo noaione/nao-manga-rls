@@ -228,15 +228,18 @@ def make_prefix_identify(magick_exe: str):
 
 
 def recommended_level(quality: int) -> int:
+    if quality < 0 or quality > 100:
+        return -1  # Invalid quality
+
     if quality > 95:
         return -1
-    elif 95 > quality > 91:
+    elif quality >= 92:
         return 0
-    elif 90 > quality > 80:
+    elif quality >= 81:
         return 1
-    elif 79 > quality > 68:
+    elif quality >= 69:
         return 2
-    elif quality < 68:
+    else:
         return 3
 
 
