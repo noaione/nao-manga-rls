@@ -254,6 +254,11 @@ def autolevel(
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
 
+def _detect_wrapper(file: Path, sat_threshold: float, percent_threshold: float) -> tuple[Path, bool]:
+    result = detect_grayscale_image(file, sat_threshold, percent_threshold)
+    return file, result
+
+
 @click.command(
     name="detect-grayscale",
     help="Detect if an image is grayscale based on its saturation levels",
@@ -314,13 +319,12 @@ def detect_grayscale(
         console.error("No files found in the provided path.")
         return 1
 
-    def _detect_wrapper(file: Path, sat_threshold: float, percent_threshold: float) -> tuple[Path, bool]:
-        result = detect_grayscale_image(file, sat_threshold, percent_threshold)
-        return file, result
-
     console.status(f"Detecting grayscale images using {threads} threads...")
     if threads <= 1:
-        results = [_detect_wrapper(file, sat_threshold, percent_threshold) for file in all_files]
+        results = []
+        for file in all_files:
+            console.status(f"Detecting grayscale images... ({file.stem})")
+            results.append(_detect_wrapper(file, sat_threshold, percent_threshold))
     else:
         with mp.Pool(threads) as fpool:
             results = fpool.starmap(
