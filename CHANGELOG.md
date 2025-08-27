@@ -287,3 +287,16 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Fixes**
 - Fix `--format` option in `nmanga autolevel` command
+
+## 0.19.0
+**New Features**
+- Add `nmanga denoise-trt` command to denoise images via TensorRT/ONNX Runtime (Experimental)
+  - Based on code by `anon`
+  - Needs `onnxruntime`, `onnxruntime-gpu`, `tensorrt` and all the NVIDIA related dependencies installed
+
+**Fixes**
+- Fix missing `p` prefix on page numbering when using `nmanga shiftname`
+- Fix broken recommendation
+
+**Refactor**
+- Use proper single thread when threads is set to 1
