@@ -123,15 +123,7 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
     type=click.Choice(["auto", "png", "jpg"]),
     help="The format of the output image, auto will detect the format from the input images",
 )
-@click.option(
-    "-t",
-    "--threads",
-    "threads",
-    type=options.POSITIVE_INT,
-    default=mp.cpu_count(),
-    show_default=True,
-    help="The number of threads to use for processing",
-)
+@options.threads
 @options.magick_path
 @time_program
 def autolevel(
@@ -184,11 +176,13 @@ def autolevel(
 
     dumped_data_temp = []
     for black_level, img_path, force_gray in results:
-        dumped_data_temp.append({
-            "image": str(img_path),
-            "black_level": black_level,
-            "force_gray": force_gray,
-        })
+        dumped_data_temp.append(
+            {
+                "image": str(img_path),
+                "black_level": black_level,
+                "force_gray": force_gray,
+            }
+        )
 
     # Dump the results for debugging
     dumped_data = json.dumps(dumped_data_temp, indent=4)
@@ -217,7 +211,8 @@ def autolevel(
         cmd = [
             *magick_cmd,
             str(img_path),
-            "-alpha", "off",
+            "-alpha",
+            "off",
         ]
         if force_gray:
             cmd.extend(["-colorspace", "Gray"])

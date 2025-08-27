@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Optional
 
@@ -283,4 +284,14 @@ is_oneshot = click.option(
     is_flag=True,
     default=False,
     help="Mark the series as oneshot, this will not add volume to the filename",
+)
+
+threads = click.option(
+    "-t",
+    "--threads",
+    "threads",
+    type=POSITIVE_INT,
+    default=cpu_count(),
+    show_default=True,
+    help="The number of threads to use for processing",
 )
