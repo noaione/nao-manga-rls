@@ -39,6 +39,7 @@ from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.releases import prepare_releases, prepare_releases_chapter
+from .cli.renamer import shift_renamer
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
 from .term import get_console
@@ -98,6 +99,7 @@ main.add_command(autolevel)
 main.add_command(detect_grayscale)
 main.add_command(denoiser)
 main.add_command(identify_denoise_candidates)
+main.add_command(shift_renamer)
 
 
 if __name__ == "__main__":

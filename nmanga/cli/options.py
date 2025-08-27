@@ -77,13 +77,18 @@ class FloatIntParamType(click.ParamType):
 class PositiveIntParamType(click.ParamType):
     name = "positive_int"
 
+    def __init__(self, start_from_zero: bool = False):
+        super().__init__()
+        self.start_from_zero = start_from_zero
+
     def convert(self, value, param, ctx):
         try:
             value = int(value)
         except ValueError:
             self.fail(f"{value!r} is not a valid integer", param, ctx)
 
-        if value < 1:
+        min_val = 0 if self.start_from_zero else 1
+        if value < min_val:
             self.fail(f"{value!r} is not a positive integer", param, ctx)
         return value
 
@@ -113,6 +118,7 @@ class MangaPublicationParamType(click.ParamType):
 
 FLOAT_INT = FloatIntParamType()
 POSITIVE_INT = PositiveIntParamType()
+ZERO_POSITIVE_INT = PositiveIntParamType(start_from_zero=True)
 PUBLICATION_TYPE = MangaPublicationParamType()
 
 
