@@ -338,6 +338,7 @@ def autolevel2(
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
             _autolevel2_wrapper(img_path, upper_limit, peak_offset, dest_output, image_fmt)
     else:
+        console.info(f"Using {threads} CPU threads for processing.")
         with mp.Pool(threads) as pool:
             pool.starmap(
                 _autolevel2_wrapper,
