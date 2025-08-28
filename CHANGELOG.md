@@ -299,7 +299,16 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Refactor**
 - Use proper single thread when threads is set to 1
 
-### Unversioned
+## 0.20.0
+**New Features**
+- PDF handling via `nmanga pdf`
+  - Added `pymupdf` (fitz) dependency for PDF handling
+  - Add `nmanga pdf extract` command to extract images from PDFs
+  - Add `nmanga pdf identify` command to show PDF DPI and page size information
+  - Add `nmanga pdf export` command to export PDF pages as images
+- (Experimental) automatic color leveling with Pillow via `nmanga autolevel2`
+  - There might be miniscule difference with ImageMagick version, so YMMV
+
 **Fixes**
 - Make manga title optional in `nmanga shiftname` command
 - Add missing proper command handler in `nmanga denoise-trt` command
