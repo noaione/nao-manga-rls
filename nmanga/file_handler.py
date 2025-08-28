@@ -28,10 +28,11 @@ import tempfile
 import zipfile
 from copy import deepcopy
 from enum import Enum
+from io import BytesIO
 from mimetypes import types_map
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import Generator, List, Optional, Tuple, Union
+from typing import Dict, Generator, List, Optional, Tuple, Union
 
 import ftfy
 import py7zr
@@ -210,6 +211,52 @@ AccessorFile = Union[zipfile.ZipInfo, py7zr.FileInfo, rarfile.RarInfo, tarfile.T
 AccessorImage = Union[zipfile.ZipInfo, py7zr.FileInfo, rarfile.RarInfo, tarfile.TarInfo, Path]
 
 
+# https://github.com/miurahr/py7zr/issues/662#issuecomment-3217126074
+class Py7zBytesIO(py7zr.Py7zIO):
+    def __init__(self, filename: str):
+        self.filename = filename
+        self._buffer = BytesIO()
+
+    def write(self, data: Union[bytes, bytearray]) -> None:
+        self._buffer.write(data)
+
+    def read(self, size: Optional[int] = None) -> bytes:
+        return self._buffer.read(size)
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._buffer.seek(offset, whence)
+
+    def flush(self):
+        return self._buffer.flush()
+
+    def size(self):
+        return self._buffer.getbuffer().nbytes
+
+    def close(self):
+        self._buffer.close()
+
+
+class BytesIOFactory(py7zr.WriterFactory):
+    def __init__(self):
+        self.products: Dict[str, Py7zBytesIO] = {}
+
+    def create(self, filename: str) -> Py7zBytesIO:
+        product = Py7zBytesIO(filename)
+        self.products[filename] = product
+        return product
+
+    def read(self, filename: str) -> bytes:
+        try:
+            return self.products[filename].read()
+        except KeyError:
+            return b""
+
+    def close(self):
+        for product in self.products.values():
+            product.close()
+        self.products.clear()
+
+
 class MangaImage:
     """
     Wrapper for image path, archive, or something like that.
@@ -350,9 +397,13 @@ class MangaArchive:
     def __actual_read(self, file: AccessorFile) -> bytes:
         self.__check_open()
         if isinstance(file, py7zr.FileInfo) and isinstance(self.__accessor, py7zr.SevenZipFile):
-            file_data = self.__accessor.read([file.filename])
+            factory = BytesIOFactory()
+            self.__accessor.extract(targets=[file.filename], factory=factory)
+            files_bytes = factory.read(file.filename)
+            # Nuke the factory to free memory
+            factory.close()
             self.__accessor.reset()
-            return next(iter(file_data.values())).read()
+            return files_bytes
         elif isinstance(file, tarfile.TarInfo) and isinstance(self.__accessor, tarfile.TarFile):
             file_data = self.__accessor.extractfile(file)
             file_data.seek(0)

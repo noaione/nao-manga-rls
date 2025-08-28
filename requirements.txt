@@ -4,11 +4,11 @@ click==8.2.1
 ftfy==6.3.1
 
 # epub
-lxml==5.4.0
-Pillow==11.2.1
+lxml==6.0.1
+Pillow==11.3.0
 
 # rararchive
 unrar2-cffi==0.4.1
 
 # 7-zip
-py7zr==0.22.0
+py7zr==1.0.0

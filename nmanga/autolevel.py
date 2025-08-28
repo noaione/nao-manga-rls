@@ -10,27 +10,20 @@ import math
 from pathlib import Path
 from typing import Tuple
 
+from PIL import Image
+
 __all__ = (
     "create_magick_params",
     "find_local_peak",
     "try_imports",
-    "try_imports_grayscale",
 )
 
-ImageLib = None
 NumpyLib = None
 ScipySignalLib = None
-ScikitColorLib = None
 
 
 def try_imports():
-    global ImageLib, NumpyLib, ScipySignalLib
-    try:
-        from PIL import Image as PilImage
-
-        ImageLib = PilImage
-    except ImportError:
-        raise ImportError("Pillow is required to use autolevel. Please install Pillow.")
+    global NumpyLib, ScipySignalLib
 
     try:
         import numpy as np
@@ -47,42 +40,18 @@ def try_imports():
         raise ImportError("scipy is required to use autolevel. Please install scipy.")
 
 
-def try_imports_grayscale():
-    global ImageLib, NumpyLib, ScikitColorLib
-    try:
-        from PIL import Image as PilImage
-
-        ImageLib = PilImage
-    except ImportError:
-        raise ImportError("Pillow is required to use grayscale detector. Please install Pillow.")
-
-    try:
-        import numpy as np
-
-        NumpyLib = np
-    except ImportError:
-        raise ImportError("numpy is required to use grayscale detector. Please install numpy.")
-
-    try:
-        import skimage.color as skcolor
-
-        ScikitColorLib = skcolor
-    except ImportError:
-        raise ImportError("scikit-image is required to use grayscale detector. Please install scikit-image.")
-
-
 def find_local_peak(img_path: Path, upper_limit: int = 60) -> Tuple[int, Path, bool]:
     """
     Automatically determine the optimal black level for an image by finding local peaks in its histogram.
 
     Returns a tuple of (black_level, img_path, force_gray).
     """
-    global ImageLib, NumpyLib, ScipySignalLib
+    global NumpyLib, ScipySignalLib
 
-    if ImageLib is None or NumpyLib is None or ScipySignalLib is None:
+    if NumpyLib is None or ScipySignalLib is None:
         try_imports()
 
-    with ImageLib.open(img_path) as image:
+    with Image.open(img_path) as image:
         force_gray = image.mode != "L"
         if force_gray:
             image = image.convert("L")  # force grayscale
