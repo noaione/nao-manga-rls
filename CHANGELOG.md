@@ -273,7 +273,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 ## 0.17.0
 **New Features**
 - Add `nmanga autolevel` command to auto-level images via ImageMagick
-  - Based on code by `anon`
 
 ## 0.18.0
 **New Features**
@@ -291,7 +290,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 ## 0.19.0
 **New Features**
 - Add `nmanga denoise-trt` command to denoise images via TensorRT/ONNX Runtime (Experimental)
-  - Based on code by `anon`
   - Needs `onnxruntime`, `onnxruntime-gpu`, `tensorrt` and all the NVIDIA related dependencies installed
 
 **Fixes**
@@ -305,3 +303,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Fixes**
 - Make manga title optional in `nmanga shiftname` command
 - Add missing proper command handler in `nmanga denoise-trt` command
+
+**Refactor**
+- Remove `nmanga detect-grayscale` command as it's not really useful

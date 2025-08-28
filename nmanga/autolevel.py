@@ -1,5 +1,5 @@
 """
-Original code by: anon
+Original code by anon
 
 Adapted for nmanga
 """
@@ -12,7 +12,6 @@ from typing import Tuple
 
 __all__ = (
     "create_magick_params",
-    "detect_grayscale_image",
     "find_local_peak",
     "try_imports",
     "try_imports_grayscale",
@@ -114,33 +113,3 @@ def create_magick_params(black_level: int, peak_offset: int = 0) -> str:
     gamma = round(1 / gamma, 2)
     black_point_pct = round(black_level / 255 * 100, 2) + peak_offset
     return f"{black_point_pct},100%,{gamma}"
-
-
-def detect_grayscale_image(image_path: Path, sat_threshold: float = 0.08, percent_threshold: float = 0.98) -> bool:
-    """
-    Detect if an image is grayscale based on its saturation levels.
-    """
-
-    global ImageLib, NumpyLib, ScikitColorLib
-
-    if ImageLib is None or NumpyLib is None or ScikitColorLib is None:
-        try_imports_grayscale()
-
-    with ImageLib.open(image_path) as img:
-        allowed_modes = ("L", "1", "LA", "P")
-        if img.mode in allowed_modes:
-            return True
-
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-
-        rgb_array = NumpyLib.asarray(img) / 255.0
-        hsv_array = ScikitColorLib.rgb2hsv(rgb_array)
-        s_channel = hsv_array[:, :, 1]
-
-        total_pixels = img.width * img.height
-        low_sat_pixels = NumpyLib.sum(s_channel < sat_threshold)
-
-        if (low_sat_pixels / total_pixels) >= percent_threshold:
-            return True
-        return False

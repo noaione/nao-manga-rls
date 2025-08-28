@@ -405,7 +405,7 @@ def denoiser_trt(
     Denoise all images using TensorRT/ONNX Runtime (Experimental)
 
     All of this code is originally created by anon.
-    Adapted to fit into nmanga by noaione
+    Adapted to fit into nmanga by me
     """
 
     if not path_or_archive.is_dir():
