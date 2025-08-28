@@ -24,7 +24,7 @@ SOFTWARE.
 
 from enum import Enum
 from io import BytesIO
-from typing import Generator, List, Literal, Optional, Tuple, Union
+from typing import Generator, List, Optional, Tuple
 
 import pymupdf
 from PIL import Image
@@ -40,7 +40,15 @@ __all__ = (
     "load_xref_with_smask",
 )
 
-PDFExportOutput = Union[Tuple[Image.Image, Literal["png"]], Tuple[bytes, Literal["pam"]]]
+devicen_allowed_matches = ["DeviceCMYK", "Black"]
+devicen_disallowed_matches = [
+    "Blue",
+    "Red",
+    "Green",
+    "Yellow",
+    "Magenta",
+    "Cyan",
+]
 
 
 class PDFColorspaceGenerate(str, Enum):
@@ -48,7 +56,7 @@ class PDFColorspaceGenerate(str, Enum):
     CMYK = "CMYK"
     GRAY = "Gray"
 
-    def as_pymupdf(self, coerce_cmyk: bool = False) -> pymupdf.Colorspace:
+    def as_pymupdf(self, force_cmyk: bool = False) -> pymupdf.Colorspace:
         """Convert to pymupdf.Colorspace
 
         If coerce_cmyk is True, CMYK will be converted to RGB
@@ -56,7 +64,7 @@ class PDFColorspaceGenerate(str, Enum):
         if self == PDFColorspaceGenerate.RGB:
             return pymupdf.csRGB
         if self == PDFColorspaceGenerate.CMYK:
-            return pymupdf.csCMYK if not coerce_cmyk else pymupdf.csRGB
+            return pymupdf.csCMYK if force_cmyk else pymupdf.csRGB
         if self == PDFColorspaceGenerate.GRAY:
             return pymupdf.csGRAY
         raise ValueError(f"Unknown colorspace: {self}")
@@ -242,35 +250,42 @@ def generate_image_from_page(
     dpi: int,
     force_colorspace: Optional[PDFColorspaceGenerate] = None,
     with_alpha: bool = False,
-    coerce_cmyk: bool = True,
-) -> PDFExportOutput:
+    force_cmyk: bool = False,
+) -> Tuple[bytes, str]:
     """
     This function create a single image from a single page of the PDF document.
 
     Return a PIL Image or bytes (for PAM).
     """
     images = get_image_info(page, hashes=False, xrefs=True)
-    prefer_color = prefer_colorspace([img["cs-name"] for img in images if "cs-name" in img])
 
     if force_colorspace is not None:
-        real_colorspace: pymupdf.Colorspace = force_colorspace.as_pymupdf(coerce_cmyk=coerce_cmyk)
+        real_colorspace: pymupdf.Colorspace = force_colorspace.as_pymupdf(force_cmyk=force_cmyk)
     else:
-        if prefer_color == "L":
+        maybe_gray = False
+        for img in images:
+            if (
+                img["cs-name"] == "DeviceGray"
+                or (
+                    all(x in img["cs-name"] for x in devicen_allowed_matches)
+                    and not any(x in img["cs-name"] for x in devicen_disallowed_matches)
+                )
+                or img["bpc"] == 1
+            ):
+                maybe_gray = True
+        if not images:
+            # Force grayscale if no images found
+            maybe_gray = True
+        if maybe_gray:
             real_colorspace = pymupdf.csGRAY
-        elif prefer_color == "CMYK":
-            real_colorspace = pymupdf.csRGB if coerce_cmyk else pymupdf.csCMYK
         else:
-            real_colorspace = pymupdf.csRGB
+            real_colorspace = pymupdf.csCMYK if force_cmyk else pymupdf.csRGB
 
     pix = get_pixmap(page, dpi=dpi, colorspace=real_colorspace, alpha=with_alpha, annots=False)
 
-    format_determine = "pam" if pix.n > 3 else "ppm"
-
-    as_bytes_data: bytes = pix.tobytes(output=format_determine)
-    if format_determine == "pam":
-        return as_bytes_data, "pam"
-
-    return Image.open(BytesIO(as_bytes_data)), "png"
+    format_determine = "jpg" if pix.n > 3 else "png"
+    as_bytes_data: bytes = pix.tobytes(output=format_determine, jpg_quality=100)
+    return as_bytes_data, format_determine
 
 
 def determine_dpi_from_width(page: pymupdf.Page, target_width: int) -> int:
@@ -291,7 +306,7 @@ def generate_images_from_pdf(
     force_colorspace: Optional[PDFColorspaceGenerate] = None,
     with_alpha: bool = False,
     coerce_cmyk: bool = True,
-) -> Generator[PDFExportOutput, None, None]:
+) -> Generator[Tuple[bytes, str], None, None]:
     """
     This function create a single image from each page of the PDF document.
 

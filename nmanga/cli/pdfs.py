@@ -24,14 +24,17 @@ SOFTWARE.
 
 # PDF management utilities
 
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
 import click
 import pymupdf
+from PIL import Image
 from pymupdf.utils import get_image_info
 
 from .. import term
+from ..autolevel import apply_levels, find_local_peak, gamma_correction
 from ..pdfs import PDFColorspaceGenerate, determine_dpi_from_width, generate_image_from_page
 from . import options
 from ._deco import time_program
@@ -118,6 +121,13 @@ def identify_dpi(pdf_file: Path):
     default=False,
     help="Force CMYK colorspace when exporting images, this would use PAM instead of PNG",
 )
+@click.option(
+    "--levels",
+    "levels",
+    is_flag=True,
+    default=False,
+    help="Automatically adjust levels of the exported images, simulate xpdf --gray method (only for gray PNG)",
+)
 @time_program
 def export_pdf(
     pdf_file: Path,
@@ -126,6 +136,7 @@ def export_pdf(
     colorspace: Optional[PDFColorspaceGenerate],
     with_alpha: bool,
     force_cmyk: bool,
+    levels: bool,
 ):
     """
     Export PDF pages as images.
@@ -144,13 +155,42 @@ def export_pdf(
 
         page = doc.load_page(page_num)
         image, fmt_ext = generate_image_from_page(
-            page=page, dpi=dpi, force_colorspace=colorspace, with_alpha=with_alpha, coerce_cmyk=not force_cmyk
+            page=page, dpi=dpi, force_colorspace=colorspace, with_alpha=with_alpha, force_cmyk=force_cmyk
         )
         output_name = f"page{(page_num + 1):06d}.{fmt_ext}"
-        if isinstance(image, bytes):
-            (dest_output / output_name).write_bytes(image)
+        dest_file = dest_output / output_name
+
+        if levels and fmt_ext == "png":
+            # Load with PIL
+            img = Image.open(BytesIO(image))
+            if img.mode not in ("L", "LA"):
+                # not gray, save as is
+                dest_file.write_bytes(image)
+                img.close()
+                continue
+
+            # Remove alpha layer
+            if img.mode == "LA":
+                img = img.convert("L")
+            black_level, _, _ = find_local_peak(img, upper_limit=60)
+            if black_level > 60 or black_level <= 0:
+                # save
+                dest_file.write_bytes(image)
+                img.close()
+                continue
+
+            # Apply the black level with Pillow
+            gamma_correct = gamma_correction(black_level)
+            black_percent = round(black_level / 255 * 100, 2)
+
+            img = img.convert("L")  # if not yet
+            adjusted_image = apply_levels(
+                img, black_point_percent=black_percent, white_point_percent=100.0, gamma=gamma_correct
+            )
+
+            adjusted_image.save(dest_file, format="PNG")
         else:
-            image.save(dest_output / output_name, format="PNG")
+            dest_file.write_bytes(image)
 
     console.stop_status(f"Exported {page_count} pages.")
     doc.close()
