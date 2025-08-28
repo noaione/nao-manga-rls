@@ -24,6 +24,7 @@ SOFTWARE.
 
 # PDF management utilities
 
+import pprint
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -67,6 +68,8 @@ def identify_dpi(pdf_file: Path):
     console.info(f"Identifying images in {pdf_file}")
 
     doc = pymupdf.Document(str(pdf_file))
+    console.info(f"Number of pages: {doc.page_count}")
+    console.info(f"Metadata: {pprint.pformat(doc.metadata)}")
     page_count = doc.page_count
     console.info(f"Calculating DPI for {page_count} pages...")
     for page_num in range(page_count):
@@ -78,9 +81,10 @@ def identify_dpi(pdf_file: Path):
             continue
 
         maximum_width: int = max(img.get("width", 0) for img in images)
+        maximum_height: int = max(img.get("height", 0) for img in images)
 
         dpi_calc = determine_dpi_from_width(page, maximum_width)
-        console.info(f"- Page {(page_num + 1):03d}: {dpi_calc} DPI")
+        console.info(f"- Page {(page_num + 1):03d} ({maximum_width}x{maximum_height}): {dpi_calc} DPI")
 
     console.stop_status(f"Calculated DPI for {page_count} pages.")
     doc.close()
