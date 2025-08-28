@@ -18,6 +18,9 @@ __all__ = (
     "try_imports",
 )
 
+# Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
+Image.MAX_IMAGE_PIXELS = 4 * ((1024 ** 3) // 3)
+
 NumpyLib = None
 ScipySignalLib = None
 

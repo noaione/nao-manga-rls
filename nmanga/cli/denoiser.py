@@ -35,14 +35,15 @@ from typing import Optional
 from uuid import uuid4
 
 import click
+from PIL import Image
 
-from nmanga import file_handler
-
-from .. import term
+from .. import file_handler, term
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, test_or_find_magick, test_or_find_w2x_trt
 
+# Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
+Image.MAX_IMAGE_PIXELS = 4 * ((1024 ** 3) // 3)
 console = term.get_console()
 
 
@@ -423,7 +424,6 @@ def denoiser_trt(
         import numpy as np
         import onnxruntime as ort
         from einops import rearrange
-        from PIL import Image
     except ImportError as e:
         console.error(f"Missing required package: {e.name}. Please install it first.")
         return 1

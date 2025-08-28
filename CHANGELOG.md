@@ -306,3 +306,5 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Refactor**
 - Remove `nmanga detect-grayscale` command as it's not really useful
+- Raise the minimum Pillow image size
+- Bump all dependencies
