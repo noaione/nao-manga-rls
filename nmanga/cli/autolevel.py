@@ -340,3 +340,90 @@ def detect_grayscale(
             dest_path = output_dir / file.name
             file.rename(dest_path)
     console.info("Done.")
+
+
+def _forcegray_exec(command: List[str]) -> None:
+    output = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # check exit code
+    if output.returncode != 0:
+        console.error(f"Command {' '.join(command)} failed with exit code {output.returncode}")
+
+
+@click.command(
+    name="forcegray",
+    help="Force convert all images in a directory to grayscale using ImageMagick",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.magick_path
+@options.threads
+@time_program
+def force_gray(
+    path_or_archive: Path,
+    magick_path: str,
+    threads: int,
+):
+    """
+    Force convert all images in a directory to grayscale using ImageMagick.
+
+    This will always use PNG as the output format.
+    """
+
+    force_search = not _is_default_path(magick_path)
+    magick_exe = test_or_find_magick(magick_path, force_search)
+    if magick_exe is None:
+        console.error("Could not find the magick executable")
+        return 1
+    console.info("Using magick executable: {}".format(magick_exe))
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    with file_handler.MangaArchive(path_or_archive) as archive:
+        all_files: list[Path] = archive.contents()
+
+    console.info(f"Found {len(all_files)} files in the directory.")
+    commands: List[List[str]] = []
+    magick_cmd: List[str] = make_prefix_convert(magick_exe)
+
+    total_files = len(all_files)
+    for idx, img_path in enumerate(all_files):
+        console.status(f"Preparing force grayscale commands [{idx + 1}/{total_files}]...")
+        dest_path = img_path.with_suffix(".png")
+
+        cmd = [
+            *magick_cmd,
+            str(img_path),
+            "-alpha",
+            "off",
+            "-colorspace",
+            "Gray",
+            str(dest_path),
+        ]
+        commands.append(cmd)
+
+    console.stop_status("Prepared force grayscale commands.")
+
+    # Create a backup directory
+    backup_dir = path_or_archive / "backup"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    console.info(f"Using {threads} CPU threads for processing.")
+    console.status(f"Processing {len(commands)} images to grayscale...")
+    if threads <= 1:
+        for command in commands:
+            _forcegray_exec(command)
+    else:
+        with mp.Pool(threads) as pool:
+            pool.map(_forcegray_exec, commands)
+
+    console.stop_status(f"Processed {len(commands)} images to grayscale.")
+
+    # Move all original files to backup directory
+    console.status(f"Backing up original files to {backup_dir}...")
+    for img_path in all_files:
+        dest_path = backup_dir / img_path.name
+        img_path.rename(dest_path)
