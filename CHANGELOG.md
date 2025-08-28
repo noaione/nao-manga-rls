@@ -300,3 +300,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Refactor**
 - Use proper single thread when threads is set to 1
+
+### Unreleased
+**Fixes**
+- Make manga title optional in `nmanga shiftname` command

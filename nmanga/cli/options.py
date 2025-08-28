@@ -241,6 +241,13 @@ manga_title = click.option(
     required=True,
     help="The title of the series",
 )
+manga_title_optional = click.option(
+    "-t",
+    "--title",
+    "manga_title",
+    required=False,
+    help="The title of the series",
+)
 manga_publisher = click.option(
     "-pub",
     "--publisher",

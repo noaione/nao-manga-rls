@@ -53,13 +53,13 @@ console = term.get_console()
     show_default=True,
     help="The starting index to rename the files to",
 )
-@options.manga_title
+@options.manga_title_optional
 @options.manga_volume
 @time_program
 def shift_renamer(
     path_or_archive: Path,
     start_index: int,
-    manga_title: str,
+    manga_title: Optional[str],
     manga_volume: Optional[Union[int, float]],
 ):
     """
