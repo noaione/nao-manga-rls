@@ -377,7 +377,7 @@ def identify_denoise_candidates(
     is_flag=True,
     default=False,
     show_default=True,
-    help="Apply contrast stretch in pre-processing to improve results",
+    help="Apply contrast stretching in pre-processing, in some cases this could made it worse",
 )
 @click.option(
     "-bg",
