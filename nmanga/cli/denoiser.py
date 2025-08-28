@@ -43,7 +43,7 @@ from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, test_or_find_magick, test_or_find_w2x_trt
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
-Image.MAX_IMAGE_PIXELS = 4 * ((1024 ** 3) // 3)
+Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 console = term.get_console()
 
 
@@ -167,12 +167,18 @@ def denoiser(
 
     base_params = [
         str(w2x_trt_exe),
-        "--model", "cunet/art",
-        "--scale", "1",
-        "--noise", str(denoise_level),
-        "--batchSize", str(batch_size),
-        "--tileSize", str(tile_size),
-        "--precision", str(precision_enum),
+        "--model",
+        "cunet/art",
+        "--scale",
+        "1",
+        "--noise",
+        str(denoise_level),
+        "--batchSize",
+        str(batch_size),
+        "--tileSize",
+        str(tile_size),
+        "--precision",
+        str(precision_enum),
         "render",
     ]
     final_params = ["-o", str(dest_dir)]
@@ -182,7 +188,8 @@ def denoiser(
     for idx, image in enumerate(all_files):
         params = [
             *base_params,
-            "-i", str(image),
+            "-i",
+            str(image),
         ]
         if tta:
             params.append("--tta")
@@ -421,9 +428,9 @@ def denoiser_trt(
     # Try importing stuff here
     console.info("Importing required packages...")
     try:
-        import numpy as np
-        import onnxruntime as ort
-        from einops import rearrange
+        import numpy as np  # type: ignore
+        import onnxruntime as ort  # type: ignore
+        from einops import rearrange  # type: ignore
     except ImportError as e:
         console.error(f"Missing required package: {e.name}. Please install it first.")
         return 1
@@ -473,9 +480,7 @@ def denoiser_trt(
         padded_width = int(tile_count_width * tile_size)
         background_tuple = (0, 0, 0) if background == "black" else (255, 255, 255)
 
-        new_padded_image = Image.new(
-            "RGB", (padded_width, padded_height), background_tuple
-        )
+        new_padded_image = Image.new("RGB", (padded_width, padded_height), background_tuple)
         new_padded_image.paste(img, (0, 0))
 
         # Pre-process
@@ -510,13 +515,7 @@ def denoiser_trt(
         num_chunks = padded_tiles.shape[0]
 
         for i in range(0, num_chunks, batch_size):
-            batch_of_chunks = padded_tiles[
-                i : (
-                    i + batch_size
-                    if i + batch_size < num_chunks
-                    else num_chunks
-                )
-            ]
+            batch_of_chunks = padded_tiles[i : (i + batch_size if i + batch_size < num_chunks else num_chunks)]
 
             # infer
             model_output = sess.run([output_name], {input_name: batch_of_chunks})
@@ -536,9 +535,7 @@ def denoiser_trt(
         # post process
         if contrast_stretch:
             postprocessed_array = reconstructed_image_with_pad.astype(np.float16)
-            postprocessed_array = (
-                postprocessed_array - np.min(postprocessed_array)
-            ) / np.ptp(postprocessed_array)
+            postprocessed_array = (postprocessed_array - np.min(postprocessed_array)) / np.ptp(postprocessed_array)
         else:
             postprocessed_array = np.clip(reconstructed_image_with_pad, 0.0, 1.0)
 

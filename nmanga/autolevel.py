@@ -19,7 +19,7 @@ __all__ = (
 )
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
-Image.MAX_IMAGE_PIXELS = 4 * ((1024 ** 3) // 3)
+Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 
 NumpyLib = None
 ScipySignalLib = None
@@ -29,14 +29,14 @@ def try_imports():
     global NumpyLib, ScipySignalLib
 
     try:
-        import numpy as np
+        import numpy as np  # type: ignore
 
         NumpyLib = np
     except ImportError:
         raise ImportError("numpy is required to use autolevel. Please install numpy.")
 
     try:
-        from scipy import signal
+        from scipy import signal  # type: ignore
 
         ScipySignalLib = signal
     except ImportError:
