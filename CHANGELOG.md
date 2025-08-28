@@ -301,6 +301,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 **Refactor**
 - Use proper single thread when threads is set to 1
 
-### Unreleased
+### Unversioned
 **Fixes**
 - Make manga title optional in `nmanga shiftname` command
+- Add missing proper command handler in `nmanga denoise-trt` command

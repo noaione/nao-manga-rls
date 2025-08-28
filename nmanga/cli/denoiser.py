@@ -325,6 +325,7 @@ def identify_denoise_candidates(
 @click.command(
     name="denoise-trt",
     help="(Experimental) Denoise all images using TensorRT/ONNX Runtime",
+    cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @click.option(
