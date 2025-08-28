@@ -24,13 +24,14 @@ SOFTWARE.
 
 from enum import Enum
 from io import BytesIO
-from typing import Generator, List, Optional, Tuple
+from typing import Generator, List, Literal, Optional, Tuple, Union
 
 import pymupdf
 from PIL import Image
 from pymupdf.utils import get_image_info, get_pixmap
 
 __all__ = (
+    "PDFColorspaceGenerate",
     "determine_dpi_from_width",
     "extract_images_from_pdf",
     "generate_image_from_page",
@@ -39,17 +40,23 @@ __all__ = (
     "load_xref_with_smask",
 )
 
+PDFExportOutput = Union[Tuple[Image.Image, Literal["png"]], Tuple[bytes, Literal["pam"]]]
+
 
 class PDFColorspaceGenerate(str, Enum):
     RGB = "RGB"
     CMYK = "CMYK"
     GRAY = "Gray"
 
-    def as_pymupdf(self) -> pymupdf.Colorspace:
+    def as_pymupdf(self, coerce_cmyk: bool = False) -> pymupdf.Colorspace:
+        """Convert to pymupdf.Colorspace
+
+        If coerce_cmyk is True, CMYK will be converted to RGB
+        """
         if self == PDFColorspaceGenerate.RGB:
             return pymupdf.csRGB
         if self == PDFColorspaceGenerate.CMYK:
-            return pymupdf.csCMYK
+            return pymupdf.csCMYK if not coerce_cmyk else pymupdf.csRGB
         if self == PDFColorspaceGenerate.GRAY:
             return pymupdf.csGRAY
         raise ValueError(f"Unknown colorspace: {self}")
@@ -120,12 +127,25 @@ def prefer_colorspace(colorspaces: List[str]) -> str:
     if not colorspaces:
         return "RGB"  # Default to RGB
 
-    if "DeviceRGB" in colorspaces:
+    def _determine(cs: str) -> Optional[int]:
+        if "DeviceRGB" in cs:
+            return 1
+        if "DeviceCMYK" in cs:
+            return 2
+        if "DeviceGray" in cs:
+            return 3
+        return None
+
+    colorspaces_coerce = sorted((cs for cs in (_determine(c) for c in colorspaces) if cs is not None))
+    if colorspaces_coerce:
+        if colorspaces_coerce[0] == 1:
+            return "RGB"
+        if colorspaces_coerce[0] == 2:
+            return "CMYK"
+        if colorspaces_coerce[0] == 3:
+            return "L"
+    if "None" in colorspaces:
         return "RGB"
-    if "DeviceCMYK" in colorspaces:
-        return "CMYK"
-    if "DeviceGray" in colorspaces:
-        return "L"
     raise ValueError(f"Unknown colorspaces: {colorspaces}")
 
 
@@ -218,32 +238,39 @@ def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Imag
 
 
 def generate_image_from_page(
-    page: pymupdf.Page, dpi: int, force_colorspace: Optional[PDFColorspaceGenerate] = None, with_alpha: bool = False
-) -> Image.Image:
+    page: pymupdf.Page,
+    dpi: int,
+    force_colorspace: Optional[PDFColorspaceGenerate] = None,
+    with_alpha: bool = False,
+    coerce_cmyk: bool = True,
+) -> PDFExportOutput:
     """
     This function create a single image from a single page of the PDF document.
+
+    Return a PIL Image or bytes (for PAM).
     """
     images = get_image_info(page, hashes=False, xrefs=True)
     prefer_color = prefer_colorspace([img["cs-name"] for img in images if "cs-name" in img])
 
     if force_colorspace is not None:
-        real_colorspace: pymupdf.Colorspace = force_colorspace.as_pymupdf()
+        real_colorspace: pymupdf.Colorspace = force_colorspace.as_pymupdf(coerce_cmyk=coerce_cmyk)
     else:
         if prefer_color == "L":
             real_colorspace = pymupdf.csGRAY
         elif prefer_color == "CMYK":
-            real_colorspace = pymupdf.csCMYK
+            real_colorspace = pymupdf.csRGB if coerce_cmyk else pymupdf.csCMYK
         else:
             real_colorspace = pymupdf.csRGB
 
-    pix = get_pixmap(
-        page,
-        dpi=dpi,
-        colorspace=real_colorspace,
-        alpha=with_alpha,
-    )
+    pix = get_pixmap(page, dpi=dpi, colorspace=real_colorspace, alpha=with_alpha, annots=False)
 
-    return Image.open(BytesIO(pix.tobytes()))
+    format_determine = "pam" if pix.n > 3 else "ppm"
+
+    as_bytes_data: bytes = pix.tobytes(output=format_determine)
+    if format_determine == "pam":
+        return as_bytes_data, "pam"
+
+    return Image.open(BytesIO(as_bytes_data)), "png"
 
 
 def determine_dpi_from_width(page: pymupdf.Page, target_width: int) -> int:
@@ -259,8 +286,12 @@ def determine_dpi_from_width(page: pymupdf.Page, target_width: int) -> int:
 
 
 def generate_images_from_pdf(
-    doc: pymupdf.Document, dpi: int, force_colorspace: Optional[PDFColorspaceGenerate] = None, with_alpha: bool = False
-) -> Generator[Image.Image, None, None]:
+    doc: pymupdf.Document,
+    dpi: int,
+    force_colorspace: Optional[PDFColorspaceGenerate] = None,
+    with_alpha: bool = False,
+    coerce_cmyk: bool = True,
+) -> Generator[PDFExportOutput, None, None]:
     """
     This function create a single image from each page of the PDF document.
 
@@ -269,10 +300,10 @@ def generate_images_from_pdf(
 
     If you want to extract images from the PDF, use `extract_images_from_pdf` instead.
 
-    This return a generator that yields PIL Images.
+    This return a generator that yields PIL Images or bytes (for PAM).
     """
 
     total_pages = len(doc)
     for page_num in range(total_pages):
         page = doc.load_page(page_num)
-        yield generate_image_from_page(page, dpi, force_colorspace, with_alpha)
+        yield generate_image_from_page(page, dpi, force_colorspace, with_alpha, coerce_cmyk)

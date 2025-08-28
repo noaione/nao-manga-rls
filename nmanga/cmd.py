@@ -38,6 +38,7 @@ from .cli.image_optimizer import image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
+from .cli.pdfs import pdf_manager
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
 from .cli.spreads_manager import spreads
@@ -101,6 +102,7 @@ main.add_command(denoiser)
 main.add_command(denoiser_trt)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
+main.add_command(pdf_manager)
 
 
 if __name__ == "__main__":
