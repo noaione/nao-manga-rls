@@ -1,0 +1,278 @@
+"""
+MIT License
+
+Copyright (c) 2022-present noaione
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+from enum import Enum
+from io import BytesIO
+from typing import Generator, List, Optional, Tuple
+
+import pymupdf
+from PIL import Image
+from pymupdf.utils import get_image_info, get_pixmap
+
+__all__ = (
+    "determine_dpi_from_width",
+    "extract_images_from_pdf",
+    "generate_image_from_page",
+    "generate_images_from_pdf",
+    "load_xref_image",
+    "load_xref_with_smask",
+)
+
+
+class PDFColorspaceGenerate(str, Enum):
+    RGB = "RGB"
+    CMYK = "CMYK"
+    GRAY = "Gray"
+
+    def as_pymupdf(self) -> pymupdf.Colorspace:
+        if self == PDFColorspaceGenerate.RGB:
+            return pymupdf.csRGB
+        if self == PDFColorspaceGenerate.CMYK:
+            return pymupdf.csCMYK
+        if self == PDFColorspaceGenerate.GRAY:
+            return pymupdf.csGRAY
+        raise ValueError(f"Unknown colorspace: {self}")
+
+
+def load_xref_image(doc: pymupdf.Document, xref: int) -> Tuple[Image.Image, str]:
+    """
+    Load image from xref
+    """
+
+    base_image = doc.extract_image(xref)
+    image_bytes = base_image["image"]
+    image_ext = base_image["ext"]
+    image = Image.open(BytesIO(image_bytes))
+    return image, image_ext
+
+
+def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int) -> Tuple[Image.Image, str]:
+    """
+    Handle image with smask (soft mask for transparency)
+
+    Based on: https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-images/extract-from-pages.py
+    """
+
+    if smask == 0:
+        return load_xref_image(doc, xref)
+
+    base_image = pymupdf.Pixmap(doc.extract_image(xref)["image"])
+    pix0 = base_image
+    if pix0.alpha:
+        pix0 = pymupdf.Pixmap(pix0, 0)  # remove alpha channel
+    mask = pymupdf.Pixmap(doc.extract_image(smask)["image"])
+
+    try:
+        pix = pymupdf.Pixmap(pix0, mask)  # apply soft mask
+    except:  # noqa: E722
+        # Fallback: just use the base image
+        pix = base_image
+
+    if pix0.n > 3:
+        ext = "pam"
+    else:
+        ext = "png"
+    image_bytes = pix.tobytes()
+    image = Image.open(BytesIO(image_bytes))
+
+    # Clean up
+    del base_image
+    del pix0
+    del mask
+    del pix
+
+    return image, ext
+
+
+def prefer_colorspace(colorspaces: List[str]) -> str:
+    """
+    Given a list of colorspaces, return the preferred one.
+
+    Preference order:
+    1. RGB
+    3. CMYK
+    2. Gray
+
+    Returns the corresponding PIL mode string.
+    """
+
+    if not colorspaces:
+        return "RGB"  # Default to RGB
+
+    if "DeviceRGB" in colorspaces:
+        return "RGB"
+    if "DeviceCMYK" in colorspaces:
+        return "CMYK"
+    if "DeviceGray" in colorspaces:
+        return "L"
+    raise ValueError(f"Unknown colorspaces: {colorspaces}")
+
+
+def has_alpha(images: List[Image.Image]) -> bool:
+    """
+    Check if any image has alpha channel
+    """
+
+    for img in images:
+        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+            return True
+    return False
+
+
+def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Image, str], None, None]:
+    """
+    This function create a single image from each page of the PDF document.
+
+    The name "extract" is correct since we are actually extracting images from the PDF
+    but we did some special handling to make sure we get a full-page image in case
+    there is multiple images overlapping on the page.
+
+    If you want to make an image from each page, use `generate_images_from_pdf` instead.
+
+    This is mostly used for PDF from DENPA and other which use PDF as a container for images.
+
+    This return a generator that yields tuples of (PIL Image, image extension).
+    """
+
+    total_pages = len(doc)
+    for page_num in range(total_pages):
+        page = doc.load_page(page_num)
+
+        # Image list since this contains the smask info
+        image_lists = page.get_images(full=False)
+        # The detailed image info
+        image_infos = get_image_info(page, hashes=False, xrefs=True)
+
+        # No images? Create padding
+        if len(image_infos) == 0:
+            # No images on this page, create a blank white image with the same size as the page
+            mat = pymupdf.Matrix(1, 1)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            img_data = pix.tobytes()
+            image = Image.frombytes("RGB", (pix.width, pix.height), img_data)
+            yield image, "png"
+            continue
+
+        # Single image? Return it directly
+        if len(image_infos) == 1:
+            xref = image_infos[0]["xref"]
+            smask = image_lists[0][1]
+            image, ext = load_xref_with_smask(doc, xref, smask)
+            yield image, ext
+            continue
+
+        # Multiple images? We need to composite them together
+        # Create a blank white image with the same size as the page
+        mat = pymupdf.Matrix(1, 1)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+
+        # load all images first
+        images = [load_xref_with_smask(doc, info["xref"], image_lists[idx][1]) for idx, info in enumerate(image_infos)]
+        prefer_spaces = prefer_colorspace([info["cs-name"] for info in image_infos if "cs-name" in info])
+
+        # Check if any image has alpha channel
+        if has_alpha([img for img, _ in images]):
+            if prefer_spaces == "CMYK":
+                prefer_spaces = "RGB"
+            prefer_spaces += "A"  # Add alpha channel
+
+        composite = Image.new(
+            prefer_spaces, (pix.width, pix.height), (255, 255, 255, 0) if "A" in prefer_spaces else (255, 255, 255)
+        )
+
+        for idx, (img, _) in enumerate(images):
+            # We paste the image at the proper position from the
+            # Convert to the preferred colorspace
+            if img.mode != prefer_spaces:
+                img = img.convert(prefer_spaces)
+
+            infos = image_infos[idx]
+            bounding = pymupdf.Rect(*infos["bbox"])
+
+            # TODO: Apply the matrix to the image first
+
+            # Paste the image onto the composite
+            composite.paste(img, (int(bounding.x0), int(bounding.y0)), img if "A" in prefer_spaces else None)
+        yield composite, "png"
+
+
+def generate_image_from_page(
+    page: pymupdf.Page, dpi: int, force_colorspace: Optional[PDFColorspaceGenerate] = None, with_alpha: bool = False
+) -> Image.Image:
+    """
+    This function create a single image from a single page of the PDF document.
+    """
+    images = get_image_info(page, hashes=False, xrefs=True)
+    prefer_color = prefer_colorspace([img["cs-name"] for img in images if "cs-name" in img])
+
+    if force_colorspace is not None:
+        real_colorspace: pymupdf.Colorspace = force_colorspace.as_pymupdf()
+    else:
+        if prefer_color == "L":
+            real_colorspace = pymupdf.csGRAY
+        elif prefer_color == "CMYK":
+            real_colorspace = pymupdf.csCMYK
+        else:
+            real_colorspace = pymupdf.csRGB
+
+    pix = get_pixmap(
+        page,
+        dpi=dpi,
+        colorspace=real_colorspace,
+        alpha=with_alpha,
+    )
+
+    return Image.open(BytesIO(pix.tobytes()))
+
+
+def determine_dpi_from_width(page: pymupdf.Page, target_width: int) -> int:
+    """
+    Determine the DPI to use to render the page to match the target width.
+
+    This is a simple calculation based on the page width in points (1/72 inch).
+    """
+
+    page_width_points = page.rect.width  # Width in points
+    dpi = int((target_width / page_width_points) * 72)  # Convert points to inches and scale to target width
+    return max(dpi, 72)  # Ensure a minimum of 72 DPI
+
+
+def generate_images_from_pdf(
+    doc: pymupdf.Document, dpi: int, force_colorspace: Optional[PDFColorspaceGenerate] = None, with_alpha: bool = False
+) -> Generator[Image.Image, None, None]:
+    """
+    This function create a single image from each page of the PDF document.
+
+    This is mostly used for PDF that are not image-based, such as scanned documents or
+    PDF generated from text.
+
+    If you want to extract images from the PDF, use `extract_images_from_pdf` instead.
+
+    This return a generator that yields PIL Images.
+    """
+
+    total_pages = len(doc)
+    for page_num in range(total_pages):
+        page = doc.load_page(page_num)
+        yield generate_image_from_page(page, dpi, force_colorspace, with_alpha)
