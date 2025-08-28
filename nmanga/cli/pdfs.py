@@ -84,7 +84,24 @@ def identify_dpi(pdf_file: Path):
         maximum_height: int = max(img.get("height", 0) for img in images)
 
         dpi_calc = determine_dpi_from_width(page, maximum_width)
-        console.info(f"- Page {(page_num + 1):03d} ({maximum_width}x{maximum_height}): {dpi_calc} DPI")
+        extra_info = ""
+        if len(images) == 1:
+            extra_info = f", {images[0].get('cs-name', 'unknown')}"
+        console.info(f"- Page {(page_num + 1):03d} ({maximum_width}x{maximum_height}{extra_info}): {dpi_calc} DPI")
+        if len(images) > 1:
+            console.info(f"   Composite of {len(images)} images:")
+            for img_idx, img in enumerate(images):
+                img_width = img.get("width", 0)
+                img_height = img.get("height", 0)
+                colorspace = img.get("cs-name", "unknown")
+                bounding_box = img.get("bbox", None)
+                transform_mtrx = img.get("transform", None)
+                img_dpi = determine_dpi_from_width(page, img_width)
+                console.info(f"   - Image {img_idx + 1:02d}: {img_width}x{img_height}, {colorspace}, {img_dpi} DPI")
+                if bounding_box:
+                    console.info(f"     Bounding box (x0, y0, w, h): {bounding_box}")
+                if transform_mtrx:
+                    console.info(f"     Transform matrix: {transform_mtrx}")
 
     console.stop_status(f"Calculated DPI for {page_count} pages.")
     doc.close()
