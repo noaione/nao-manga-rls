@@ -32,7 +32,7 @@ import multiprocessing as mp
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import click
 
@@ -258,11 +258,13 @@ def _forcegray_exec(command: List[str]) -> None:
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
+@options.dest_output(optional=True)
 @options.magick_path
 @options.threads
 @time_program
 def force_gray(
     path_or_archive: Path,
+    dest_output: Optional[Path],
     magick_path: str,
     threads: int,
 ):
@@ -294,7 +296,12 @@ def force_gray(
     total_files = len(all_files)
     for idx, img_path in enumerate(all_files):
         console.status(f"Preparing force grayscale commands [{idx + 1}/{total_files}]...")
-        dest_path = img_path.with_suffix(".png")
+        if dest_output is not None and dest_output != path_or_archive:
+            # Use the destination output directory
+            dest_output.mkdir(parents=True, exist_ok=True)
+            dest_path = dest_output / img_path.with_suffix(".png").name
+        else:
+            dest_path = img_path.with_suffix(".png")
 
         cmd = [
             *magick_cmd,
@@ -325,7 +332,9 @@ def force_gray(
     console.stop_status(f"Processed {len(commands)} images to grayscale.")
 
     # Move all original files to backup directory
-    console.status(f"Backing up original files to {backup_dir}...")
-    for img_path in all_files:
-        dest_path = backup_dir / img_path.name
-        img_path.rename(dest_path)
+    if dest_output is None or dest_output == path_or_archive:
+        console.status(f"Backing up original files to {backup_dir}...")
+        for img_path in all_files:
+            dest_path = backup_dir / img_path.name
+            img_path.rename(dest_path)
+        console.stop_status(f"Backed up original files to {backup_dir}.")
