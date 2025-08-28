@@ -88,14 +88,7 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@click.option(
-    "-o",
-    "--output",
-    "dest_dir",
-    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    required=True,
-    help="The output directory to save the processed images",
-)
+@options.dest_dir
 @click.option(
     "-ul",
     "--upper-limit",

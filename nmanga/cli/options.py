@@ -308,3 +308,12 @@ threads = click.option(
     show_default=True,
     help="The number of threads to use for processing",
 )
+
+dest_dir = click.option(
+    "-o",
+    "--output",
+    "dest_dir",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    required=True,
+    help="The output directory to save the results",
+)

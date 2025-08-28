@@ -62,14 +62,7 @@ def get_precision_enum(precision: str) -> str:
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@click.option(
-    "-o",
-    "--output",
-    "dest_dir",
-    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    required=True,
-    help="The output directory to save the processed images",
-)
+@options.dest_dir
 @click.option(
     "-dn",
     "--denoise-level",
@@ -335,14 +328,7 @@ def identify_denoise_candidates(
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@click.option(
-    "-o",
-    "--output",
-    "dest_dir",
-    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    required=True,
-    help="The output directory to save the processed images",
-)
+@options.dest_dir
 @click.option(
     "-m",
     "--model",
