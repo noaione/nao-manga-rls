@@ -31,7 +31,7 @@ import click
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
-from .cli.autolevel import autolevel, detect_grayscale, force_gray
+from .cli.autolevel import autolevel, force_gray
 from .cli.config import cli_config
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.image_optimizer import image_optimizer
@@ -96,7 +96,6 @@ main.add_command(image_tagging_raw)
 main.add_command(image_optimizer)
 main.add_command(timewizard_modify)
 main.add_command(autolevel)
-main.add_command(detect_grayscale)
 main.add_command(force_gray)
 main.add_command(denoiser)
 main.add_command(denoiser_trt)
