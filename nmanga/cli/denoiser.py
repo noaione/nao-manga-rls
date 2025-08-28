@@ -62,7 +62,7 @@ def get_precision_enum(precision: str) -> str:
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@options.dest_dir
+@options.dest_output()
 @click.option(
     "-dn",
     "--denoise-level",
@@ -112,7 +112,7 @@ def get_precision_enum(precision: str) -> str:
 @time_program
 def denoiser(
     path_or_archive: Path,
-    dest_dir: Path,
+    dest_output: Path,
     denoise_level: int,
     batch_size: int,
     tile_size: int,
@@ -146,14 +146,14 @@ def denoiser(
     console.info(f"Using precision: {precision}")
     console.info(f"TTA enabled?: {tta}")
 
-    console.info("Destination directory: {}".format(dest_dir))
+    console.info("Destination directory: {}".format(dest_output))
 
     is_continue = console.confirm("Proceed with denoising?")
     if not is_continue:
         console.info("Aborting denoise.")
         return 0
 
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_output.mkdir(parents=True, exist_ok=True)
 
     precision_enum = get_precision_enum(precision)
 
@@ -173,7 +173,7 @@ def denoiser(
         str(precision_enum),
         "render",
     ]
-    final_params = ["-o", str(dest_dir)]
+    final_params = ["-o", str(dest_output)]
 
     console.status("Denoising images...")
     errors = []
@@ -328,7 +328,7 @@ def identify_denoise_candidates(
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@options.dest_dir
+@options.dest_output()
 @click.option(
     "-m",
     "--model",
@@ -386,7 +386,7 @@ def identify_denoise_candidates(
 @time_program
 def denoiser_trt(
     path_or_archive: Path,
-    dest_dir: Path,
+    dest_output: Path,
     model_path: Path,
     device_id: int,
     batch_size: int,
@@ -443,12 +443,12 @@ def denoiser_trt(
     )
 
     total_files = len(all_files)
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_output.mkdir(parents=True, exist_ok=True)
 
     console.status(f"Denoising images... [???/{total_files}]")
     for idx, image_file in enumerate(all_files):
         console.status(f"Denoising images... [{idx + 1}/{total_files}]")
-        output_path = dest_dir / f"{image_file.stem}.png"
+        output_path = dest_output / f"{image_file.stem}.png"
 
         img_file = Image.open(image_file)
         orig_img_mode = img_file.mode

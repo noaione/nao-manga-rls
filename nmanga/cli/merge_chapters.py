@@ -32,6 +32,7 @@ from typing import List, Optional
 import click
 
 from .. import exporter, file_handler, term
+from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
 
@@ -59,14 +60,7 @@ def _clean_filename(output_name: Optional[str]) -> Optional[str]:
     nargs=-1,
     type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
 )
-@click.option(
-    "-o",
-    "--output",
-    "output_file",
-    required=False,
-    default=None,
-    help="Override the output file, will default to first input if not provided!",
-)
+@options.dest_output(optional=True, dir_okay=False, file_okay=True)
 @time_program
 def merge_chapters(archives: List[Path], output_file: Optional[str] = None):  # pragma: no cover
     if len(archives) < 2:

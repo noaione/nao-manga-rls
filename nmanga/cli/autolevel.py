@@ -88,7 +88,7 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@options.dest_dir
+@options.dest_output()
 @click.option(
     "-ul",
     "--upper-limit",
@@ -121,7 +121,7 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
 @time_program
 def autolevel(
     path_or_archive: Path,
-    dest_dir: Path,
+    dest_output: Path,
     upper_limit: int,
     peak_offset: int,
     image_fmt: str,
@@ -165,8 +165,8 @@ def autolevel(
     to_be_copied: List[Path] = []
     magick_cmd: List[str] = make_prefix_convert(magick_exe)
 
-    console.info(f"Saving processed images to: {dest_dir}")
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    console.info(f"Saving processed images to: {dest_output}")
+    dest_output.mkdir(parents=True, exist_ok=True)
 
     dumped_data_temp = []
     for black_level, img_path, force_gray in results:
@@ -200,7 +200,7 @@ def autolevel(
 
         params = create_magick_params(black_level, peak_offset)
         image_name = img_path.stem + determine_image_format(img_path, image_fmt)
-        dest_path = dest_dir / image_name
+        dest_path = dest_output / image_name
 
         cmd = [
             *magick_cmd,
@@ -226,7 +226,7 @@ def autolevel(
     console.status(f"Copying {len(to_be_copied)} images without autolevel...")
     # Do copying first
     for img_path in to_be_copied:
-        dest_path = dest_dir / img_path.name
+        dest_path = dest_output / img_path.name
         if dest_path.exists():
             console.warning(f"Skipping existing file: {dest_path}")
             continue

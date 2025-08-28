@@ -309,11 +309,16 @@ threads = click.option(
     help="The number of threads to use for processing",
 )
 
-dest_dir = click.option(
-    "-o",
-    "--output",
-    "dest_dir",
-    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    required=True,
-    help="The output directory to save the results",
-)
+
+def dest_output(file_okay: bool = False, dir_okay: bool = True, optional: bool = False):
+    if not file_okay and not dir_okay:
+        raise click.UsageError("You can't disable both file and folder")
+
+    return click.option(
+        "-o",
+        "--output",
+        "dest_output",
+        type=click.Path(file_okay=file_okay, dir_okay=dir_okay, path_type=Path),
+        required=not optional,
+        help="The output directory/file to save the results",
+    )
