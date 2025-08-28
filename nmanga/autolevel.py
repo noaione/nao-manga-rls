@@ -97,41 +97,25 @@ def create_magick_params(black_level: int, peak_offset: int = 0) -> str:
     return f"{black_point_pct},100%,{gamma}"
 
 
-def apply_levels(image: Image.Image, black_point_percent=12.4, white_point_percent=100.0, gamma=1.12):
+def apply_levels(image: Image.Image, black_point: float, white_point: float, gamma: float):
     """
     Apply level adjustments similar to ImageMagick's -level command.
-
-    Args:
-        image: PIL Image object
-        black_point_percent: Black point as percentage (0-100)
-        white_point_percent: White point as percentage (0-100)
-        gamma: Gamma correction value
-
-    Returns:
-        PIL Image object with levels applied
     """
+    delta = white_point - black_point
+    inv_gamma = 1.0 / gamma
 
-    # Convert percentages to 0-255 range
-    black_point = int((black_point_percent / 100.0) * 255)
-    white_point = int((white_point_percent / 100.0) * 255)
-
-    # Create lookup table for level adjustment
-    def level_adjust(value):
-        # Clamp input to black/white points
-        if value <= black_point:
+    def lookup_table(value: int):
+        if value < black_point:
             return 0
-        elif value >= white_point:
+        elif value > white_point:
             return 255
         else:
-            # Normalize to 0-1 range
-            normalized = (value - black_point) / (white_point - black_point)
-            # Apply gamma correction
-            gamma_corrected = normalized ** (1.0 / gamma)
-            # Scale back to 0-255
-            return int(gamma_corrected * 255)
+            normalized = (value - black_point) / delta
+            gamma_corrected = math.pow(normalized, inv_gamma)
+            return round(gamma_corrected * 255)
 
     # Create lookup table
-    lookup_table = [level_adjust(i) for i in range(256)]
+    lut_adjustments = [lookup_table(i) for i in range(256)]
 
     # Apply the lookup table
-    return image.point(lookup_table)
+    return image.point(lut_adjustments * len(image.getbands()))

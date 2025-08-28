@@ -181,12 +181,9 @@ def export_pdf(
 
             # Apply the black level with Pillow
             gamma_correct = gamma_correction(black_level)
-            black_percent = round(black_level / 255 * 100, 2)
 
             img = img.convert("L")  # if not yet
-            adjusted_image = apply_levels(
-                img, black_point_percent=black_percent, white_point_percent=100.0, gamma=gamma_correct
-            )
+            adjusted_image = apply_levels(img, black_point=black_level, white_point=255, gamma=gamma_correct)
 
             adjusted_image.save(dest_file, format="PNG")
         else:

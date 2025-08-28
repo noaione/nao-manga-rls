@@ -35,11 +35,10 @@ from pathlib import Path
 from typing import List, Optional
 
 import click
+from PIL import Image
 
-from nmanga import file_handler
-
-from .. import term
-from ..autolevel import create_magick_params, find_local_peak
+from .. import file_handler, term
+from ..autolevel import apply_levels, create_magick_params, find_local_peak, gamma_correction
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -243,6 +242,108 @@ def autolevel(
             pool.map(_autolevel_exec, commands)
 
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
+
+
+def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest_output: Path, image_fmt: str) -> None:
+    img = Image.open(img_path)
+    black_level, _, _ = find_local_peak(img, upper_limit=60)
+
+    if black_level <= 0 or black_level > upper_limit:
+        # No need to adjust
+        img.close()
+
+        dest_path = dest_output / img_path.name
+        if dest_path.exists():
+            console.warning(f"Skipping existing file: {dest_path}")
+            return
+        shutil.copy2(img_path, dest_path)
+        return
+
+    dest_path = dest_output / img_path.with_suffix(f".{image_fmt}").name
+    if dest_path.exists():
+        console.warning(f"Skipping existing file: {dest_path}")
+        return
+
+    # Apply the black level with Pillow
+    img = img.convert("L")  # if not yet
+    gamma_correct = gamma_correction(black_level)
+
+    adjusted_img = apply_levels(img, black_point=black_level + peak_offset, white_point=255, gamma=gamma_correct)
+
+    # if jpeg, set quality to 95
+    params = {}
+    if image_fmt == "jpg":
+        params["quality"] = 95
+    adjusted_img.save(dest_path, format=image_fmt.upper(), **params)
+
+
+@click.command(
+    name="autolevel2",
+    help="Automatically adjust the levels of images in a directory using Pillow (experimental)",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output()
+@click.option(
+    "-ul",
+    "--upper-limit",
+    "upper_limit",
+    type=click.IntRange(1, 255),
+    default=60,
+    show_default=True,
+    help="The upper limit for finding local peaks in the histogram",
+)
+@click.option(
+    "-po",
+    "--peak-offset",
+    "peak_offset",
+    type=click.IntRange(-100, 100),
+    default=0,
+    show_default=True,
+    help="The offset to add to the detected black level percentage",
+)
+@click.option(
+    "-f",
+    "--format",
+    "image_fmt",
+    default="png",
+    show_default=True,
+    type=click.Choice(["png", "jpg"]),
+    help="The format of the output image",
+)
+@options.threads
+@time_program
+def autolevel2(
+    path_or_archive: Path,
+    dest_output: Path,
+    upper_limit: int,
+    peak_offset: int,
+    image_fmt: str,
+    threads: int,
+):  # pragma: no cover
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    total_files = len(all_files)
+    console.info(f"Found {total_files} files in the directory.")
+
+    console.status("Processing images with autolevel...")
+    dest_output.mkdir(parents=True, exist_ok=True)
+    if threads <= 1:
+        for idx, img_path in enumerate(all_files):
+            console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
+            _autolevel2_wrapper(img_path, upper_limit, peak_offset, dest_output, image_fmt)
+    else:
+        with mp.Pool(threads) as pool:
+            pool.starmap(
+                _autolevel2_wrapper,
+                [(img_path, upper_limit, peak_offset, dest_output, image_fmt) for img_path in all_files],
+            )
+    console.stop_status(f"Processed {total_files} images with autolevel.")
 
 
 def _forcegray_exec(command: List[str]) -> None:
