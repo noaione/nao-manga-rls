@@ -143,8 +143,7 @@ def denoiser(
             param_hint="path_or_archive",
         )
 
-    with file_handler.MangaArchive(path_or_archive) as archive:
-        all_files: list[Path] = archive.contents()
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
 
     total_files = len(all_files)
     console.info(f"Found {total_files} files in the directory.")
@@ -422,8 +421,7 @@ def denoiser_trt(
             param_hint="path_or_archive",
         )
 
-    with file_handler.MangaArchive(path_or_archive) as archive:
-        all_files: list[Path] = archive.contents()
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
 
     # Try importing stuff here
     console.info("Importing required packages...")

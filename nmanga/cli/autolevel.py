@@ -152,9 +152,7 @@ def autolevel(
             param_hint="path_or_archive",
         )
 
-    with file_handler.MangaArchive(path_or_archive) as archive:
-        all_files: list[Path] = archive.contents()
-
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
     console.info(f"Found {len(all_files)} files in the directory.")
 
     is_continue = console.confirm("Proceed with autoleveling calculation")
@@ -294,8 +292,7 @@ def force_gray(
             param_hint="path_or_archive",
         )
 
-    with file_handler.MangaArchive(path_or_archive) as archive:
-        all_files: list[Path] = archive.contents()
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
 
     console.info(f"Found {len(all_files)} files in the directory.")
     commands: List[List[str]] = []
