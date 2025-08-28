@@ -35,7 +35,7 @@ from pymupdf.utils import get_image_info
 
 from .. import term
 from ..autolevel import apply_levels, find_local_peak, gamma_correction
-from ..pdfs import PDFColorspaceGenerate, determine_dpi_from_width, generate_image_from_page
+from ..pdfs import PDFColorspaceGenerate, determine_dpi_from_width, extract_images_from_pdf, generate_image_from_page
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -191,3 +191,53 @@ def export_pdf(
 
     console.stop_status(f"Exported {page_count} pages.")
     doc.close()
+
+
+@pdf_manager.command(
+    name="extract",
+    help="Extract images from PDF",
+    cls=NMangaCommandHandler,
+)
+@pdf_file
+@options.dest_output()
+@click.option(
+    "--no-composite",
+    "no_composite",
+    is_flag=True,
+    default=False,
+    help="Do not attempt to composite multiple image parts into one image",
+)
+@time_program
+def extract_pdf_images(
+    pdf_file: Path,
+    dest_output: Path,
+    no_composite: bool,
+):
+    """
+    Extract images from PDF.
+
+    This will extract all images from the PDF and save them in the specified output directory.
+    """
+
+    console.info(f"Extracting images from {pdf_file} to {dest_output}")
+    doc = pymupdf.Document(str(pdf_file))
+    page_count = doc.page_count
+    dest_output.mkdir(parents=True, exist_ok=True)
+
+    console.status("Extracting images...")
+
+    for extracted_img in extract_images_from_pdf(doc, no_composite=no_composite):
+        page_num = extracted_img.page
+        console.status(f"Extracting images... (Page {page_num + 1}/{page_count})")
+        img = extracted_img.image
+        img_ext = extracted_img.extension
+        img_index = extracted_img.index
+
+        output_name = f"page{(page_num + 1):06d}"
+        if img_index is not None:
+            output_name += f"-{img_index:02d}"
+        output_name += f".{img_ext}"
+        dest_file = dest_output / output_name
+        img.save(dest_file, format=img_ext.upper())
+        img.close()
+    console.stop_status(f"Extracted images from {page_count} pages.")

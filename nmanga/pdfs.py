@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from typing import Generator, List, Optional, Tuple
@@ -31,6 +32,7 @@ from PIL import Image
 from pymupdf.utils import get_image_info, get_pixmap
 
 __all__ = (
+    "ExtractedImage",
     "PDFColorspaceGenerate",
     "determine_dpi_from_width",
     "extract_images_from_pdf",
@@ -49,6 +51,18 @@ devicen_disallowed_matches = [
     "Magenta",
     "Cyan",
 ]
+
+
+@dataclass
+class ExtractedImage:
+    image: Image.Image
+    """:class:`PIL.Image.Image`: The extracted image, or composited image"""
+    extension: str
+    """:str: The image extension (e.g. 'png', 'jpg', 'tiff', etc.)"""
+    page: int
+    """:int: The page number (1-based) where the image was extracted from"""
+    index: Optional[int] = None
+    """:Optional[int]: The index of the image on the page (0-based), or None if the image is a full page image"""
 
 
 class PDFColorspaceGenerate(str, Enum):
@@ -168,7 +182,7 @@ def has_alpha(images: List[Image.Image]) -> bool:
     return False
 
 
-def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Image, str], None, None]:
+def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -> Generator[ExtractedImage, None, None]:
     """
     This function create a single image from each page of the PDF document.
 
@@ -199,7 +213,7 @@ def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Imag
             pix = page.get_pixmap(matrix=mat, alpha=False)
             img_data = pix.tobytes()
             image = Image.frombytes("RGB", (pix.width, pix.height), img_data)
-            yield image, "png"
+            yield ExtractedImage(image=image, extension="png", page=page_num + 1)
             continue
 
         # Single image? Return it directly
@@ -207,7 +221,14 @@ def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Imag
             xref = image_infos[0]["xref"]
             smask = image_lists[0][1]
             image, ext = load_xref_with_smask(doc, xref, smask)
-            yield image, ext
+            yield ExtractedImage(image=image, extension=ext, page=page_num + 1)
+            continue
+
+        # Preload the images
+        images = [load_xref_with_smask(doc, info["xref"], image_lists[idx][1]) for idx, info in enumerate(image_infos)]
+        if no_composite:
+            for idx, (img, ext) in enumerate(images):
+                yield ExtractedImage(image=img, extension=ext, page=page_num + 1, index=idx)
             continue
 
         # Multiple images? We need to composite them together
@@ -216,7 +237,6 @@ def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Imag
         pix = page.get_pixmap(matrix=mat, alpha=False)
 
         # load all images first
-        images = [load_xref_with_smask(doc, info["xref"], image_lists[idx][1]) for idx, info in enumerate(image_infos)]
         prefer_spaces = prefer_colorspace([info["cs-name"] for info in image_infos if "cs-name" in info])
 
         # Check if any image has alpha channel
@@ -242,7 +262,7 @@ def extract_images_from_pdf(doc: pymupdf.Document) -> Generator[Tuple[Image.Imag
 
             # Paste the image onto the composite
             composite.paste(img, (int(bounding.x0), int(bounding.y0)), img if "A" in prefer_spaces else None)
-        yield composite, "png"
+        yield ExtractedImage(image=composite, extension="png", page=page_num + 1)
 
 
 def generate_image_from_page(
