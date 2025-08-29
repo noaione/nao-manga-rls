@@ -101,10 +101,10 @@ def test_or_find_magick(magick_path: str, force_search: bool = True) -> Optional
     try:
         success = _test_exec([magick_path, "-version"])
         if not success:
-            return None if not force_search else _find_exec_path(["magick", "convert"], "-version")
-        return magick_path or (None if not force_search else _find_exec_path(["magick", "convert"], "-version"))
+            return None if not force_search else _find_exec_path(["magick"], "-version")
+        return magick_path or (None if not force_search else _find_exec_path(["magick"], "-version"))
     except OSError:
-        return None if not force_search else _find_exec_path(["magick", "convert"], "-version")
+        return None if not force_search else _find_exec_path(["magick"], "-version")
 
 
 def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Optional[str]:
@@ -199,7 +199,7 @@ class UnrecoverableNMangaError(click.ClickException):
     def show(self):
         emoji = ""
         if console.is_advanced():
-            emoji = "\u274C "
+            emoji = "\u274c "
         console.error(f"*** {emoji}An unrecoverable error occured ***")
         console.error(self.message)
         # Make traceback
@@ -288,13 +288,11 @@ class RegexCollection:
 
     @overload
     @classmethod
-    def chapter_re(cls, title: str) -> Pattern[str]:
-        ...
+    def chapter_re(cls, title: str) -> Pattern[str]: ...
 
     @overload
     @classmethod
-    def chapter_re(cls, title: str, publisher: str) -> Pattern[str]:
-        ...
+    def chapter_re(cls, title: str, publisher: str) -> Pattern[str]: ...
 
     @classmethod
     def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:

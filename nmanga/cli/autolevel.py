@@ -61,7 +61,9 @@ def make_prefix_convert(magick_exe: str):
     name = Path(magick_exe).name
     if name.lower() == "convert":
         return ["convert"]
-    return ["magick", "convert"]
+    if name.lower() == "magick":
+        return ["magick"]
+    raise ValueError("Invalid magick executable name, must be 'magick' or 'convert'")
 
 
 def _autolevel_exec(command: List[str]) -> None:

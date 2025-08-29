@@ -317,3 +317,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Remove `nmanga detect-grayscale` command as it's not really useful
 - Raise the minimum Pillow image size
 - Bump all dependencies
+
+### Unversioned
+**Fixes**
+- Make `magick convert` to be `magick` instead since it's deprecated in ImageMagick 7+
