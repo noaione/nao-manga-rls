@@ -246,7 +246,7 @@ def autolevel(
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
 
-def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest_output: Path, image_fmt: str) -> None:
+def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest_output: Path, image_fmt: str) -> bool:
     img = Image.open(img_path)
     black_level, _, _ = find_local_peak(img, upper_limit=60)
 
@@ -259,7 +259,7 @@ def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest
             console.warning(f"Skipping existing file: {dest_path}")
             return
         shutil.copy2(img_path, dest_path)
-        return
+        return False
 
     dest_path = dest_output / img_path.with_suffix(f".{image_fmt}").name
     if dest_path.exists():
@@ -277,6 +277,7 @@ def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest
     if image_fmt == "jpg":
         params["quality"] = 95
     adjusted_img.save(dest_path, format=image_fmt.upper(), **params)
+    return True
 
 
 @click.command(
@@ -335,6 +336,7 @@ def autolevel2(
 
     console.status("Processing images with autolevel...")
     dest_output.mkdir(parents=True, exist_ok=True)
+    results = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
@@ -342,11 +344,15 @@ def autolevel2(
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         with mp.Pool(threads) as pool:
-            pool.starmap(
+            results = pool.starmap(
                 _autolevel2_wrapper,
                 [(img_path, upper_limit, peak_offset, dest_output, image_fmt) for img_path in all_files],
             )
     console.stop_status(f"Processed {total_files} images with autolevel.")
+
+    if len(results) > 0:
+        copied_images = total_files - sum(results)
+        console.info(f"Copied {copied_images} images without autolevel.")
 
 
 def _forcegray_exec(command: List[str]) -> None:

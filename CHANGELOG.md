@@ -319,5 +319,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Bump all dependencies
 
 ### Unversioned
-**Fixes**
+**Changes**
 - Make `magick convert` to be `magick` instead since it's deprecated in ImageMagick 7+
+- Properly say how many images is copied without autolevel
