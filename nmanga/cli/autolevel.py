@@ -31,6 +31,7 @@ import json
 import multiprocessing as mp
 import shutil
 import subprocess
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional
 
@@ -44,6 +45,12 @@ from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
 
 console = term.get_console()
+
+
+class AutoLevelResult(int, Enum):
+    PROCESSED = 1
+    GRAYSCALED = 2
+    COPIED = 3
 
 
 def _is_default_path(path: str) -> bool:
@@ -246,20 +253,27 @@ def autolevel(
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
 
-def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest_output: Path, image_fmt: str) -> bool:
+def _autolevel2_wrapper(
+    img_path: Path, upper_limit: int, peak_offset: int, force_gray: bool, dest_output: Path, image_fmt: str
+) -> AutoLevelResult:
     img = Image.open(img_path)
     black_level, _, _ = find_local_peak(img, upper_limit=60)
 
     if black_level <= 0 or black_level > upper_limit:
-        # No need to adjust
+        dest_path = dest_output / img_path.name
+        if force_gray:
+            img = img.convert("L")
+            img.save(dest_path.with_suffix(".png"), format="PNG")
+            img.close()
+            return AutoLevelResult.GRAYSCALED
+
         img.close()
 
-        dest_path = dest_output / img_path.name
         if dest_path.exists():
             console.warning(f"Skipping existing file: {dest_path}")
             return
         shutil.copy2(img_path, dest_path)
-        return False
+        return AutoLevelResult.COPIED
 
     dest_path = dest_output / img_path.with_suffix(f".{image_fmt}").name
     if dest_path.exists():
@@ -277,7 +291,9 @@ def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest
     if image_fmt == "jpg":
         params["quality"] = 95
     adjusted_img.save(dest_path, format=image_fmt.upper(), **params)
-    return True
+    adjusted_img.close()
+    img.close()
+    return AutoLevelResult.PROCESSED
 
 
 @click.command(
@@ -306,6 +322,14 @@ def _autolevel2_wrapper(img_path: Path, upper_limit: int, peak_offset: int, dest
     help="The offset to add to the detected black level percentage",
 )
 @click.option(
+    "-gr",
+    "--force-gray",
+    "force_gray",
+    is_flag=True,
+    default=False,
+    help="Force convert all images to grayscale for image that is not autoleveled",
+)
+@click.option(
     "-f",
     "--format",
     "image_fmt",
@@ -321,6 +345,7 @@ def autolevel2(
     dest_output: Path,
     upper_limit: int,
     peak_offset: int,
+    force_gray: bool,
     image_fmt: str,
     threads: int,
 ):  # pragma: no cover
@@ -336,23 +361,30 @@ def autolevel2(
 
     console.status("Processing images with autolevel...")
     dest_output.mkdir(parents=True, exist_ok=True)
-    results = []
+    results: List[AutoLevelResult] = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
-            _autolevel2_wrapper(img_path, upper_limit, peak_offset, dest_output, image_fmt)
+            _autolevel2_wrapper(img_path, upper_limit, peak_offset, force_gray, dest_output, image_fmt)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         with mp.Pool(threads) as pool:
             results = pool.starmap(
                 _autolevel2_wrapper,
-                [(img_path, upper_limit, peak_offset, dest_output, image_fmt) for img_path in all_files],
+                [(img_path, upper_limit, peak_offset, force_gray, dest_output, image_fmt) for img_path in all_files],
             )
-    console.stop_status(f"Processed {total_files} images with autolevel.")
 
-    if len(results) > 0:
-        copied_images = total_files - sum(results)
-        console.info(f"Copied {copied_images} images without autolevel.")
+    autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
+    copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
+    grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
+    console.stop_status(f"Processed {total_files} images with autolevel2.")
+
+    if copied_count > 0:
+        console.info(f"Copied {copied_count} images without autolevel.")
+    if autolevel_count > 0:
+        console.info(f"Autoleveled {autolevel_count} images.")
+    if grayscaled_count > 0:
+        console.info(f"Grayscaled {grayscaled_count} images.")
 
 
 def _forcegray_exec(command: List[str]) -> None:
