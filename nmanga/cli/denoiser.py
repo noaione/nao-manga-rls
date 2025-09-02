@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -425,21 +426,42 @@ def denoiser_trt(
     ort.set_default_logger_severity(verbose_level)
     ort.set_default_logger_verbosity(verbose_level)
 
+    # If mac, use CoreML EP
+    if sys.platform == "darwin":
+        CACHE_DIR = Path.home() / ".cache" / "nmanga-denoiser"
+        providers = [
+            (
+                "CoreMLExecutionProvider",
+                {
+                    "ModelFormat": "MLProgram",
+                    "MLComputeUnits": "ALL",
+                    "RequireStaticInputShapes": "1",
+                    "EnableOnSubgraphs": "1",
+                    "ModelCacheDirectory": str(CACHE_DIR),
+                    "SpecializationStrategy": "FastPrediction",
+                },
+            )
+        ]
+    else:
+        providers = (
+            [
+                (
+                    # Force use of TensorRT if available
+                    "TensorrtExecutionProvider",
+                    {
+                        "device_id": device_id,
+                        "trt_fp16_enable": True,
+                        "trt_sparsity_enable": True,
+                    },
+                ),
+            ],
+        )
+
     sess_opt = ort.SessionOptions()
     sess = ort.InferenceSession(
         model_path,
         sess_options=sess_opt,
-        providers=[
-            (
-                # Force use of TensorRT if available
-                "TensorrtExecutionProvider",
-                {
-                    "device_id": device_id,
-                    "trt_fp16_enable": True,
-                    "trt_sparsity_enable": True,
-                },
-            ),
-        ],
+        providers=providers,
     )
 
     total_files = len(all_files)
