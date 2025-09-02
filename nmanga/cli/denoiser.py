@@ -443,19 +443,17 @@ def denoiser_trt(
             )
         ]
     else:
-        providers = (
-            [
-                (
-                    # Force use of TensorRT if available
-                    "TensorrtExecutionProvider",
-                    {
-                        "device_id": device_id,
-                        "trt_fp16_enable": True,
-                        "trt_sparsity_enable": True,
-                    },
-                ),
-            ],
-        )
+        providers = [
+            (
+                # Force use of TensorRT if available
+                "TensorrtExecutionProvider",
+                {
+                    "device_id": device_id,
+                    "trt_fp16_enable": True,
+                    "trt_sparsity_enable": True,
+                },
+            ),
+        ]
 
     sess_opt = ort.SessionOptions()
     sess = ort.InferenceSession(
