@@ -55,8 +55,8 @@ devicen_disallowed_matches = [
 
 @dataclass
 class ExtractedImage:
-    image: Image.Image
-    """:class:`PIL.Image.Image`: The extracted image, or composited image"""
+    image: bytes
+    """:class:`bytes`: The extracted image, or composited image"""
     extension: str
     """:str: The image extension (e.g. 'png', 'jpg', 'tiff', etc.)"""
     page: int
@@ -84,7 +84,7 @@ class PDFColorspaceGenerate(str, Enum):
         raise ValueError(f"Unknown colorspace: {self}")
 
 
-def load_xref_image(doc: pymupdf.Document, xref: int) -> Tuple[Image.Image, str]:
+def load_xref_image(doc: pymupdf.Document, xref: int) -> Tuple[bytes, str]:
     """
     Load image from xref
     """
@@ -92,18 +92,17 @@ def load_xref_image(doc: pymupdf.Document, xref: int) -> Tuple[Image.Image, str]
     base_image = doc.extract_image(xref)
     image_bytes = base_image["image"]
     image_ext = base_image["ext"]
-    image = Image.open(BytesIO(image_bytes))
-    return image, image_ext
+    return image_bytes, image_ext
 
 
-def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int) -> Tuple[Image.Image, str]:
+def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int, skip_mask: bool = False) -> Tuple[bytes, str]:
     """
     Handle image with smask (soft mask for transparency)
 
     Based on: https://github.com/pymupdf/PyMuPDF-Utilities/blob/master/examples/extract-images/extract-from-pages.py
     """
 
-    if smask == 0:
+    if smask == 0 or skip_mask:
         return load_xref_image(doc, xref)
 
     base_image = pymupdf.Pixmap(doc.extract_image(xref)["image"])
@@ -122,8 +121,7 @@ def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int) -> Tuple[
         ext = "pam"
     else:
         ext = "png"
-    image_bytes = pix.tobytes()
-    image = Image.open(BytesIO(image_bytes))
+    image_bytes = pix.tobytes(output=ext)
 
     # Clean up
     del base_image
@@ -131,7 +129,7 @@ def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int) -> Tuple[
     del mask
     del pix
 
-    return image, ext
+    return image_bytes, ext
 
 
 def prefer_colorspace(colorspaces: List[str]) -> str:
@@ -262,7 +260,12 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
 
             # Paste the image onto the composite
             composite.paste(img, (int(bounding.x0), int(bounding.y0)), img if "A" in prefer_spaces else None)
-        yield ExtractedImage(image=composite, extension="png", page=page_num + 1)
+
+        # Save composite to bytes
+        with BytesIO() as output:
+            composite.save(output, format="PNG")
+            composite_bytes = output.getvalue()
+        yield ExtractedImage(image=composite_bytes, extension="png", page=page_num + 1)
 
 
 def generate_image_from_page(

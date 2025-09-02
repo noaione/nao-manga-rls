@@ -259,6 +259,5 @@ def extract_pdf_images(
             output_name += f"-{img_index:02d}"
         output_name += f".{img_ext}"
         dest_file = dest_output / output_name
-        img.save(dest_file, format=img_ext.upper())
-        img.close()
+        dest_file.write_bytes(img)
     console.stop_status(f"Extracted images from {page_count} pages.")
