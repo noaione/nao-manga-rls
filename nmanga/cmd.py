@@ -24,6 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import click
@@ -32,6 +34,7 @@ from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
 from .cli.autolevel import autolevel, autolevel2, force_gray
+from .cli.base import NMangaCommandHandler
 from .cli.config import cli_config
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.image_optimizer import image_optimizer
@@ -82,6 +85,20 @@ def main(ctx: click.Context, verbose: bool):
         console.disable_debug()
 
 
+@click.command(
+    name="version",
+    help="Show nmanga version information",
+    cls=NMangaCommandHandler,
+)
+def show_version():
+    """Show nmanga version information."""
+    print(f"{__name__} version: {__version__}")
+    print(f"Created by: {__author__}")
+    print(f"Working directory: {WORKING_DIR}")
+    print(f"Python version: {sys.version.replace(os.linesep, ' ')}")
+    print(f"Platform: {sys.platform}")
+
+
 main.add_command(auto_split)
 main.add_command(cli_config)
 main.add_command(manual_split)
@@ -104,6 +121,7 @@ main.add_command(denoiser_trt)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 main.add_command(pdf_manager)
+main.add_command(show_version)
 
 
 if __name__ == "__main__":
