@@ -85,6 +85,7 @@ class UnknownArchiveType(Exception):
         super().__init__(f"An unknown archive format found: {file}")
 
 
+# Simple wrapper to allow `with` statement
 class WrappedRarFile(rarfile.RarFile):
     def __init__(self, filename):
         super().__init__(filename)
@@ -178,7 +179,7 @@ def collect_image_archive(file: Path):
         return
 
     if is_cbz(file):
-        with zipfile.ZipFile(str(file)) as cbz_file:
+        with zipfile.ZipFile(str(file), metadata_encoding="utf-8") as cbz_file:  # Use utf-8 metadata
             yield from collect_image_from_cbz(cbz_file)
     elif is_rar(file):
         with WrappedRarFile(str(file)) as rar_file:
@@ -187,7 +188,7 @@ def collect_image_archive(file: Path):
         with py7zr.SevenZipFile(str(file)) as archive:
             yield from collect_image_from_7z(archive)
     elif is_tararchive(file):
-        with tarfile.open(str(file)) as tararchive_file:
+        with tarfile.open(str(file), encoding="utf-8") as tararchive_file:  # Force utf-8 encoding
             yield from collect_image_from_tar(tararchive_file)
     else:
         raise UnknownArchiveType(file)
@@ -307,7 +308,7 @@ class MangaImage:
     def filename(self):
         """Shortcut for the image filename."""
         try:
-            return ftfy.fix_encoding(self.name)
+            return ftfy.fix_text(self.name)
         except Exception:
             # In a absurd case that it fail miserably, just return the original name.
             return self.name
@@ -346,8 +347,12 @@ class MangaArchive:
     one of the file in the archive or folder.
     """
 
-    def __init__(self, file_or_folder: Path):
+    def __init__(self, file_or_folder: Union[Path, str]):
         self.__accessor: AccessorType = None
+        if isinstance(file_or_folder, str):
+            file_or_folder = Path(file_or_folder)
+        elif not isinstance(file_or_folder, Path):
+            raise TypeError("file_or_folder must be a Path or str")
         self.__path = file_or_folder
 
     def __check_open(self):
@@ -359,13 +364,13 @@ class MangaArchive:
             return self.__accessor
         if self.__path.is_file():
             if is_cbz(self.__path):
-                self.__accessor = zipfile.ZipFile(str(self.__path))
+                self.__accessor = zipfile.ZipFile(str(self.__path), metadata_encoding="utf-8")  # Use utf-8 metadata
             elif is_rar(self.__path):
                 self.__accessor = rarfile.RarFile(str(self.__path))
             elif is_7zarchive(self.__path):
                 self.__accessor = py7zr.SevenZipFile(str(self.__path))
             elif is_tararchive(self.__path):
-                self.__accessor = tarfile.open(str(self.__path))
+                self.__accessor = tarfile.open(str(self.__path), encoding="utf-8")  # Force utf-8 encoding
             else:
                 raise UnknownArchiveType(self.__path)
         else:
