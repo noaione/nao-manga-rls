@@ -62,13 +62,13 @@ def _clean_filename(output_name: Optional[str]) -> Optional[str]:
 )
 @options.dest_output(optional=True, dir_okay=False, file_okay=True)
 @time_program
-def merge_chapters(archives: List[Path], output_file: Optional[str] = None):  # pragma: no cover
+def merge_chapters(archives: List[Path], dest_output: Optional[Path] = None):  # pragma: no cover
     if len(archives) < 2:
         console.error("You must provide at least two archives to merge!")
         return 1
 
     first_dir = archives[0].parent
-    output_name = _clean_filename(output_file) or file_handler.random_name()
+    output_name = _clean_filename(dest_output.stem) or file_handler.random_name()
     output_path = first_dir / f"{output_name}.cbz"
     target_cbz = exporter.CBZMangaExporter(output_name, first_dir)
 
@@ -88,7 +88,7 @@ def merge_chapters(archives: List[Path], output_file: Optional[str] = None):  # 
     console.info("[+] Writing output file...")
     target_cbz.close()
     actual_name = output_path.name
-    if not output_file:
+    if not dest_output:
         first_name = archives[0].name
         target_name = first_dir / first_name
         actual_name = first_name

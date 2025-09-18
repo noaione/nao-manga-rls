@@ -325,3 +325,4 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Force use UTF-8 when opening archive metadata
 - Add `--keep-colorspace` on `autolevel2` command to keep original colorspace
 - Add more detailed info on `denoise-trt` command
+- Fix issue with `nmanga merge` command not working properly
