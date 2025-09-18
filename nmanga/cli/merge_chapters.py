@@ -39,13 +39,11 @@ from .base import NMangaCommandHandler
 console = term.get_console()
 
 
-def _clean_filename(output_name: Optional[str]) -> Optional[str]:
+def _clean_filename(output_name: Optional[Path]) -> Optional[Path]:
     if output_name is None:
         return None
 
-    if output_name.endswith(".cbz"):
-        output_name = output_name[:-4]
-    return output_name
+    return output_name.stem
 
 
 @click.command(
@@ -68,7 +66,7 @@ def merge_chapters(archives: List[Path], dest_output: Optional[Path] = None):  #
         return 1
 
     first_dir = archives[0].parent
-    output_name = _clean_filename(dest_output.stem) or file_handler.random_name()
+    output_name = _clean_filename(dest_output) or file_handler.random_name()
     output_path = first_dir / f"{output_name}.cbz"
     target_cbz = exporter.CBZMangaExporter(output_name, first_dir)
 
