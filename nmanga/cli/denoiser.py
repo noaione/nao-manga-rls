@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -418,6 +419,7 @@ def denoiser_trt(
         from einops import rearrange  # type: ignore
     except ImportError as e:
         console.error(f"Missing required package: {e.name}. Please install it first.")
+        traceback.print_exc()
         return 1
 
     console.info(f"Loading model: {model_path.name}...")
@@ -425,6 +427,9 @@ def denoiser_trt(
     verbose_level = 3 if not console.debugged else 0
     ort.set_default_logger_severity(verbose_level)
     ort.set_default_logger_verbosity(verbose_level)
+    console.info(f"ONNX Runtime version: {ort.__version__}")
+    console.info(f"Using device ID: {device_id}")
+    console.info(f"Available Execution Providers: {ort.get_available_providers()}")
 
     # If mac, use CoreML EP
     if sys.platform == "darwin":
