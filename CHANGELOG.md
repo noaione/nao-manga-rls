@@ -323,3 +323,5 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Make `magick convert` to be `magick` instead since it's deprecated in ImageMagick 7+
 - Properly say how many images is copied without autolevel
 - Force use UTF-8 when opening archive metadata
+- Add `--keep-colorspace` on `autolevel2` command to keep original colorspace
+- Add more detailed info on `denoise-trt` command

@@ -31,6 +31,7 @@ import json
 import multiprocessing as mp
 import shutil
 import subprocess
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
@@ -253,15 +254,22 @@ def autolevel(
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
 
-def _autolevel2_wrapper(
-    img_path: Path, upper_limit: int, peak_offset: int, force_gray: bool, dest_output: Path, image_fmt: str
-) -> AutoLevelResult:
+@dataclass
+class Autolevel2Config:
+    upper_limit: int
+    peak_offset: int
+    force_gray: bool
+    keep_colorspace: bool
+    image_fmt: str
+
+
+def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Config) -> AutoLevelResult:
     img = Image.open(img_path)
     black_level, _, _ = find_local_peak(img, upper_limit=60)
 
-    if black_level <= 0 or black_level > upper_limit:
+    if black_level <= 0 or black_level > config.upper_limit:
         dest_path = dest_output / img_path.name
-        if force_gray:
+        if config.force_gray:
             img = img.convert("L")
             img.save(dest_path.with_suffix(".png"), format="PNG")
             img.close()
@@ -275,22 +283,24 @@ def _autolevel2_wrapper(
         shutil.copy2(img_path, dest_path)
         return AutoLevelResult.COPIED
 
-    dest_path = dest_output / img_path.with_suffix(f".{image_fmt}").name
+    dest_path = dest_output / img_path.with_suffix(f".{config.image_fmt}").name
     if dest_path.exists():
         console.warning(f"Skipping existing file: {dest_path}")
         return
 
     # Apply the black level with Pillow
-    img = img.convert("L")  # if not yet
+    if not config.keep_colorspace:
+        # Force convert to grayscale
+        img = img.convert("L")
     gamma_correct = gamma_correction(black_level)
 
-    adjusted_img = apply_levels(img, black_point=black_level + peak_offset, white_point=255, gamma=gamma_correct)
+    adjusted_img = apply_levels(img, black_point=black_level + config.peak_offset, white_point=255, gamma=gamma_correct)
 
-    # if jpeg, set quality to 95
+    # if jpeg, set quality to 98
     params = {}
-    if image_fmt == "jpg":
-        params["quality"] = 95
-    adjusted_img.save(dest_path, format=image_fmt.upper(), **params)
+    if config.image_fmt == "jpg":
+        params["quality"] = 98
+    adjusted_img.save(dest_path, format=config.image_fmt.upper(), **params)
     adjusted_img.close()
     img.close()
     return AutoLevelResult.PROCESSED
@@ -330,6 +340,14 @@ def _autolevel2_wrapper(
     help="Force convert all images to grayscale for image that is not autoleveled",
 )
 @click.option(
+    "-kc",
+    "--keep-colorspace",
+    "keep_colorspace",
+    is_flag=True,
+    default=False,
+    help="Keep the original colorspace of the image instead of converting to grayscale",
+)
+@click.option(
     "-f",
     "--format",
     "image_fmt",
@@ -346,6 +364,7 @@ def autolevel2(
     upper_limit: int,
     peak_offset: int,
     force_gray: bool,
+    keep_colorspace: bool,
     image_fmt: str,
     threads: int,
 ):  # pragma: no cover
@@ -359,19 +378,27 @@ def autolevel2(
     total_files = len(all_files)
     console.info(f"Found {total_files} files in the directory.")
 
+    full_config = Autolevel2Config(
+        upper_limit=upper_limit,
+        peak_offset=peak_offset,
+        force_gray=force_gray,
+        keep_colorspace=keep_colorspace,
+        image_fmt=image_fmt,
+    )
+
     console.status("Processing images with autolevel...")
     dest_output.mkdir(parents=True, exist_ok=True)
     results: List[AutoLevelResult] = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
-            _autolevel2_wrapper(img_path, upper_limit, peak_offset, force_gray, dest_output, image_fmt)
+            _autolevel2_wrapper(img_path, dest_output, full_config)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         with mp.Pool(threads) as pool:
             results = pool.starmap(
                 _autolevel2_wrapper,
-                [(img_path, upper_limit, peak_offset, force_gray, dest_output, image_fmt) for img_path in all_files],
+                [(img_path, dest_output, full_config) for img_path in all_files],
             )
 
     autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
