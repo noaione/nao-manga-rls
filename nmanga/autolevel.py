@@ -203,7 +203,7 @@ def pad_shades_to_bpc(shades: List[int]) -> List[int]:
     diffs_count = num_palette_shades - num_shades
 
     corrected = sorted(shades.copy())  # sort ascending
-    corrected.extend([0] * diffs_count)  # Pad with black
+    corrected.extend([255] * diffs_count)  # Pad with white
     return corrected
 
 
@@ -217,10 +217,8 @@ def posterize_image_by_shades(image: Image.Image, shades: List[int]) -> Image.Im
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    # We pad the palette to the closest bpc value
-    padded_shades = pad_shades_to_bpc(shades)
     palette: List[Tuple[int, int, int]] = []
-    for shade in padded_shades:
+    for shade in shades:
         palette.extend([shade] * 3)  # R, G, B
 
     palette_img = Image.new("P", (1, 1))

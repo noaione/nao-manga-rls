@@ -590,17 +590,37 @@ class AutoPosterizeResult:
     COPIED = 2
 
 
-def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float):
+def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float) -> AutoLevelResult:
     img = Image.open(img_path)
     dest_path = dest_output / img_path.with_suffix(".png").name
 
     shades = analyze_gray_shades(img, threshold)
-    shades_nums = [shade_info["shade"] for shade_info in shades]
+
+    # Pad the shades to the nearest bpc value
+    shades_nums = pad_shades_to_bpc([shade_info["shade"] for shade_info in shades])
+    if len(shades_nums) == 0:
+        # No significant shades found, just copy the image
+        img.close()
+        if dest_path.exists():
+            console.warning(f"Skipping existing file: {dest_path}")
+            return AutoLevelResult.COPIED
+        shutil.copy2(img_path, dest_path)
+        return AutoLevelResult.COPIED
+    if len(shades_nums) > 128:
+        # same 8bpc, just copy the image
+        img.close()
+        if dest_path.exists():
+            console.warning(f"Skipping existing file: {dest_path}")
+            return AutoLevelResult.COPIED
+        shutil.copy2(img_path, dest_path)
+        return AutoLevelResult.COPIED
+
     posterized = posterize_image_by_shades(img, shades_nums)
 
     posterized.save(dest_path, format="PNG")
     posterized.close()
     img.close()
+    return AutoLevelResult.PROCESSED
 
 
 @click.command(
