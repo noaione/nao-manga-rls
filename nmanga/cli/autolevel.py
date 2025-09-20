@@ -40,7 +40,15 @@ import click
 from PIL import Image
 
 from .. import file_handler, term
-from ..autolevel import apply_levels, create_magick_params, find_local_peak, gamma_correction
+from ..autolevel import (
+    analyze_gray_shades,
+    apply_levels,
+    create_magick_params,
+    find_local_peak,
+    gamma_correction,
+    posterize_image_by_bits,
+    posterize_image_by_shades,
+)
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -392,7 +400,7 @@ def autolevel2(
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
-            _autolevel2_wrapper(img_path, dest_output, full_config)
+            results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         with mp.Pool(threads) as pool:
@@ -507,3 +515,161 @@ def force_gray(
             dest_path = backup_dir / img_path.name
             img_path.rename(dest_path)
         console.stop_status(f"Backed up original files to {backup_dir}.")
+
+
+def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
+    img = Image.open(img_path)
+
+    posterized = posterize_image_by_bits(img, num_bits)
+    dest_path = dest_output / img_path.with_suffix(".png").name
+
+    posterized.save(dest_path, format="PNG")
+    posterized.close()
+    img.close()
+
+
+@click.command(
+    name="posterize",
+    help="Force posterize images to a specific bit depth using Pillow",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output(optional=True)
+@click.option(
+    "-b",
+    "--bits",
+    "num_bits",
+    type=click.IntRange(1, 8),
+    default=4,
+    show_default=True,
+    help="The number of bits to posterize the image to (1-8)",
+)
+@options.threads
+@time_program
+def posterize_simple(
+    path_or_archive: Path,
+    dest_output: Optional[Path],
+    num_bits: int,
+    threads: int,
+):
+    """
+    Posterize images in a directory to a specific bit depth using Pillow.
+
+    This will always use PNG as the output format.
+    """
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    total_files = len(all_files)
+    console.info(f"Found {total_files} files in the directory.")
+
+    console.status("Processing images with posterize...")
+    dest_output.mkdir(parents=True, exist_ok=True)
+    if threads <= 1:
+        for idx, img_path in enumerate(all_files):
+            console.status(f"Processing image with posterize... [{idx + 1}/{total_files}]")
+            _posterize_simple_wrapper(img_path, dest_output, num_bits)
+    else:
+        console.info(f"Using {threads} CPU threads for processing.")
+        with mp.Pool(threads) as pool:
+            pool.starmap(
+                _posterize_simple_wrapper,
+                [(img_path, dest_output, num_bits) for img_path in all_files],
+            )
+
+    console.stop_status(f"Processed {total_files} images with posterize.")
+
+
+class AutoPosterizeResult:
+    PROCESSED = 1
+    COPIED = 2
+
+
+def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float):
+    img = Image.open(img_path)
+    dest_path = dest_output / img_path.with_suffix(".png").name
+
+    shades = analyze_gray_shades(img, threshold)
+    shades_nums = [shade_info["shade"] for shade_info in shades]
+    posterized = posterize_image_by_shades(img, shades_nums)
+
+    posterized.save(dest_path, format="PNG")
+    posterized.close()
+    img.close()
+
+
+@click.command(
+    name="autoposterize",
+    help="(Experimental) Analyze and posterize images to optimal bit depth using Pillow",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output(optional=True)
+@click.option(
+    "-t",
+    "--threshold",
+    "threshold_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.01,
+    show_default=True,
+    help="The threshold percentage to consider a shade as significant (0-100%)",
+)
+@options.threads
+@time_program
+def auto_posterize(
+    path_or_archive: Path,
+    dest_output: Optional[Path],
+    threshold_pct: float,
+    threads: int,
+):
+    """
+    Automatically analyze and posterize images in a directory to an optimal bit depth using Pillow.
+
+    This will always use PNG as the output format.
+    """
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    if threshold_pct == 0.0:
+        raise click.BadParameter(
+            "Threshold percentage cannot be 0.0, as this will consider all shades as significant.",
+            param_hint="threshold_pct",
+        )
+
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    total_files = len(all_files)
+    console.info(f"Found {total_files} files in the directory.")
+
+    console.status("Processing images with autoposterize...")
+    dest_output.mkdir(parents=True, exist_ok=True)
+    results: List[AutoPosterizeResult] = []
+    if threads <= 1:
+        for idx, img_path in enumerate(all_files):
+            console.status(f"Processing image with autoposterize... [{idx + 1}/{total_files}]")
+            results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct))
+    else:
+        console.info(f"Using {threads} CPU threads for processing.")
+        with mp.Pool(threads) as pool:
+            results = pool.starmap(
+                _autoposterize_wrapper,
+                [(img_path, dest_output, threshold_pct) for img_path in all_files],
+            )
+
+    posterized_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
+    copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
+    grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
+    console.stop_status(f"Processed {total_files} images with autoposterize.")
+
+    if copied_count > 0:
+        console.info(f"Copied {copied_count} images without autoposterize.")
+    if posterized_count > 0:
+        console.info(f"Posterized {posterized_count} images.")
+    if grayscaled_count > 0:
+        console.info(f"Grayscaled {grayscaled_count} images.")

@@ -319,6 +319,11 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Bump all dependencies
 
 ### Unversioned
+**New Features**
+- Add `posterize` and `autoposterize` command to reduce the number of shades in the image
+  - Posterize: Reduce to fixed number of shades (2, 4, 8, 16, 32, 64, 128)
+  - Autoposterize: Reduce to optimal number of shades based on threshold percentage (default 0.5%)
+
 **Changes**
 - Make `magick convert` to be `magick` instead since it's deprecated in ImageMagick 7+
 - Properly say how many images is copied without autolevel

@@ -9,15 +9,20 @@ from __future__ import annotations
 import math
 from io import BytesIO
 from pathlib import Path
-from typing import Tuple, Union
+from typing import List, Tuple, TypedDict, Union
 
 from PIL import Image
 
 __all__ = (
+    "analyze_gray_shades",
+    "apply_levels",
     "apply_levels",
     "create_magick_params",
     "find_local_peak",
     "gamma_correction",
+    "pad_shades_to_bpc",
+    "posterize_image_by_bits",
+    "posterize_image_by_shades",
     "try_imports",
 )
 
@@ -26,6 +31,13 @@ Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 
 NumpyLib = None
 ScipySignalLib = None
+
+
+class ShadeAnalysis(TypedDict):
+    shade: int
+    """The gray shade value in integer (0-255)"""
+    percentage: float
+    """The percentage of pixels in the image that have this shade."""
 
 
 def try_imports():
@@ -119,3 +131,100 @@ def apply_levels(image: Image.Image, black_point: float, white_point: float, gam
 
     # Apply the lookup table
     return image.point(lut_adjustments * len(image.getbands()))
+
+
+def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> List[ShadeAnalysis]:
+    """
+    Analyze the amount of gray shades in a "grayscale" image.
+    """
+
+    global NumpyLib
+
+    if NumpyLib is None:
+        try_imports()
+
+    if image.mode != "L":
+        image = image.convert("L")  # force grayscale
+
+    img_array = NumpyLib.array(image)
+
+    total_pixels = img_array.size
+    unique_shades, counter = NumpyLib.unique(img_array, return_counts=True)
+
+    filtered_shades = []
+    for shade, count in zip(unique_shades, counter):
+        percentage = (count / total_pixels) * 100
+        if percentage >= threshold:
+            # Get the RGB value of the shade
+            filtered_shades.append({"shade": int(shade), "percentage": percentage})
+
+    # Sort by highest percentage first
+    filtered_shades.sort(key=lambda x: x["percentage"], reverse=True)
+    return filtered_shades
+
+
+def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
+    """
+    Posterize an image to the specified gray shades.
+
+    This would return 2^num_bits shades.
+    """
+
+    if image.mode != "L":
+        image = image.convert("L")  # force grayscale
+
+    quantized = image.quantize(colors=2**num_bits, method=Image.Dither.FLOYDSTEINBERG)
+    return quantized
+
+
+def pad_shades_to_bpc(shades: List[int]) -> List[int]:
+    """
+    Pad the shades list to the closest bpc value.
+
+    Shades is a list of gray shade values (0-255).
+    """
+
+    num_shades = len(shades)
+    if num_shades <= 1:
+        # Uhhhh, nothing to posterize
+        return shades
+
+    # Known shade values:
+    # 1bpc -> 2 shades
+    # 2bpc -> 4 shades
+    # 3bpc -> 8 shades
+    # 4bpc -> 16 shades
+    # 5bpc -> 32 shades
+    # 6bpc -> 64 shades
+    # 7bpc -> 128 shades
+    # 8bpc -> 256 shades
+    num_bits = math.ceil(math.log2(num_shades))
+    num_palette_shades = math.pow(2, num_bits)
+    diffs_count = num_palette_shades - num_shades
+
+    corrected = sorted(shades.copy())  # sort ascending
+    corrected.extend([0] * diffs_count)  # Pad with black
+    return corrected
+
+
+def posterize_image_by_shades(image: Image.Image, shades: List[int]) -> Image.Image:
+    """
+    Posterize an image to the specified gray shades.
+
+    Shades is a list of gray shade values (0-255).
+    """
+
+    if image.mode != "L":
+        image = image.convert("L")  # force grayscale
+
+    # We pad the palette to the closest bpc value
+    padded_shades = pad_shades_to_bpc(shades)
+    palette: List[Tuple[int, int, int]] = []
+    for shade in padded_shades:
+        palette.extend([shade] * 3)  # R, G, B
+
+    palette_img = Image.new("P", (1, 1))
+    palette_img.putpalette(palette)
+
+    dithered_img = image.convert("P", palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG)
+    return dithered_img
