@@ -46,6 +46,7 @@ from ..autolevel import (
     create_magick_params,
     find_local_peak,
     gamma_correction,
+    pad_shades_to_bpc,
     posterize_image_by_bits,
     posterize_image_by_shades,
 )
@@ -673,3 +674,57 @@ def auto_posterize(
         console.info(f"Posterized {posterized_count} images.")
     if grayscaled_count > 0:
         console.info(f"Grayscaled {grayscaled_count} images.")
+
+
+@click.command(
+    name="analyze-shades",
+    help="(Experimental) Analyze and show the gray shades in images in a directory using Pillow",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-t",
+    "--threshold",
+    "threshold_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.01,
+    show_default=True,
+    help="The threshold percentage to consider a shade as significant (0-100%)",
+)
+@time_program
+def analyze_shades(
+    path_or_archive: Path,
+    threshold_pct: float,
+):
+    """
+    Analyze and show the gray shades in images in a directory using Pillow.
+    """
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    if threshold_pct == 0.0:
+        raise click.BadParameter(
+            "Threshold percentage cannot be 0.0, as this will consider all shades as significant.",
+            param_hint="threshold_pct",
+        )
+
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    total_files = len(all_files)
+    console.info(f"Found {total_files} files in the directory.")
+
+    console.status("Processing images with analyzer...")
+    for image_path in all_files:
+        console.status(f"Analyzing image... {image_path}")
+        shades = analyze_gray_shades(Image.open(image_path), threshold_pct)
+        if len(shades) == 0:
+            console.info(f"No significant shades found in {image_path}")
+            continue
+
+        closest_bpc = pad_shades_to_bpc([shade_info["shade"] for shade_info in shades])
+        total_shades = len(shades)
+        console.info(
+            f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {len(closest_bpc).bit_length() - 1})"
+        )

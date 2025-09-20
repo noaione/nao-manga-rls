@@ -199,7 +199,7 @@ def pad_shades_to_bpc(shades: List[int]) -> List[int]:
     # 7bpc -> 128 shades
     # 8bpc -> 256 shades
     num_bits = math.ceil(math.log2(num_shades))
-    num_palette_shades = math.pow(2, num_bits)
+    num_palette_shades = int(math.pow(2, num_bits))
     diffs_count = num_palette_shades - num_shades
 
     corrected = sorted(shades.copy())  # sort ascending
