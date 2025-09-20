@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import multiprocessing as mp
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
@@ -98,6 +99,11 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
     if not ext.startswith("."):
         return f".{ext}"
     return ext
+
+
+def _init_worker():
+    """Initialize worker processes to handle keyboard interrupts properly."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 @click.command(
@@ -175,8 +181,14 @@ def autolevel(
     if threads <= 1:
         results = [find_local_peak(file, upper_limit) for file in all_files]
     else:
-        with mp.Pool(threads) as pool:
-            results = pool.starmap(find_local_peak, [(file, upper_limit) for file in all_files])
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                results = pool.starmap(find_local_peak, [(file, upper_limit) for file in all_files])
+        except KeyboardInterrupt:
+            console.warning("Autoleveling interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
     console.stop_status("Calculated black levels for images.")
 
     commands: List[str] = []
@@ -257,8 +269,14 @@ def autolevel(
         for command in commands:
             _autolevel_exec(command)
     else:
-        with mp.Pool(threads) as pool:
-            pool.map(_autolevel_exec, commands)
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                pool.map(_autolevel_exec, commands)
+        except KeyboardInterrupt:
+            console.warning("Autoleveling interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
 
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
@@ -404,11 +422,17 @@ def autolevel2(
             results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        with mp.Pool(threads) as pool:
-            results = pool.starmap(
-                _autolevel2_wrapper,
-                [(img_path, dest_output, full_config) for img_path in all_files],
-            )
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                results = pool.starmap(
+                    _autolevel2_wrapper,
+                    [(img_path, dest_output, full_config) for img_path in all_files],
+                )
+        except KeyboardInterrupt:
+            console.warning("Autoleveling interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
 
     autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
     copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
@@ -504,8 +528,14 @@ def force_gray(
         for command in commands:
             _forcegray_exec(command)
     else:
-        with mp.Pool(threads) as pool:
-            pool.map(_forcegray_exec, commands)
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                pool.map(_forcegray_exec, commands)
+        except KeyboardInterrupt:
+            console.warning("Force grayscale interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
 
     console.stop_status(f"Processed {len(commands)} images to grayscale.")
 
@@ -576,11 +606,17 @@ def posterize_simple(
             _posterize_simple_wrapper(img_path, dest_output, num_bits)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        with mp.Pool(threads) as pool:
-            pool.starmap(
-                _posterize_simple_wrapper,
-                [(img_path, dest_output, num_bits) for img_path in all_files],
-            )
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                pool.starmap(
+                    _posterize_simple_wrapper,
+                    [(img_path, dest_output, num_bits) for img_path in all_files],
+                )
+        except KeyboardInterrupt:
+            console.warning("Posterize interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
 
     console.stop_status(f"Processed {total_files} images with posterize.")
 
@@ -677,11 +713,17 @@ def auto_posterize(
             results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        with mp.Pool(threads) as pool:
-            results = pool.starmap(
-                _autoposterize_wrapper,
-                [(img_path, dest_output, threshold_pct) for img_path in all_files],
-            )
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                results = pool.starmap(
+                    _autoposterize_wrapper,
+                    [(img_path, dest_output, threshold_pct) for img_path in all_files],
+                )
+        except KeyboardInterrupt:
+            console.warning("Auto-posterizing interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
 
     posterized_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
     copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
