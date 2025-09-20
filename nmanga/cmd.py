@@ -33,7 +33,7 @@ import click
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
-from .cli.autolevel import analyze_shades, auto_posterize, autolevel, autolevel2, force_gray, posterize_simple
+from .cli.autolevel import autolevel, autolevel2, force_gray
 from .cli.base import NMangaCommandHandler
 from .cli.config import cli_config
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
@@ -42,6 +42,7 @@ from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.pdfs import pdf_manager
+from .cli.posterize import analyze_shades, auto_posterize, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
 from .cli.spreads_manager import spreads
