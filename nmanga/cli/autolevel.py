@@ -631,7 +631,7 @@ def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float) 
 @options.path_or_archive(disable_archive=True)
 @options.dest_output(optional=True)
 @click.option(
-    "-t",
+    "-th",
     "--threshold",
     "threshold_pct",
     type=click.FloatRange(0.0, 100.0),
@@ -703,7 +703,7 @@ def auto_posterize(
 )
 @options.path_or_archive(disable_archive=True)
 @click.option(
-    "-t",
+    "-th",
     "--threshold",
     "threshold_pct",
     type=click.FloatRange(0.0, 100.0),
