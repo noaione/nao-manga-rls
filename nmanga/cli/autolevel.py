@@ -626,23 +626,18 @@ class AutoPosterizeResult:
     COPIED = 2
 
 
-def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float) -> AutoLevelResult:
+def _autoposterize_wrapper(
+    img_path: Path, dest_output: Path, threshold: float, use_palette_mode: bool
+) -> AutoLevelResult:
     img = Image.open(img_path)
     dest_path = dest_output / img_path.with_suffix(".png").name
 
     shades = analyze_gray_shades(img, threshold)
 
     # Pad the shades to the nearest bpc value
-    shades_nums = pad_shades_to_bpc([shade_info["shade"] for shade_info in shades])
-    if len(shades_nums) == 0:
-        # No significant shades found, just copy the image
-        img.close()
-        if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
-            return AutoLevelResult.COPIED
-        shutil.copy2(img_path, dest_path)
-        return AutoLevelResult.COPIED
-    if len(shades_nums) > 128:
+    shades_nums = pad_shades_to_bpc(shades)
+    bpc_count = max(len(shades_nums).bit_length() - 1, 1)
+    if bpc_count >= 8:
         # same 8bpc, just copy the image
         img.close()
         if dest_path.exists():
@@ -651,7 +646,10 @@ def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float) 
         shutil.copy2(img_path, dest_path)
         return AutoLevelResult.COPIED
 
-    posterized = posterize_image_by_shades(img, shades_nums)
+    if use_palette_mode:
+        posterized = posterize_image_by_bits(img, bpc_count)
+    else:
+        posterized = posterize_image_by_shades(img, shades_nums)
 
     posterized.save(dest_path, format="PNG")
     posterized.close()
@@ -675,12 +673,21 @@ def _autoposterize_wrapper(img_path: Path, dest_output: Path, threshold: float) 
     show_default=True,
     help="The threshold percentage to consider a shade as significant (0-100%)",
 )
+@click.option(
+    "-pm",
+    "--palette-mode",
+    "use_palette_mode",
+    is_flag=True,
+    default=False,
+    help="Use palette mode for posterization instead of direct color mapping (may produce better results)",
+)
 @options.threads
 @time_program
 def auto_posterize(
     path_or_archive: Path,
     dest_output: Optional[Path],
     threshold_pct: float,
+    use_palette_mode: bool,
     threads: int,
 ):
     """
@@ -710,14 +717,14 @@ def auto_posterize(
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autoposterize... [{idx + 1}/{total_files}]")
-            results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct))
+            results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct, use_palette_mode))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         try:
             with mp.Pool(threads, initializer=_init_worker) as pool:
                 results = pool.starmap(
                     _autoposterize_wrapper,
-                    [(img_path, dest_output, threshold_pct) for img_path in all_files],
+                    [(img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
                 )
         except KeyboardInterrupt:
             console.warning("Auto-posterizing interrupted by user.")
@@ -785,7 +792,7 @@ def analyze_shades(
             console.info(f"No significant shades found in {image_path}")
             continue
 
-        closest_bpc = pad_shades_to_bpc([shade_info["shade"] for shade_info in shades])
+        closest_bpc = pad_shades_to_bpc(shades)
         total_shades = len(shades)
         console.info(
             f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {len(closest_bpc).bit_length() - 1})"

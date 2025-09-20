@@ -173,21 +173,23 @@ def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    quantized = image.quantize(colors=2**num_bits, method=Image.Dither.FLOYDSTEINBERG)
+    quantized = image.quantize(colors=2**num_bits, dither=Image.Dither.FLOYDSTEINBERG)
     return quantized
 
 
-def pad_shades_to_bpc(shades: List[int]) -> List[int]:
+def pad_shades_to_bpc(shades: List[ShadeAnalysis]) -> List[int]:
     """
     Pad the shades list to the closest bpc value.
 
-    Shades is a list of gray shade values (0-255).
+    Accepts the output of analyze_gray_shades.
+    Returns a list of gray shade values (0-255).
     """
 
     num_shades = len(shades)
     if num_shades <= 1:
         # Uhhhh, nothing to posterize
-        return shades
+        shade_values = [shade_info["shade"] for shade_info in shades]
+        return shade_values
 
     # Known shade values:
     # 1bpc -> 2 shades
@@ -199,12 +201,27 @@ def pad_shades_to_bpc(shades: List[int]) -> List[int]:
     # 7bpc -> 128 shades
     # 8bpc -> 256 shades
     num_bits = math.ceil(math.log2(num_shades))
-    num_palette_shades: int = 2**num_bits
-    diffs_count: int = num_palette_shades - num_shades
 
-    corrected = sorted(shades.copy())  # sort ascending
-    corrected.extend([255] * diffs_count)  # Pad with white
-    return corrected
+    # Now calculate to the correct nearest bpc
+    # PNG should support:
+    # - 1bpc
+    # - 2bpc
+    # - 4bpc
+    # - 8bpc
+    nearest_bpc = min([1, 2, 4, 8], key=lambda x: abs(x - num_bits))
+    target_shades: int = 2**nearest_bpc
+
+    diffs = target_shades - num_shades
+    if diffs < 0:
+        # We cut down the top shades already
+        cut_down = sorted(shades.copy(), key=lambda x: x["shade"])[:target_shades]
+        return [shade_info["shade"] for shade_info in cut_down]
+
+    # We need to pad the shades
+    corrected = shades.copy()
+    shade_values = [shade_info["shade"] for shade_info in corrected]
+    shade_values.extend([255] * diffs)  # pad with white
+    return shade_values
 
 
 def posterize_image_by_shades(image: Image.Image, shades: List[int]) -> Image.Image:
