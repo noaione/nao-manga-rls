@@ -46,6 +46,7 @@ from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
+from .cli.upscaler import upscale_tiled
 from .term import get_console
 
 console = get_console()
@@ -120,6 +121,7 @@ main.add_command(posterize_simple)
 main.add_command(auto_posterize)
 main.add_command(denoiser)
 main.add_command(denoiser_trt)
+main.add_command(upscale_tiled)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 main.add_command(pdf_manager)
