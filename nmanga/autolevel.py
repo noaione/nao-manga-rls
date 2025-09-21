@@ -58,7 +58,7 @@ def try_imports():
         raise ImportError("scipy is required to use autolevel. Please install scipy.")
 
 
-def find_local_peak(img_path: Union[Path, BytesIO, Image.Image], upper_limit: int = 60) -> Tuple[int, Path, bool]:
+def find_local_peak(img_path: Union[Path, BytesIO, Image.Image], upper_limit: int = 60) -> Tuple[int, int, bool]:
     """
     Automatically determine the optimal black level for an image by finding local peaks in its histogram.
 
@@ -84,6 +84,7 @@ def find_local_peak(img_path: Union[Path, BytesIO, Image.Image], upper_limit: in
         # temp image, close
         image.close()
 
+    black_level = 0
     if result.any():
         if hist[result[0] - 1] > hist[result[0]]:
             result[0] = result[0] - 1
@@ -91,8 +92,22 @@ def find_local_peak(img_path: Union[Path, BytesIO, Image.Image], upper_limit: in
             result[0] = result[0] + 1
 
         black_level = math.ceil(binedges[result[0]])
-        return black_level, img_path, force_gray
-    return 0, img_path, force_gray
+
+    upper_range_start = 255 - upper_limit
+    upper_hist = hist[upper_range_start:]
+    white_level = 255
+    if upper_hist.any():
+        white_peak = NumpyLib.argmax(upper_hist)
+        if hist[upper_range_start + white_peak - 1] > hist[upper_range_start + white_peak]:
+            white_peak = white_peak - 1
+        elif hist[upper_range_start + white_peak + 1] > hist[upper_range_start + white_peak]:
+            white_peak = white_peak + 1
+
+        white_level = math.floor(binedges[upper_range_start + white_peak])
+    if white_level - black_level < 50:
+        black_level = 0  # Ignore, too close to white point
+
+    return black_level, white_level, force_gray
 
 
 def gamma_correction(black_level: int) -> int:
@@ -103,10 +118,11 @@ def gamma_correction(black_level: int) -> int:
     return round(1 / gamma, 2)
 
 
-def create_magick_params(black_level: int, peak_offset: int = 0) -> str:
+def create_magick_params(black_level: int, white_point: int, peak_offset: int = 0) -> str:
     gamma = gamma_correction(black_level)
     black_point_pct = round(black_level / 255 * 100, 2) + peak_offset
-    return f"{black_point_pct},100%,{gamma}"
+    white_point_pct = round(white_point / 255 * 100, 2)
+    return f"{black_point_pct},{white_point_pct}%,{gamma}"
 
 
 def apply_levels(image: Image.Image, black_point: float, white_point: float, gamma: float):

@@ -35,7 +35,7 @@ import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import click
 from PIL import Image
@@ -100,6 +100,11 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
 def _init_worker():
     """Initialize worker processes to handle keyboard interrupts properly."""
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int) -> Tuple[int, int, Path, bool]:
+    black_level, white_level, force_gray = find_local_peak(img_path, upper_limit)
+    return black_level, white_level, img_path, force_gray
 
 
 @click.command(
@@ -175,11 +180,11 @@ def autolevel(
 
     console.status("Calculating black levels for images...")
     if threads <= 1:
-        results = [find_local_peak(file, upper_limit) for file in all_files]
+        results = [_find_local_peak_magick_wrapper(file, upper_limit) for file in all_files]
     else:
         try:
             with mp.Pool(threads, initializer=_init_worker) as pool:
-                results = pool.starmap(find_local_peak, [(file, upper_limit) for file in all_files])
+                results = pool.starmap(_find_local_peak_magick_wrapper, [(file, upper_limit) for file in all_files])
         except KeyboardInterrupt:
             console.warning("Autoleveling interrupted by user.")
             pool.terminate()
@@ -195,11 +200,12 @@ def autolevel(
     dest_output.mkdir(parents=True, exist_ok=True)
 
     dumped_data_temp = []
-    for black_level, img_path, force_gray in results:
+    for black_level, white_level, img_path, force_gray in results:
         dumped_data_temp.append(
             {
                 "image": str(img_path),
                 "black_level": black_level,
+                "white_level": white_level,
                 "force_gray": force_gray,
             }
         )
@@ -213,7 +219,7 @@ def autolevel(
 
     # Pre-compute all the image magick commands
     total_results = len(results)
-    for idx, (black_level, img_path, force_gray) in enumerate(results):
+    for idx, (black_level, white_level, img_path, force_gray) in enumerate(results):
         console.status(f"Preparing autolevel commands [{idx + 1}/{total_results}]...")
         if black_level == 0:
             # Skip images that don't need autolevel
@@ -224,7 +230,7 @@ def autolevel(
             to_be_copied.append(img_path)
             continue
 
-        params = create_magick_params(black_level, peak_offset)
+        params = create_magick_params(black_level, white_level, peak_offset)
         image_name = img_path.stem + determine_image_format(img_path, image_fmt)
         dest_path = dest_output / image_name
 
@@ -284,13 +290,17 @@ class Autolevel2Config:
     force_gray: bool
     keep_colorspace: bool
     image_fmt: str
+    no_white: bool
 
 
 def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Config) -> AutoLevelResult:
     img = Image.open(img_path)
-    black_level, _, _ = find_local_peak(img, upper_limit=60)
+    black_level, white_level, _ = find_local_peak(img, upper_limit=60)
 
-    if black_level <= 0 or black_level > config.upper_limit:
+    is_black_bad = black_level <= 0
+    is_white_bad = white_level >= 255 if not config.no_white else False
+
+    if (is_black_bad and is_white_bad) or black_level > config.upper_limit:
         dest_path = dest_output / img_path.name
         if config.force_gray:
             img = img.convert("L")
@@ -317,7 +327,12 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
         img = img.convert("L")
     gamma_correct = gamma_correction(black_level)
 
-    adjusted_img = apply_levels(img, black_point=black_level + config.peak_offset, white_point=255, gamma=gamma_correct)
+    adjusted_img = apply_levels(
+        img,
+        black_point=black_level + config.peak_offset,
+        white_point=255 if config.no_white else white_level,
+        gamma=gamma_correct,
+    )
 
     # if jpeg, set quality to 98
     params = {}
@@ -379,6 +394,13 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
     type=click.Choice(["png", "jpg"]),
     help="The format of the output image",
 )
+@click.option(
+    "--no-white",
+    "no_white",
+    is_flag=True,
+    default=False,
+    help="Do not adjust white level, only adjust black level",
+)
 @options.threads
 @time_program
 def autolevel2(
@@ -389,6 +411,7 @@ def autolevel2(
     force_gray: bool,
     keep_colorspace: bool,
     image_fmt: str,
+    no_white: bool,
     threads: int,
 ):  # pragma: no cover
     if not path_or_archive.is_dir():
@@ -407,6 +430,7 @@ def autolevel2(
         force_gray=force_gray,
         keep_colorspace=keep_colorspace,
         image_fmt=image_fmt,
+        no_white=no_white,
     )
 
     console.status("Processing images with autolevel...")
