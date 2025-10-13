@@ -32,9 +32,11 @@ from shutil import move as mv
 from typing import Dict, List, Optional, TypedDict
 
 import click
+from PIL import Image
 
 from .. import file_handler, term
 from ..common import RegexCollection
+from ..spreads import SpreadDirection, join_spreads
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -70,15 +72,8 @@ class _ExportedImage:
     postfix: Optional[str] = None
 
 
-def execute_spreads_join(
-    magick_dir: str,
-    quality: float,
-    input_imgs: List[_ExportedImage],
-    out_dir: Path,
-    reverse_mode: bool,
-    output_fmt: str = "auto",
-):
-    extensions = [x.path.suffix for x in input_imgs]
+def select_exts(files: List[Path]) -> str:
+    extensions = [x.suffix for x in files]
     select_ext = ".jpg"
     if ".png" in extensions:
         select_ext = ".png"
@@ -89,6 +84,18 @@ def execute_spreads_join(
     if ".webp" in extensions and select_ext != ".webp":
         console.warning("Mixed format detected, using png as output format")
         select_ext = ".png"
+    return select_ext
+
+
+def execute_spreads_join(
+    magick_dir: str,
+    quality: float,
+    input_imgs: List[_ExportedImage],
+    out_dir: Path,
+    reverse_mode: bool,
+    output_fmt: str = "auto",
+):
+    select_ext = select_exts([x.path for x in input_imgs])
     if output_fmt != "auto":
         select_ext = f".{output_fmt}"
     output_name = file_handler.random_name() + select_ext
@@ -189,6 +196,13 @@ def spreads():
 )
 @reverse_direction
 @format_output
+@click.option(
+    "--use-pil",
+    "use_pil",
+    is_flag=True,
+    default=False,
+    help="Use PIL to join images instead of ImageMagick (may use more memory)",
+)
 @options.magick_path
 @time_program
 def spreads_join(
@@ -197,6 +211,7 @@ def spreads_join(
     spreads_data: List[str],
     reverse: bool,
     image_fmt: str,
+    use_pil: bool,
     magick_path: str,
 ):
     """
@@ -204,7 +219,7 @@ def spreads_join(
     """
     force_search = not _is_default_path(magick_path)
     magick_exe = test_or_find_magick(magick_path, force_search)
-    if magick_exe is None:
+    if magick_exe is None and not use_pil:
         console.error("Could not find the magick executable")
         return 1
     console.info("Using magick executable: {}".format(magick_exe))
@@ -254,9 +269,12 @@ def spreads_join(
 
     total_match_spread = len(list(exported_imgs.keys()))
     current = 1
+
+    direction = SpreadDirection.RTL if reverse else SpreadDirection.LTR
+
     for spread, imgs in exported_imgs.items():
         console.status(f"Joining spreads: {current}/{total_match_spread}")
-        temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive, reverse, image_fmt)
+
         # Rename back
         pattern = imgs["pattern"]
         pattern.sort()
@@ -266,12 +284,29 @@ def spreads_join(
         pre_t = first_img.prefix or ""
         post_t = first_img.postfix or ""
 
-        extension = Path(temp_output).suffix
         final_filename = f"{pre_t}p{first_val:03d}-{last_val:03d}{post_t}"
-        final_filename += extension
-        final_path = path_or_archive / final_filename
-        temp_output_path = path_or_archive / temp_output
-        temp_output_path.rename(final_path)
+
+        if use_pil:
+            # Load all images
+            all_img_paths = [x.path for x in imgs["imgs"]]
+            loaded_images = [Image.open(p) for p in all_img_paths]
+
+            joined_image = join_spreads(loaded_images, direction)
+            extension = select_exts(all_img_paths)
+            if image_fmt != "auto":
+                extension = f".{image_fmt}"
+            final_filename += extension
+
+            joined_image.save(path_or_archive / final_filename, quality=int(quality))
+        else:
+            temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive, reverse, image_fmt)
+            extension = Path(temp_output).suffix
+
+            final_filename += extension
+
+            final_path = path_or_archive / final_filename
+            temp_output_path = path_or_archive / temp_output
+            temp_output_path.rename(final_path)
         current += 1
     console.stop_status(f"Joined {total_match_spread} spreads")
 
