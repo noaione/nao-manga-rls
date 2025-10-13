@@ -48,7 +48,10 @@ __all__ = (
     "ActionSpreads",
     "ActionTagging",
     "Actions",
+    "ChapterConfig",
+    "MetadataNamingConfig",
     "OrchestratorConfig",
+    "SkipActionConfig",
     "VolumeConfig",
 )
 
@@ -89,7 +92,7 @@ class ActionShiftName(BaseModel):
     Title and volume are derived from the main config so they are not included here.
     """
 
-    kind: Literal[ActionKind.SHIFT_RENAME]
+    kind: Literal[ActionKind.SHIFT_RENAME] = Field(ActionKind.SHIFT_RENAME)
     """The kind of action"""
     start: int = Field(0, ge=0)
     """The starting index to rename the files to"""
@@ -100,7 +103,7 @@ class ActionSpreads(BaseModel):
     Action to join spreads of a volume
     """
 
-    kind: Literal[ActionKind.SPREADS]
+    kind: Literal[ActionKind.SPREADS] = Field(ActionKind.SPREADS)
     """The kind of action"""
     reverse: bool = Field(False)
     """Whether to use reverse mode when joining spreads"""
@@ -123,7 +126,7 @@ class ActionRename(BaseModel):
     All the other options are derived from the main config so they are not included here.
     """
 
-    kind: Literal[ActionKind.RENAME]
+    kind: Literal[ActionKind.RENAME] = Field(ActionKind.RENAME)
     """The kind of action"""
 
 
@@ -132,7 +135,7 @@ class ActionDenoise(BaseModel):
     Action to denoise all images in a volume with denoise-trt
     """
 
-    kind: Literal[ActionKind.DENOISE]
+    kind: Literal[ActionKind.DENOISE] = Field(ActionKind.DENOISE)
     """The kind of action"""
     model: Path
     """The path to the ONNX model"""
@@ -157,7 +160,7 @@ class ActionAutolevel(BaseModel):
     - All tagged color images will be leveled in keep colorspace mode
     """
 
-    kind: Literal[ActionKind.AUTOLEVEL]
+    kind: Literal[ActionKind.AUTOLEVEL] = Field(ActionKind.AUTOLEVEL)
     """The kind of action"""
     base_path: Path = Field("leveled")
     """The base path to save the leveled images to"""
@@ -176,7 +179,7 @@ class ActionOptimize(BaseModel):
     Optimize all images in a volume with pingo
     """
 
-    kind: Literal[ActionKind.OPTIMIZE]
+    kind: Literal[ActionKind.OPTIMIZE] = Field(ActionKind.OPTIMIZE)
     """The kind of action"""
     aggresive: bool = Field(False)
     """Whether to use the aggressive mode of pingo, which would force grayscale conversion for all images"""
@@ -191,7 +194,7 @@ class ActionTagging(BaseModel):
     Everything would be derived from the main config so they are not included here.
     """
 
-    kind: Literal[ActionKind.TAGGING]
+    kind: Literal[ActionKind.TAGGING] = Field(ActionKind.TAGGING)
     """The kind of action"""
 
 
@@ -202,7 +205,7 @@ class ActionMoveColor(BaseModel):
     Everything would be derived from the main config so they are not included here.
     """
 
-    kind: Literal[ActionKind.MOVE_COLOR]
+    kind: Literal[ActionKind.MOVE_COLOR] = Field(ActionKind.MOVE_COLOR)
     """The kind of action"""
     base_path: Path = Field("colors")
     """The base path to save the color images to"""
@@ -213,7 +216,7 @@ class ActionJpegify(BaseModel):
     Action to convert images to JPEG format with cjpegli
     """
 
-    kind: Literal[ActionKind.JPEGIFY]
+    kind: Literal[ActionKind.JPEGIFY] = Field(ActionKind.JPEGIFY)
     """The kind of action"""
     base_path: Path | None = Field(None)
     """The base path to save the JPEG images to, this would use the last used base path if not provided"""
@@ -332,22 +335,22 @@ class VolumeConfig(BaseModel):
 
     path: Path
     """The directory of the volume, relative to the base_path"""
-    volume: int | float
+    number: int | float
     """The volume number"""
-    chapters: list[ChapterConfig] = Field(..., min_length=1)
-    """The list of chapters in the volume"""
     year: int = Field(default_factory=current_year, ge=1000, le=9999)
     """The year of the volume, this is used for tagging"""
-    colors: list[int] = Field(default_factory=list)
-    """The list of color tagged pages in the volume"""
     spreads: list[tuple[int, int]] = Field(default_factory=list)
     """
     The list of spreads in the volume, each tuple is a pair of page numbers
 
     This would be made into a range from the first to the second number inclusive.
     """
+    colors: list[int] = Field(default_factory=list)
+    """The list of color tagged pages in the volume"""
     meta_naming: list[MetadataNamingConfig] = Field(default_factory=list)
     """The list of metadata naming configurations"""
+    chapters: list[ChapterConfig] = Field(..., min_length=1)
+    """The list of chapters in the volume"""
     extra_text: str | None = Field(None)
     """Extra text to add to the filename"""
     revision: int = Field(1, ge=1)
@@ -436,24 +439,24 @@ class OrchestratorConfig(BaseModel):
     """The ripper credit for the manga"""
     email: str
     """The ripper email for the manga"""
-    base_path: Path = Field("source")
-    """The first path to look for volumes, relative to the orchestrator config file"""
     bracket_type: Literal["square", "round", "curly"] = Field("round")
     """The bracket type to use for the ripper credit"""
-    volumes: list[VolumeConfig] = Field(default_factory=list)
+    base_path: Path = Field("source")
+    """The first path to look for volumes, relative to the orchestrator config file"""
+    volumes: list[VolumeConfig] = Field(default_factory=list, min_length=1)
     """The list of volumes to process"""
-    actions: list[Actions] = Field(default_factory=list)
+    actions: list[Actions] = Field(default_factory=list, min_length=1)
     """The list of actions to perform on each volume"""
 
     @model_validator(mode="after")
     def check_volumes_duplicates(self) -> Self:
         existing_volumes = set()
         for vol in self.volumes:
-            if vol.volume in existing_volumes:
+            if vol.number in existing_volumes:
                 raise PydanticCustomError(
                     "duplicate_volume",
                     "Duplicate volume number found: {volume}",
-                    {"volume": vol.volume},
+                    {"volume": vol.number},
                 )
-            existing_volumes.add(vol.volume)
+            existing_volumes.add(vol.number)
         return self

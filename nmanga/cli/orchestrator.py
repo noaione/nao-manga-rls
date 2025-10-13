@@ -89,16 +89,29 @@ def orchestrator_generate(
     config = OrchestratorConfig(
         title=manga_title,
         publisher=manga_publisher,
+        base_path=Path("source"),
         credit=rls_credit,
         email=rls_email,
         bracket_type=bracket_type,
-        base_path=None,
-        volumes=[],
-        actions=[],
+        volumes=[
+            VolumeConfig(
+                number=1,
+                path=Path("v01"),
+                chapters=[
+                    ChapterConfig(number=1, start=0),
+                ],
+            )
+        ],
+        actions=[
+            # Simple shift name
+            ActionShiftName(start=0),
+            # Then use daiz-renamer
+            ActionRename(),
+        ],
     )
 
     with output_file.open("w", encoding="utf-8") as f:
-        json.dump(config.model_dump(), f, indent=4)
+        f.write(config.model_dump_json(indent=4, exclude_none=True))
 
     console.info(f"Generated default orchestrator configuration to {output_file}")
     return 0
@@ -127,4 +140,19 @@ def orchestrator_runner(
     with input_file.open("r", encoding="utf-8") as f:
         config = OrchestratorConfig.model_validate_json(f.read(), strict=True)
 
-    print(config)
+    console.info(f"Running orchestrator for {config.title}...")
+    full_base = input_file.resolve().parent
+
+    input_dir = full_base / config.base_path
+    for volume in config.volumes:
+        chapter_path = input_dir / volume.path
+        if not chapter_path.exists():
+            console.warning(f"Volume path {chapter_path} does not exist, skipping...")
+            continue
+        if not chapter_path.is_dir():
+            console.warning(f"Volume path {chapter_path} is not a directory, skipping...")
+            continue
+
+        console.info(f"Processing volume {volume.volume} {chapter_path}...")
+        for action in config.actions:
+            console.info(f" - Running action {action.kind.name}...")
