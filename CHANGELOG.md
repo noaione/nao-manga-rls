@@ -318,7 +318,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Raise the minimum Pillow image size
 - Bump all dependencies
 
-### Unversioned
+## 0.21.0
 **New Features**
 - Add `posterize` and `autoposterize` command to reduce the number of shades in the image
   - Posterize: Reduce to fixed number of shades (2, 4, 8, 16, 32, 64, 128)
@@ -335,3 +335,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 **Refactor**
 - Move to Python 3.10+ as minimum and change typing to use built-in generics
+
+## Unversioned
+**New Features**
+- `nmanga orchestra` - Create/run a JSON file that will run multiple functions in nmanga together
