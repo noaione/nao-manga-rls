@@ -332,3 +332,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Add `--keep-colorspace` on `autolevel2` command to keep original colorspace
 - Add more detailed info on `denoise-trt` command
 - Fix issue with `nmanga merge` command not working properly
+
+**Refactor**
+- Move to Python 3.10+ as minimum and change typing to use built-in generics

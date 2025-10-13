@@ -34,7 +34,7 @@ from mimetypes import types_map
 from os import PathLike
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import IO, Dict, Generator, List, Optional, Tuple, Union
+from typing import IO, Generator, TypeAlias
 
 import ftfy
 import py7zr
@@ -102,14 +102,14 @@ class WrappedRarFile(rarfile.RarFile):
 class UnicodeZipFile(zipfile.ZipFile):
     def __init__(
         self,
-        file: Union[str, PathLike, IO[bytes]],
+        file: str | PathLike | IO[bytes],
         mode: str = "r",
         compression: int = zipfile.ZIP_STORED,
         allowZip64: bool = True,
-        compresslevel: Optional[int] = None,
+        compresslevel: int | None = None,
         *,
         strict_timestamps: bool = True,
-        metadata_encoding: Optional[str] = None,
+        metadata_encoding: str | None = None,
     ):
         # Check if python 3.10 or below which does not support metadata_encoding
         if sys.version_info < (3, 11):
@@ -154,7 +154,7 @@ def collect_image_from_cbz(cbz_file: zipfile.ZipFile):
 
 
 def collect_image_from_rar(rar_file: rarfile.RarFile):
-    all_contents: List[rarfile.RarInfo] = rar_file.infolist()
+    all_contents: list[rarfile.RarInfo] = rar_file.infolist()
     valid_images = [x for x in all_contents if not x.is_dir() and is_image(x.filename)]
     valid_images.sort(key=lambda x: Path(x.filename).name)
     total_count = len(valid_images)
@@ -250,39 +250,39 @@ def collect_all_comics(folder: Path):
             yield file
 
 
-AccessorType = Union[zipfile.ZipFile, rarfile.RarFile, py7zr.SevenZipFile, tarfile.TarFile, Path]
-AccessorFile = Union[zipfile.ZipInfo, py7zr.FileInfo, rarfile.RarInfo, tarfile.TarInfo, str, bytes]
-AccessorImage = Union[zipfile.ZipInfo, py7zr.FileInfo, rarfile.RarInfo, tarfile.TarInfo, Path]
+AccessorType: TypeAlias = zipfile.ZipFile | rarfile.RarFile | py7zr.SevenZipFile | tarfile.TarFile | Path
+AccessorFile: TypeAlias = zipfile.ZipInfo | py7zr.FileInfo | rarfile.RarInfo | tarfile.TarInfo | str | bytes
+AccessorImage: TypeAlias = zipfile.ZipInfo | py7zr.FileInfo | rarfile.RarInfo | tarfile.TarInfo | Path
 
 
 # https://github.com/miurahr/py7zr/issues/662#issuecomment-3217126074
 class Py7zBytesIO(py7zr.Py7zIO):
     def __init__(self, filename: str):
-        self.filename = filename
+        self.filename: str = filename
         self._buffer = BytesIO()
 
-    def write(self, data: Union[bytes, bytearray]) -> None:
+    def write(self, data: bytes | bytearray) -> None:
         self._buffer.write(data)
 
-    def read(self, size: Optional[int] = None) -> bytes:
+    def read(self, size: int | None = None) -> bytes:
         return self._buffer.read(size)
 
     def seek(self, offset: int, whence: int = 0) -> int:
         return self._buffer.seek(offset, whence)
 
-    def flush(self):
+    def flush(self) -> None:
         return self._buffer.flush()
 
-    def size(self):
+    def size(self) -> int:
         return self._buffer.getbuffer().nbytes
 
-    def close(self):
+    def close(self) -> None:
         self._buffer.close()
 
 
 class BytesIOFactory(py7zr.WriterFactory):
     def __init__(self):
-        self.products: Dict[str, Py7zBytesIO] = {}
+        self.products: dict[str, Py7zBytesIO] = {}
 
     def create(self, filename: str) -> Py7zBytesIO:
         product = Py7zBytesIO(filename)
@@ -295,7 +295,7 @@ class BytesIOFactory(py7zr.WriterFactory):
         except KeyError:
             return b""
 
-    def close(self):
+    def close(self) -> None:
         for product in self.products.values():
             product.close()
         self.products.clear()
@@ -390,7 +390,7 @@ class MangaArchive:
     one of the file in the archive or folder.
     """
 
-    def __init__(self, file_or_folder: Union[Path, str]):
+    def __init__(self, file_or_folder: Path | str):
         self.__accessor: AccessorType = None
         if isinstance(file_or_folder, str):
             file_or_folder = Path(file_or_folder)
@@ -398,11 +398,11 @@ class MangaArchive:
             raise TypeError("file_or_folder must be a Path or str")
         self.__path = file_or_folder
 
-    def __check_open(self):
+    def __check_open(self) -> None:
         if self.__accessor is None:
             self.open()
 
-    def open(self):
+    def open(self) -> AccessorType:
         if self.__accessor is not None:
             return self.__accessor
         if self.__path.is_file():
@@ -433,7 +433,7 @@ class MangaArchive:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def read(self, file: Union[AccessorFile, MangaImage]) -> bytes:
+    def read(self, file: AccessorFile | MangaImage) -> bytes:
         """Read a specific file from the archive or folder.
 
         Return the bytes data.
@@ -482,7 +482,7 @@ class MangaArchive:
         elif isinstance(self.__accessor, tarfile.TarFile):
             return self.__accessor.getmembers()
 
-    def __iter__(self) -> Generator[Tuple[MangaImage, int], None, None]:
+    def __iter__(self) -> Generator[tuple[MangaImage, int], None, None]:
         self.__check_open()
         if isinstance(self.__accessor, Path):
             for file, _, count, _ in collect_image_from_folder(self.__path):
@@ -503,14 +503,14 @@ class MangaArchive:
             raise NotImplementedError("Not implemented for this archive type")
 
     @property
-    def comment(self) -> Optional[str]:
+    def comment(self) -> str | None:
         self.__check_open()
         if isinstance(self.__accessor, (zipfile.ZipFile, rarfile.RarFile)):
             return decode_or(self.__accessor.comment)
         return None
 
     @comment.setter
-    def comment(self, new_comment: Optional[Union[str, bytes]]):
+    def comment(self, new_comment: str | bytes | None):
         self.__check_open()
         if isinstance(self.__accessor, (zipfile.ZipFile, rarfile.RarFile)):
             self.__accessor.comment = encode_or(new_comment) or b""

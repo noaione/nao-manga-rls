@@ -25,7 +25,6 @@ SOFTWARE.
 # Quickly do zero-index renaming of all images in a folder
 
 from pathlib import Path
-from typing import List, Optional, Union
 
 import click
 
@@ -59,8 +58,8 @@ console = term.get_console()
 def shift_renamer(
     path_or_archive: Path,
     start_index: int,
-    manga_title: Optional[str],
-    manga_volume: Optional[Union[int, float]],
+    manga_title: str | None,
+    manga_volume: int | float | None,
 ):
     """
     Quickly rename all images in a folder to a padded number starting from START_INDEX.
@@ -75,7 +74,7 @@ def shift_renamer(
     volume_text = format_volume_text(manga_volume=manga_volume, manga_chapter=None)
     console.info(f"Bulk renaming images in {path_or_archive} with starting index {start_index}...")
 
-    all_images: List[Path] = []
+    all_images: list[Path] = []
     for image_file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
         all_images.append(image_file.resolve())
 

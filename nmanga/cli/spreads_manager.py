@@ -29,7 +29,7 @@ import subprocess as sp
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import move as mv
-from typing import Dict, List, Optional, TypedDict
+from typing import TypedDict
 
 import click
 from PIL import Image
@@ -68,11 +68,11 @@ def make_prefix_convert(magick_exe: str):
 @dataclass
 class _ExportedImage:
     path: Path
-    prefix: Optional[str] = None
-    postfix: Optional[str] = None
+    prefix: str | None = None
+    postfix: str | None = None
 
 
-def select_exts(files: List[Path]) -> str:
+def select_exts(files: list[Path]) -> str:
     extensions = [x.suffix for x in files]
     select_ext = ".jpg"
     if ".png" in extensions:
@@ -90,7 +90,7 @@ def select_exts(files: List[Path]) -> str:
 def execute_spreads_join(
     magick_dir: str,
     quality: float,
-    input_imgs: List[_ExportedImage],
+    input_imgs: list[_ExportedImage],
     out_dir: Path,
     reverse_mode: bool,
     output_fmt: str = "auto",
@@ -138,8 +138,8 @@ def execute_spreads_split(
 
 
 class _ExportedImages(TypedDict):
-    imgs: List[_ExportedImage]
-    pattern: List[int]
+    imgs: list[_ExportedImage]
+    pattern: list[int]
 
 
 @dataclass
@@ -208,7 +208,7 @@ def spreads():
 def spreads_join(
     path_or_archive: Path,
     quality: float,
-    spreads_data: List[str],
+    spreads_data: list[str],
     reverse: bool,
     image_fmt: str,
     use_pil: bool,
@@ -232,7 +232,7 @@ def spreads_join(
 
     # Validate spreads data
     spreads_data = [x.strip() for x in spreads_data]
-    valid_spreads_data: Dict[str, List[int]] = {}
+    valid_spreads_data: dict[str, list[int]] = {}
     for idx, spread in enumerate(spreads_data):
         matched_data = _SpreadsRe.match(spread)
         if not matched_data:
@@ -245,7 +245,7 @@ def spreads_join(
 
     page_re = RegexCollection.page_re()
 
-    exported_imgs: Dict[str, _ExportedImages] = {x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()}
+    exported_imgs: dict[str, _ExportedImages] = {x: {"imgs": [], "pattern": y} for x, y in valid_spreads_data.items()}
     console.info("Collecting image for spreads...")
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, _ in archive:
@@ -351,7 +351,7 @@ def spreads_split(
             param_hint="path_or_archive",
         )
 
-    image_list: List[_SplitSpreads] = []
+    image_list: list[_SplitSpreads] = []
     page_re = RegexCollection.page_re()
     console.info("Collecting image for spreads...")
     with file_handler.MangaArchive(path_or_archive) as archive:

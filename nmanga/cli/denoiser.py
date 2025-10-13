@@ -33,7 +33,6 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 
 import click
@@ -120,7 +119,7 @@ def denoiser(
     tile_size: int,
     precision: str,
     tta: bool,
-    w2x_trt_path: Optional[str],
+    w2x_trt_path: str | None,
 ):  # pragma: no cover
     """
     Automatically adjust the levels of all images in a directory based on local peaks in their histograms.

@@ -27,7 +27,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import click
 
@@ -69,14 +69,14 @@ console = term.get_console()
 def image_tagging(
     path_or_archive: Path,
     manga_title: str,
-    manga_volume: Optional[Union[int, float]],
-    manga_chapter: Optional[Union[int, float]],
+    manga_volume: int | float | None,
+    manga_chapter: int | float | None,
     manga_year: int,
     manga_publication_type: MangaPublication,
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
-    rls_extra_metadata: Optional[str],
+    rls_extra_metadata: str | None,
     bracket_type: Literal["square", "round", "curly"],
     exiftool_path: str,
 ):  # pragma: no cover

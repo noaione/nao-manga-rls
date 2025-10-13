@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from io import BytesIO
 from pathlib import Path
-from typing import List, Tuple, TypedDict, Union
+from typing import TypedDict
 
 from PIL import Image
 
@@ -60,8 +60,8 @@ def try_imports():
 
 
 def find_local_peak(
-    img_path: Union[Path, BytesIO, Image.Image], upper_limit: int = 60, skip_white_peaks: bool = False
-) -> Tuple[int, int, bool]:
+    img_path: Path | BytesIO | Image.Image, upper_limit: int = 60, skip_white_peaks: bool = False
+) -> tuple[int, int, bool]:
     """
     Automatically determine the optimal black level for an image by finding local peaks in its histogram.
 
@@ -155,7 +155,7 @@ def apply_levels(image: Image.Image, black_point: float, white_point: float, gam
     return image.point(lut_adjustments * len(image.getbands()))
 
 
-def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> List[ShadeAnalysis]:
+def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> list[ShadeAnalysis]:
     """
     Analyze the amount of gray shades in a "grayscale" image.
     """
@@ -219,7 +219,7 @@ def npow2(num: int) -> int:
     return 1 if num == 0 else 2 ** (num - 1).bit_length()
 
 
-def detect_nearest_bpc(shades: List[ShadeAnalysis]) -> int:
+def detect_nearest_bpc(shades: list[ShadeAnalysis]) -> int:
     num_shades = len(shades)
     if num_shades <= 1:
         return 1  # 1 bpc
@@ -228,7 +228,7 @@ def detect_nearest_bpc(shades: List[ShadeAnalysis]) -> int:
     return bitdepth
 
 
-def pad_shades_to_bpc(shades: List[ShadeAnalysis]) -> List[int]:
+def pad_shades_to_bpc(shades: list[ShadeAnalysis]) -> list[int]:
     """
     Pad the shades list to the closest bpc value.
 
@@ -275,7 +275,7 @@ def pad_shades_to_bpc(shades: List[ShadeAnalysis]) -> List[int]:
     return shade_values
 
 
-def posterize_image_by_shades(image: Image.Image, shades: List[int]) -> Image.Image:
+def posterize_image_by_shades(image: Image.Image, shades: list[int]) -> Image.Image:
     """
     Posterize an image to the specified gray shades.
 
@@ -285,7 +285,7 @@ def posterize_image_by_shades(image: Image.Image, shades: List[int]) -> Image.Im
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    palette: List[Tuple[int, int, int]] = []
+    palette: list[tuple[int, int, int]] = []
     for shade in shades:
         palette.extend([shade] * 3)  # R, G, B
 

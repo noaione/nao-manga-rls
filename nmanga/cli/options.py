@@ -24,7 +24,6 @@ SOFTWARE.
 
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -108,7 +107,7 @@ class MangaPublicationParamType(click.ParamType):
             self.fail(f"{value!r} is not a valid publication type (must be either: {pub_keys})")
         return pub_type
 
-    def get_metavar(self, param: "click.core.Parameter") -> Optional[str]:
+    def get_metavar(self, param: "click.core.Parameter") -> str | None:
         choices_str = "|".join(list(MANGA_PUBLICATION_TYPES.keys()))
 
         if param.required and param.param_type_name == "argument":

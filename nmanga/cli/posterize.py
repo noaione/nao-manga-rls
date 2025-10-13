@@ -31,7 +31,6 @@ import shutil
 import signal
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
 
 import click
 from PIL import Image
@@ -92,7 +91,7 @@ def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
 @time_program
 def posterize_simple(
     path_or_archive: Path,
-    dest_output: Optional[Path],
+    dest_output: Path | None,
     num_bits: int,
     threads: int,
 ):
@@ -198,7 +197,7 @@ def _autoposterize_wrapper(
 @time_program
 def auto_posterize(
     path_or_archive: Path,
-    dest_output: Optional[Path],
+    dest_output: Path | None,
     threshold_pct: float,
     use_palette_mode: bool,
     threads: int,
@@ -226,7 +225,7 @@ def auto_posterize(
 
     console.status("Processing images with autoposterize...")
     dest_output.mkdir(parents=True, exist_ok=True)
-    results: List[AutoPosterizeResult] = []
+    results: list[AutoPosterizeResult] = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autoposterize... [{idx + 1}/{total_files}]")
@@ -304,8 +303,6 @@ def analyze_shades(
 
         closest_bpc = detect_nearest_bpc(shades)
         total_shades = len(shades)
-        console.info(
-            f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {closest_bpc}bpp)"
-        )
+        console.info(f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {closest_bpc}bpp)")
 
     console.stop_status(f"Analyzed {total_files} images!")

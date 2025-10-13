@@ -26,7 +26,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import Literal
 
 import click
 
@@ -124,16 +124,16 @@ class SpecialNaming:
 def prepare_releases(
     path_or_archive: Path,
     manga_title: str,
-    manga_year: Optional[int],
+    manga_year: int | None,
     manga_publisher: str,
     manga_publication_type: MangaPublication,
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
-    rls_extra_metadata: Optional[str],
+    rls_extra_metadata: str | None,
     is_oneshot: bool,
     is_high_quality: bool,
-    image_quality: Optional[str],
+    image_quality: str | None,
     do_exif_tagging: bool,
     do_img_optimize: bool,
     exiftool_path: str,
@@ -184,13 +184,13 @@ def prepare_releases(
     )
     rls_information.sort(key=lambda x: x.number)
 
-    packing_extra: Dict[int, List[ChapterRange]] = {}
+    packing_extra: dict[int, list[ChapterRange]] = {}
     for info in rls_information:
         if info.base not in packing_extra:
             packing_extra[info.base] = []
         packing_extra[info.base].append(info)
 
-    special_naming: Dict[int, SpecialNaming] = {}
+    special_naming: dict[int, SpecialNaming] = {}
     do_special_get = console.confirm("Do you want to add some special naming?")
     if do_special_get:
         while True:
@@ -208,7 +208,7 @@ def prepare_releases(
     console.info(f"Has {len(rls_information)} chapters")
     current = 1
     console.info("Processing: 1/???")
-    image_titling: Optional[str] = None
+    image_titling: str | None = None
     vol_oshot_warn = False
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = cmx_re.match(image.name)
@@ -223,14 +223,12 @@ def prepare_releases(
         vol_ex = title_match.group("volex")
         if p02 is not None:
             p01 = f"{p01}-{p02}"
-        vol_act: Optional[Union[int, float]]
+        vol_act: int | float | None
         if is_oneshot:
             vol_act = None
             if not vol_oshot_warn:
                 vol_oshot_warn = True
-                console.warning(
-                    "Marked as Oneshot, using OShot as default for image and empty for archive name!"
-                )
+                console.warning("Marked as Oneshot, using OShot as default for image and empty for archive name!")
         else:
             if vol is None:
                 vol_act = None
@@ -377,18 +375,18 @@ def prepare_releases(
 def prepare_releases_chapter(
     path_or_archive: Path,
     manga_title: str,
-    manga_year: Optional[int],
+    manga_year: int | None,
     manga_publisher: str,
-    manga_chapter: Optional[Union[float, int]],
-    manga_volume: Optional[int],
-    chapter_title: Optional[str],
+    manga_chapter: int | float | None,
+    manga_volume: int | None,
+    chapter_title: str | None,
     manga_publication_type: MangaPublication,
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
-    rls_extra_metadata: Optional[str],
+    rls_extra_metadata: str | None,
     is_high_quality: bool,
-    image_quality: Optional[str],
+    image_quality: str | None,
     do_exif_tagging: bool,
     do_img_optimize: bool,
     exiftool_path: str,
@@ -440,7 +438,7 @@ def prepare_releases_chapter(
     console.info("Preparing release...")
     current = 1
     console.info("Processing: 1/???")
-    image_titling: Optional[str] = None
+    image_titling: str | None = None
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = page_re.match(image.name)
         if title_match is None:

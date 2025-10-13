@@ -25,7 +25,7 @@ SOFTWARE.
 import re
 import subprocess as sp
 from pathlib import Path
-from typing import Dict, List, Match, Optional, Pattern, Tuple, Union, overload
+from typing import Match, Pattern, overload
 
 from . import config, term, utils
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
@@ -67,7 +67,7 @@ class PseudoChapterMatch:
     """
 
     def __init__(self):
-        self._contents: Dict[str, str] = {}
+        self._contents: dict[str, str] = {}
 
     def set(self, key: str, value: str):
         self._contents[key] = value
@@ -75,7 +75,7 @@ class PseudoChapterMatch:
     def get(self, key: str):
         return self._contents.get(key)
 
-    def group(self, key: Union[str, int]):
+    def group(self, key: str | int):
         if isinstance(key, int):
             try:
                 actual = list(self._contents.keys())[key]
@@ -86,7 +86,7 @@ class PseudoChapterMatch:
 
 
 def format_daiz_like_numbering(
-    number: Union[int, float], digit: int = 3, use_minus: bool = True, separator: str = conf.defaults.ch_special_tag
+    number: int | float, digit: int = 3, use_minus: bool = True, separator: str = conf.defaults.ch_special_tag
 ):
     if isinstance(number, int):
         return f"{int(number):0{digit}d}"
@@ -100,7 +100,7 @@ def format_daiz_like_numbering(
 
 class ChapterRange:
     def __init__(
-        self, number: Union[int, float], name: Optional[str] = None, range: List[int] = list(), is_single: bool = False
+        self, number: int | float, name: str | None = None, range: list[int] = list(), is_single: bool = False
     ):
         self.number = number
         self.name = name
@@ -112,7 +112,7 @@ class ChapterRange:
             return f"<ChapterRange c{self.number} - {self.name}>"
         return f"<ChapterRange c{self.number:03d} - {self.name}>"
 
-    def __eq__(self, other: Union[int, float, "ChapterRange"]):
+    def __eq__(self, other: int | float | "ChapterRange"):
         if isinstance(other, ChapterRange):
             other = other.number
         return self.number == other
@@ -129,7 +129,7 @@ class ChapterRange:
         return int(b)
 
     @property
-    def floating(self) -> Optional[int]:
+    def floating(self) -> int | None:
         if not isinstance(self.number, float):
             return None
         _, f = str(self.number).split(".")
@@ -141,7 +141,7 @@ def check_cbz_exist(base_path: Path, filename: str):
     return full_path.exists() and full_path.is_file()
 
 
-def actual_or_fallback(actual_ch: Optional[str], chapter_num: int) -> str:
+def actual_or_fallback(actual_ch: str | None, chapter_num: int) -> str:
     proper_ch = f"{chapter_num:03d}"
     if not actual_ch:
         return proper_ch
@@ -160,7 +160,7 @@ def actual_or_fallback(actual_ch: Optional[str], chapter_num: int) -> str:
         return proper_ch
 
 
-def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: bool = False):
+def create_chapter(match: Match[str] | PseudoChapterMatch, has_publisher: bool = False):
     chapter_num = int(match.group("ch"))
     chapter_extra = match.group("ex")
     chapter_vol = match.group("vol")
@@ -177,7 +177,7 @@ def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: 
             else:
                 chapter_vol = int(chapter_vol[1:])
 
-    chapter_title: Optional[str] = None
+    chapter_title: str | None = None
     try:
         chapter_title = match.group("title")
         if chapter_title is not None:
@@ -205,14 +205,14 @@ def create_chapter(match: Union[Match[str], PseudoChapterMatch], has_publisher: 
     return chapter_data
 
 
-def safe_int(value: str) -> Optional[int]:
+def safe_int(value: str) -> int | None:
     try:
         return int(value)
     except ValueError:
         return None
 
 
-def int_or_float(value: str) -> Optional[Union[int, float]]:
+def int_or_float(value: str) -> int | float | None:
     if "." in value:
         try:
             return float(value)
@@ -221,7 +221,7 @@ def int_or_float(value: str) -> Optional[Union[int, float]]:
     return safe_int(value)
 
 
-def parse_ch_ranges(data: str) -> Tuple[List[int], bool]:
+def parse_ch_ranges(data: str) -> tuple[list[int], bool]:
     split_range = data.split("-")
     if len(split_range) < 2:
         return [int(data)], True
@@ -248,8 +248,8 @@ def validate_ch_ranges(current: str):
 
 def inquire_chapter_ranges(
     initial_prompt: str, continue_prompt: str, ask_title: bool = False
-) -> List[ChapterRange]:  # pragma: no cover
-    chapter_ranges: List[ChapterRange] = []
+) -> list[ChapterRange]:  # pragma: no cover
+    chapter_ranges: list[ChapterRange] = []
     while True:
         console.info(initial_prompt)
 
@@ -259,7 +259,7 @@ def inquire_chapter_ranges(
         ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
         actual_ranges, is_single = parse_ch_ranges(ch_ranges)
 
-        ch_title: Optional[str] = None
+        ch_title: str | None = None
         if ask_title:
             ch_title = console.inquire("Chapter title", lambda y: len(y.strip()) > 0)
         simple_range = ChapterRange(ch_number, ch_title, actual_ranges, is_single)
@@ -315,7 +315,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
         proc.wait()
 
 
-def _run_pingo_and_verify(pingo_cmd: List[str]):  # pragma: no cover
+def _run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
     proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
 
@@ -423,9 +423,9 @@ def format_archive_filename(
     publication_type: MangaPublication,
     ripper_credit: str,
     bracket_type: str,
-    manga_volume_text: Optional[str] = None,
-    extra_metadata: Optional[str] = None,
-    rls_revision: Optional[int] = None,
+    manga_volume_text: str | None = None,
+    extra_metadata: str | None = None,
+    rls_revision: int | None = None,
 ):
     pair_left, pair_right = BRACKET_MAPPINGS.get(bracket_type.lower(), BRACKET_MAPPINGS["square"])
 
@@ -453,12 +453,12 @@ def format_archive_filename(
 
 
 def format_volume_text(
-    manga_volume: Optional[Union[int, float]] = None,
-    manga_chapter: Optional[Union[int, float]] = None,
-) -> Optional[str]:
+    manga_volume: int | float | None = None,
+    manga_chapter: int | float | None = None,
+) -> str | None:
     tag_sep = conf.defaults.ch_special_tag
 
-    volume_text: Optional[str] = None
+    volume_text: str | None = None
     if manga_chapter is not None:
         if isinstance(manga_chapter, float):
             float_string = str(manga_chapter)
@@ -487,12 +487,12 @@ def format_daiz_like_filename(
     publication_type: MangaPublication,
     ripper_credit: str,
     bracket_type: str,
-    manga_volume: Optional[Union[int, float]] = None,
-    extra_metadata: Optional[str] = None,
-    image_quality: Optional[str] = None,  # {HQ}/{LQ} thing
-    rls_revision: Optional[int] = None,
-    chapter_extra_maps: Dict[int, List[ChapterRange]] = dict(),
-    extra_archive_metadata: Optional[str] = None,
+    manga_volume: int | float | None = None,
+    extra_metadata: str | None = None,
+    image_quality: str | None = None,  # {HQ}/{LQ} thing
+    rls_revision: int | None = None,
+    chapter_extra_maps: dict[int, list[ChapterRange]] = dict(),
+    extra_archive_metadata: str | None = None,
     fallback_volume_name: str = "OShot",
 ):
     pub_type = ""
@@ -627,7 +627,7 @@ class RegexCollection:
     # fmt: on
 
     @classmethod
-    def volume_re(cls, title: str, limit_credit: Optional[str] = None) -> Pattern[str]:
+    def volume_re(cls, title: str, limit_credit: str | None = None) -> Pattern[str]:
         re_fmt = cls._VolumeRegex.replace("CHANGETHIS", re.escape(title))
         if limit_credit is not None:
             re_fmt += r"[\[\(]" + limit_credit + r".*"
@@ -644,7 +644,7 @@ class RegexCollection:
         ...
 
     @classmethod
-    def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
+    def chapter_re(cls, title: str, publisher: str | None = None) -> Pattern[str]:
         if publisher is None:
             return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", re.escape(title)))
         return re.compile(

@@ -24,7 +24,7 @@ SOFTWARE.
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, List, Optional, Union, overload
+from typing import TYPE_CHECKING, Callable, TypeAlias, overload
 
 import inquirer
 from rich.console import Console as RichConsole
@@ -44,15 +44,15 @@ rich_theme = RichTheme(
         "info": "cyan bold",
     }
 )
-AnyType = Union[str, bytes, int, float]
-ValidateFunc = Callable[[str], bool]
-ValidationType = Union[ValidateFunc, str]
+AnyType: TypeAlias = str | bytes | int | float
+ValidateFunc: TypeAlias = Callable[[str], bool]
+ValidationType: TypeAlias = ValidateFunc | str
 
 
 @dataclass
 class ConsoleChoice:
     name: str
-    value: Optional[str] = None
+    value: str | None = None
 
     def __post_init__(self):
         self.value = self.value or self.name
@@ -62,8 +62,8 @@ class Console:
     def __init__(self, debug_mode: bool = False):
         self.__debug_mode = debug_mode
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True)
-        self._status: Optional["RichStatus"] = None
-        self.__last_known_status: Optional[str] = None
+        self._status: "RichStatus" | None = None
+        self.__last_known_status: str | None = None
 
     def enable_debug(self):
         self.__debug_mode = True
@@ -115,14 +115,12 @@ class Console:
             self.__debug_status(message)
 
     @overload
-    def stop_status(self) -> None:
-        ...
+    def stop_status(self) -> None: ...
 
     @overload
-    def stop_status(self, final_text: str) -> None:
-        ...
+    def stop_status(self, final_text: str) -> None: ...
 
-    def stop_status(self, final_text: Optional[str] = None) -> None:
+    def stop_status(self, final_text: str | None = None) -> None:
         final_text = final_text or self.__last_known_status
         if self._status:
             if final_text is not None:
@@ -150,27 +148,25 @@ class Console:
     @overload
     def choice(
         self,
-        message: Optional[str] = ...,
-        choices: List[AnyType] = ...,
-        default: Optional[Union[AnyType, ConsoleChoice]] = ...,
-    ) -> str:
-        ...
+        message: str | None = ...,
+        choices: list[AnyType] = ...,
+        default: AnyType | ConsoleChoice | None = ...,
+    ) -> str: ...
 
     @overload
     def choice(
         self,
-        message: Optional[str] = ...,
-        choices: List[ConsoleChoice] = ...,
-        default: Optional[Union[AnyType, ConsoleChoice]] = ...,
-    ) -> ConsoleChoice:
-        ...
+        message: str | None = ...,
+        choices: list[ConsoleChoice] = ...,
+        default: AnyType | ConsoleChoice | None = ...,
+    ) -> ConsoleChoice: ...
 
     def choice(
         self,
-        message: Optional[str] = None,
-        choices: Union[List[AnyType], List[ConsoleChoice]] = [],
-        default: Optional[Union[AnyType, ConsoleChoice]] = None,
-    ) -> Union[AnyType, ConsoleChoice]:
+        message: str | None = None,
+        choices: list[AnyType] | list[ConsoleChoice] = [],
+        default: AnyType | ConsoleChoice | None = None,
+    ) -> AnyType | ConsoleChoice:
         if not choices:
             raise ValueError("No choices provided")
         message = message or "Please choose an option"
@@ -197,18 +193,16 @@ class Console:
         self,
         prompt: str,
         validation: ValidateFunc = ...,
-        default: Optional[AnyType] = ...,
-    ) -> AnyType:
-        ...
+        default: AnyType | None = ...,
+    ) -> AnyType: ...
 
     @overload
     def inquire(
         self,
         prompt: str,
         validation: str = ...,
-        default: Optional[AnyType] = ...,
-    ) -> AnyType:
-        ...
+        default: AnyType | None = ...,
+    ) -> AnyType: ...
 
     def _internal_validation(self, text_input: str, validation: ValidateFunc):
         try:
@@ -217,9 +211,7 @@ class Console:
         except Exception:
             return False
 
-    def inquire(
-        self, prompt: str, validation: Optional[ValidateFunc] = None, default: Optional[AnyType] = None
-    ) -> AnyType:
+    def inquire(self, prompt: str, validation: ValidateFunc | None = None, default: AnyType | None = None) -> AnyType:
         # Custom inquirer
         inquired_text = default
         while True:
@@ -248,7 +240,7 @@ class Console:
 
         return inquired_text
 
-    def confirm(self, prompt: Optional[str] = None) -> bool:
+    def confirm(self, prompt: str | None = None) -> bool:
         prompt = prompt or "Are you sure?"
         return inquirer.confirm(prompt, default=False)
 

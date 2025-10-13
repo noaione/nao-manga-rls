@@ -28,7 +28,7 @@ import sys
 import traceback
 import warnings
 from functools import partial
-from typing import TYPE_CHECKING, Callable, List, Optional, Pattern, Tuple, Union, cast, overload
+from typing import TYPE_CHECKING, Callable, Pattern, cast, overload
 
 import click
 from click.core import Context
@@ -56,7 +56,7 @@ __all__ = (
 def _test_exec(
     arguments: list,
     *,
-    extra_check: Optional[Callable[[str, str], bool]] = None,
+    extra_check: Callable[[str, str], bool] | None = None,
 ):
     try:
         proc = sp.Popen(arguments, stdout=sp.PIPE, stderr=sp.PIPE)
@@ -74,10 +74,10 @@ def _test_exec(
 
 
 def _find_exec_path(
-    exec_name: Union[str, List[str]],
-    test_cmd: Optional[str] = None,
+    exec_name: str | list[str],
+    test_cmd: str | None = None,
     *,
-    extra_check: Optional[Callable[[str, str], bool]] = None,
+    extra_check: Callable[[str, str], bool] | None = None,
 ) -> str:
     if isinstance(exec_name, str):
         exec_name = [exec_name]
@@ -97,7 +97,7 @@ def _find_exec_path(
     console.stop_status()
 
 
-def test_or_find_magick(magick_path: str, force_search: bool = True) -> Optional[str]:
+def test_or_find_magick(magick_path: str, force_search: bool = True) -> str | None:
     try:
         success = _test_exec([magick_path, "-version"])
         if not success:
@@ -107,7 +107,7 @@ def test_or_find_magick(magick_path: str, force_search: bool = True) -> Optional
         return None if not force_search else _find_exec_path(["magick"], "-version")
 
 
-def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Optional[str]:
+def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> str | None:
     try:
         success = _test_exec([exiftool_path, "-ver"])
         if not success:
@@ -117,7 +117,7 @@ def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> Opti
         return None if not force_search else _find_exec_path("exiftool", ["-ver"])
 
 
-def test_or_find_w2x_trt(w2x_trt_path: Optional[str], force_search: bool = True) -> Optional[str]:
+def test_or_find_w2x_trt(w2x_trt_path: str | None, force_search: bool = True) -> str | None:
     if not w2x_trt_path:
         return None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"])
     try:
@@ -129,7 +129,7 @@ def test_or_find_w2x_trt(w2x_trt_path: Optional[str], force_search: bool = True)
         return None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"])
 
 
-def _is_pingo_validity_check(stdout: str, stderr: str):
+def _is_pingo_validity_check(stdout: str, stderr: str) -> bool:
     if "bad command. type 'pingo'" in (stdout := stdout.strip().lower()):
         return True
     if "bad command. type 'pingo'" in (stderr := stderr.strip().lower()):
@@ -137,7 +137,7 @@ def _is_pingo_validity_check(stdout: str, stderr: str):
     return False
 
 
-def test_or_find_pingo(pingo_path: str, force_search: bool = True) -> Optional[str]:
+def test_or_find_pingo(pingo_path: str, force_search: bool = True) -> str | None:
     try:
         success = _test_exec([pingo_path, "-help"], extra_check=_is_pingo_validity_check)
         if not success:
@@ -166,21 +166,21 @@ class WithDeprecatedOption(click.Option):
     def __init__(self, *args, **kwargs):
         self.is_deprecated = bool(kwargs.pop("deprecated", False))
 
-        preferred: Optional[Union[Tuple[str], List[str], str]] = kwargs.pop("preferred", None)
+        preferred: tuple[str] | list[str] | str | None = kwargs.pop("preferred", None)
         preferred_list = []
         if preferred is not None:
             if isinstance(preferred, str):
                 preferred_list = [preferred]
             elif isinstance(preferred_list, (tuple, list)):
-                preferred_list: List[str] = []
+                preferred_list: list[str] = []
                 for pref in preferred:
                     if not isinstance(pref, str):
                         raise ValueError(f"The following prefered option is not a string! `{pref!r}`")
                     preferred_list.append(pref)
-        self.preferred: List[str] = preferred_list
+        self.preferred: list[str] = preferred_list
         super(WithDeprecatedOption, self).__init__(*args, **kwargs)
 
-    def get_help_record(self, ctx: Context) -> Optional[Tuple[str, str]]:
+    def get_help_record(self, ctx: Context) -> tuple[str, str] | None:
         parent = super().get_help_record(ctx)
         if parent is None:
             return parent
@@ -206,7 +206,7 @@ class UnrecoverableNMangaError(click.ClickException):
         traceback.print_exception(*self.exc_info)
 
 
-def _fmt_pref_text(preferred: List[str]):
+def _fmt_pref_text(preferred: list[str]):
     return "`" + "` or `".join(preferred) + "`"
 
 
@@ -236,7 +236,7 @@ class NMangaCommandHandler(click.Command):
                     original_func: callable,
                 ):
                     is_deprecated = cast(bool, getattr(upper_opt.obj, "is_deprecated", False))
-                    preferred = cast(List[str], getattr(upper_opt.obj, "preferred", []))
+                    preferred = cast(list[str], getattr(upper_opt.obj, "preferred", []))
 
                     opt_short = upper_opt._short_opts
                     opt_long = upper_opt._long_opts
@@ -278,7 +278,7 @@ class NMangaCommandHandler(click.Command):
 
 class RegexCollection:
     @classmethod
-    def volume_re(cls, title: str, limit_credit: Optional[str] = None) -> Pattern[str]:
+    def volume_re(cls, title: str, limit_credit: str | None = None) -> Pattern[str]:
         warnings.warn(
             "nmanga.cli.base.RegexCollection.volume_re is deprecated, "
             "use nmanga.common.RegexCollection.volume_re instead",
@@ -295,7 +295,7 @@ class RegexCollection:
     def chapter_re(cls, title: str, publisher: str) -> Pattern[str]: ...
 
     @classmethod
-    def chapter_re(cls, title: str, publisher: Optional[str] = None) -> Pattern[str]:
+    def chapter_re(cls, title: str, publisher: str | None = None) -> Pattern[str]:
         warnings.warn(
             "nmanga.cli.base.RegexCollection.chapter_re is deprecated, "
             "use nmanga.common.RegexCollection.chapter_re instead",

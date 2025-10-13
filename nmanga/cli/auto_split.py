@@ -29,7 +29,6 @@ SOFTWARE.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import click
 
@@ -91,9 +90,9 @@ console = term.get_console()
 def auto_split(
     path_or_archive: Path,
     title: str,
-    publisher: Optional[str] = None,
-    inner_title: Optional[str] = None,
-    limit_to_credit: Optional[str] = None,
+    publisher: str | None = None,
+    inner_title: str | None = None,
+    limit_to_credit: str | None = None,
     is_oneshot: bool = False,
 ):
     """
@@ -102,7 +101,7 @@ def auto_split(
     if inner_title is None:
         inner_title = title
 
-    all_comic_files: Dict[str, Path] = {}
+    all_comic_files: dict[str, Path] = {}
     parent_dir = path_or_archive
     volume_re = RegexCollection.volume_re(title, limit_to_credit)
     if file_handler.is_archive(path_or_archive):
@@ -149,8 +148,8 @@ def auto_split(
 
         # Just need to mirror automatically.
         # Read to memory, then dump to disk
-        collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
-        skipped_chapters: List[str] = []
+        collected_chapters: dict[str, exporter.CBZMangaExporter] = {}
+        skipped_chapters: list[str] = []
         with file_handler.MangaArchive(file_path) as archive:
             for image, _ in archive:
                 filename = image.filename

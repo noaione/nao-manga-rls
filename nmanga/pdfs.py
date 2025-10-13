@@ -25,7 +25,7 @@ SOFTWARE.
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Generator, List, Optional, Tuple
+from typing import Generator
 
 import pymupdf
 from PIL import Image
@@ -61,7 +61,7 @@ class ExtractedImage:
     """:str: The image extension (e.g. 'png', 'jpg', 'tiff', etc.)"""
     page: int
     """:int: The page number (1-based) where the image was extracted from"""
-    index: Optional[int] = None
+    index: int | None = None
     """:Optional[int]: The index of the image on the page (0-based), or None if the image is a full page image"""
 
 
@@ -84,7 +84,7 @@ class PDFColorspaceGenerate(str, Enum):
         raise ValueError(f"Unknown colorspace: {self}")
 
 
-def load_xref_image(doc: pymupdf.Document, xref: int) -> Tuple[bytes, str]:
+def load_xref_image(doc: pymupdf.Document, xref: int) -> tuple[bytes, str]:
     """
     Load image from xref
     """
@@ -95,7 +95,7 @@ def load_xref_image(doc: pymupdf.Document, xref: int) -> Tuple[bytes, str]:
     return image_bytes, image_ext
 
 
-def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int, skip_mask: bool = False) -> Tuple[bytes, str]:
+def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int, skip_mask: bool = False) -> tuple[bytes, str]:
     """
     Handle image with smask (soft mask for transparency)
 
@@ -132,7 +132,7 @@ def load_xref_with_smask(doc: pymupdf.Document, xref: int, smask: int, skip_mask
     return image_bytes, ext
 
 
-def prefer_colorspace(colorspaces: List[str]) -> str:
+def prefer_colorspace(colorspaces: list[str]) -> str:
     """
     Given a list of colorspaces, return the preferred one.
 
@@ -147,7 +147,7 @@ def prefer_colorspace(colorspaces: List[str]) -> str:
     if not colorspaces:
         return "RGB"  # Default to RGB
 
-    def _determine(cs: str) -> Optional[int]:
+    def _determine(cs: str) -> int | None:
         if "DeviceRGB" in cs:
             return 1
         if "DeviceCMYK" in cs:
@@ -169,7 +169,7 @@ def prefer_colorspace(colorspaces: List[str]) -> str:
     raise ValueError(f"Unknown colorspaces: {colorspaces}")
 
 
-def has_alpha(images: List[Image.Image]) -> bool:
+def has_alpha(images: list[Image.Image]) -> bool:
     """
     Check if any image has alpha channel
     """
@@ -271,10 +271,10 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
 def generate_image_from_page(
     page: pymupdf.Page,
     dpi: int,
-    force_colorspace: Optional[PDFColorspaceGenerate] = None,
+    force_colorspace: PDFColorspaceGenerate | None = None,
     with_alpha: bool = False,
     force_cmyk: bool = False,
-) -> Tuple[bytes, str]:
+) -> tuple[bytes, str]:
     """
     This function create a single image from a single page of the PDF document.
 
@@ -326,10 +326,10 @@ def determine_dpi_from_width(page: pymupdf.Page, target_width: int) -> int:
 def generate_images_from_pdf(
     doc: pymupdf.Document,
     dpi: int,
-    force_colorspace: Optional[PDFColorspaceGenerate] = None,
+    force_colorspace: PDFColorspaceGenerate | None = None,
     with_alpha: bool = False,
     coerce_cmyk: bool = True,
-) -> Generator[Tuple[bytes, str], None, None]:
+) -> Generator[tuple[bytes, str], None, None]:
     """
     This function create a single image from each page of the PDF document.
 

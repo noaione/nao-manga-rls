@@ -28,7 +28,6 @@ from datetime import datetime
 from enum import Enum
 from mimetypes import guess_type
 from pathlib import Path
-from typing import Optional, Tuple, Type, Union
 from xml.dom.minidom import parseString as xml_dom_parse
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
@@ -49,7 +48,7 @@ __all__ = (
 )
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
-Image.MAX_IMAGE_PIXELS = 4 * ((1024 ** 3) // 3)
+Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 
 
 class ExporterType(str, Enum):
@@ -60,7 +59,7 @@ class ExporterType(str, Enum):
     epub = "epub"
 
     @classmethod
-    def from_choice(cls: Type["ExporterType"], ext: str):
+    def from_choice(cls: type["ExporterType"], ext: str):
         ext = ext.lower()
         if ext == "cbz":
             return cls.cbz
@@ -82,7 +81,7 @@ class MangaExporter:
     def is_existing(self):
         return self._out_dir.exists()
 
-    def add_image(self, image_name: str, image_data: Union[bytes, Path]):
+    def add_image(self, image_name: str, image_data: bytes | Path):
         target_path = self._out_dir / image_name
         if isinstance(image_data, bytes):
             target_path.write_bytes(image_data)
@@ -90,7 +89,7 @@ class MangaExporter:
             # Copy image
             target_path.write_bytes(image_data.read_bytes())
 
-    def set_comment(self, comment: Union[str, bytes]):
+    def set_comment(self, comment: str | bytes):
         pass
 
     def close(self):
@@ -125,14 +124,14 @@ class CBZMangaExporter(ArchiveMangaExporter):
             return True
         return False
 
-    def add_image(self, image_name: str, image_data: Union[bytes, Path]):
+    def add_image(self, image_name: str, image_data: bytes | Path):
         base_name = Path(image_name).name
         if isinstance(image_data, bytes):
             self._target_cbz.writestr(base_name, image_data)
         else:
             self._target_cbz.write(str(image_data), base_name)
 
-    def set_comment(self, comment: Union[str, bytes]):
+    def set_comment(self, comment: str | bytes):
         self._target_cbz.comment = encode_or(comment) or b""
 
     def close(self):
@@ -154,7 +153,7 @@ class CB7MangaExporter(ArchiveMangaExporter):
             return True
         return False
 
-    def add_image(self, image_name: str, image_data: Union[bytes, Path]):
+    def add_image(self, image_name: str, image_data: bytes | Path):
         base_name = Path(image_name).name
         if isinstance(image_data, bytes):
             self._target_cb7.writestr(image_data, base_name)
@@ -176,7 +175,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         self._page_counter = 1
         self._manga_title = manga_title
 
-        self._base_img_size: Optional[Tuple[int, int]] = None
+        self._base_img_size: tuple[int, int] | None = None
         self._last_direction = "center"
 
     def is_existing(self):
@@ -243,7 +242,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
             page_id.replace("page-", "image-"),
         )
 
-    def __add_item_to_manifest(self, idname: str, filename: str, mimetype: str, fallback: Optional[str] = None):
+    def __add_item_to_manifest(self, idname: str, filename: str, mimetype: str, fallback: str | None = None):
         # ref: <item id="cover" href="Text/cover.xhtml" media-type="application/xhtml+xml"/>
         # ref: <item id="Color1.jpg" href="Images/Color1.jpg" media-type="image/jpeg"/>
         manifest_root = self._xml_content_opf.find(".//{http://www.idpf.org/2007/opf}manifest")
@@ -295,7 +294,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         metadata_root.append(item_res)
         metadata_root.append(item_viewport)
 
-    def add_image(self, image_name: str, image_data: Union[bytes, Path]):
+    def add_image(self, image_name: str, image_data: bytes | Path):
         self._initialize_meta()
         base_name = Path(image_name).name
         image = f"OEBPS/Images/{base_name}"
@@ -333,14 +332,14 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         self._target_epub.writestr("OEBPS/content.opf", self._format_xml())
         self._target_epub.close()
 
-    def set_comment(self, comment: Union[str, bytes]):
+    def set_comment(self, comment: bytes | Path):
         self._target_epub.comment = encode_or(comment) or b""
 
 
 def exporter_factory(
     file_name: str,
     output_directory: Path,
-    mode: Union[str, ExporterType] = ExporterType.cbz,
+    mode: str | ExporterType = ExporterType.cbz,
     **kwargs,
 ):
     if isinstance(mode, str):

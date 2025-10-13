@@ -1,9 +1,7 @@
-from typing import List
-
 from setuptools import setup
 
 
-def clean_requirements(requirements: List[str]) -> List[str]:
+def clean_requirements(requirements: list[str]) -> list[str]:
     valid_requirements = []
     for requirement in requirements:
         requirement = requirement.rstrip()
@@ -18,7 +16,7 @@ def clean_requirements(requirements: List[str]) -> List[str]:
 version = None
 author = None
 author_email = None
-with open("nmanga/_metadata.py") as f:
+with open("nmanga/_metadata.py") as f:  # noqa: PTH123
     for line in f:
         if line.find("__version__") >= 0 and version is None:
             version = line.split("=")[1].strip()
@@ -40,12 +38,12 @@ if author is None:
 if author_email is None:
     raise Exception("Author email not found")
 
-with open("README.md") as f:
+with open("README.md") as f:  # noqa: PTH123
     readme = f.read()
 
-with open("requirements.txt") as f:
+with open("requirements.txt") as f:  # noqa: PTH123
     requirements = clean_requirements(f.readlines())
-with open("requirements-dev.txt") as f:
+with open("requirements-dev.txt") as f:  # noqa: PTH123
     dev_requirements = clean_requirements(f.readlines())
 
 

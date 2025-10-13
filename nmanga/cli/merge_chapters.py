@@ -27,7 +27,6 @@ SOFTWARE.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
 
 import click
 
@@ -39,7 +38,7 @@ from .base import NMangaCommandHandler
 console = term.get_console()
 
 
-def _clean_filename(output_name: Optional[Path]) -> Optional[Path]:
+def _clean_filename(output_name: Path | None) -> Path | None:
     if output_name is None:
         return None
 
@@ -60,7 +59,7 @@ def _clean_filename(output_name: Optional[Path]) -> Optional[Path]:
 )
 @options.dest_output(optional=True, dir_okay=False, file_okay=True)
 @time_program
-def merge_chapters(archives: List[Path], dest_output: Optional[Path] = None):  # pragma: no cover
+def merge_chapters(archives: list[Path], dest_output: Path | None = None):  # pragma: no cover
     if len(archives) < 2:
         console.error("You must provide at least two archives to merge!")
         return 1

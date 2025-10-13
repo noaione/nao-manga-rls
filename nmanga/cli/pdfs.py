@@ -27,7 +27,6 @@ SOFTWARE.
 import pprint
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
 
 import click
 import pymupdf
@@ -154,7 +153,7 @@ def export_pdf(
     pdf_file: Path,
     dest_output: Path,
     dpi: int,
-    colorspace: Optional[PDFColorspaceGenerate],
+    colorspace: PDFColorspaceGenerate | None,
     with_alpha: bool,
     force_cmyk: bool,
     levels: bool,

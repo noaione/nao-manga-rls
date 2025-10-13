@@ -35,7 +35,6 @@ import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import click
 from PIL import Image
@@ -80,7 +79,7 @@ def make_prefix_convert(magick_exe: str):
     raise ValueError("Invalid magick executable name, must be 'magick' or 'convert'")
 
 
-def _autolevel_exec(command: List[str]) -> None:
+def _autolevel_exec(command: list[str]) -> None:
     output = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # check exit code
     if output.returncode != 0:
@@ -102,7 +101,7 @@ def _init_worker():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int, skip_white: bool) -> Tuple[int, int, Path, bool]:
+def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int, skip_white: bool) -> tuple[int, int, Path, bool]:
     black_level, white_level, force_gray = find_local_peak(img_path, upper_limit, skip_white)
     return black_level, white_level, img_path, force_gray
 
@@ -202,9 +201,9 @@ def autolevel(
             return 1
     console.stop_status("Calculated black levels for images.")
 
-    commands: List[str] = []
-    to_be_copied: List[Path] = []
-    magick_cmd: List[str] = make_prefix_convert(magick_exe)
+    commands: list[str] = []
+    to_be_copied: list[Path] = []
+    magick_cmd: list[str] = make_prefix_convert(magick_exe)
 
     console.info(f"Saving processed images to: {dest_output}")
     dest_output.mkdir(parents=True, exist_ok=True)
@@ -449,7 +448,7 @@ def autolevel2(
 
     console.status("Processing images with autolevel...")
     dest_output.mkdir(parents=True, exist_ok=True)
-    results: List[AutoLevelResult] = []
+    results: list[AutoLevelResult] = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
@@ -481,7 +480,7 @@ def autolevel2(
         console.info(f"Grayscaled {grayscaled_count} images.")
 
 
-def _forcegray_exec(command: List[str]) -> None:
+def _forcegray_exec(command: list[str]) -> None:
     output = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # check exit code
     if output.returncode != 0:
@@ -500,7 +499,7 @@ def _forcegray_exec(command: List[str]) -> None:
 @time_program
 def force_gray(
     path_or_archive: Path,
-    dest_output: Optional[Path],
+    dest_output: Path | None,
     magick_path: str,
     threads: int,
 ):
@@ -526,8 +525,8 @@ def force_gray(
     all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
 
     console.info(f"Found {len(all_files)} files in the directory.")
-    commands: List[List[str]] = []
-    magick_cmd: List[str] = make_prefix_convert(magick_exe)
+    commands: list[list[str]] = []
+    magick_cmd: list[str] = make_prefix_convert(magick_exe)
 
     total_files = len(all_files)
     for idx, img_path in enumerate(all_files):

@@ -23,7 +23,7 @@ SOFTWARE.
 """
 
 from string import Formatter
-from typing import Any, Dict
+from typing import Any
 
 __all__ = (
     "OptionalFormatter",
@@ -37,7 +37,7 @@ class _OptinalDict(dict):
 
 
 class OptionalFormatter:
-    def __init__(self, data: Dict[str, Any]) -> None:
+    def __init__(self, data: dict[str, Any]) -> None:
         self.fmt = Formatter()
         self.data = _OptinalDict(data)
 

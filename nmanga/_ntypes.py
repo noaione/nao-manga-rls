@@ -1,9 +1,11 @@
-from typing import Literal, Optional, TypedDict
+from typing import Literal, TypedDict
 
 __all__ = (
     "BracketTypeT",
     "ConfigT",
 )
+
+
 BracketTypeT = Literal["square", "round", "curly"]
 
 
@@ -17,7 +19,7 @@ class _ConfigExecutableT(TypedDict, total=False):
     magick_path: str
     pingo_path: str
     exiftool_path: str
-    w2x_trt_path: Optional[str]
+    w2x_trt_path: str | None
 
 
 class ConfigT(TypedDict, total=False):

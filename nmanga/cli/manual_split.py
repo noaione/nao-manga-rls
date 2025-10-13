@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Pattern, Union
+from typing import Pattern
 
 import click
 
@@ -51,8 +51,8 @@ console = term.get_console()
 
 
 def extract_page_num(
-    filename: str, custom_data: Dict[str, int] = {}, regex_data: Optional[Pattern[str]] = None
-) -> List[int]:
+    filename: str, custom_data: dict[str, int] = {}, regex_data: Pattern[str] | None = None
+) -> list[int]:
     # Remove until pXXX
     if regex_data is not None:
         filename = re.sub(regex_data, r"\1-\2", filename)
@@ -68,7 +68,7 @@ def extract_page_num(
         return [int(filename)]
 
 
-def coerce_number_page(number: Union[int, float]) -> str:
+def coerce_number_page(number: int | float) -> str:
     if isinstance(number, int):
         return f"{number:03d}"
     base, floating = str(number).split(".")
@@ -76,7 +76,7 @@ def coerce_number_page(number: Union[int, float]) -> str:
 
 
 def _collect_custom_page():  # pragma: no cover
-    custom_data: Dict[str, int] = {}
+    custom_data: dict[str, int] = {}
     console.enter()
     console.info("Please input the custom page mapping:")
     while True:
@@ -96,15 +96,15 @@ def _collect_custom_page():  # pragma: no cover
 def _collect_archive_to_chapters(
     target_path: Path,
     archive_file: Path,
-    chapters_mapping: List[ChapterRange],
-    volume_num: Optional[Union[int, float]] = None,
-    custom_data: Dict[str, int] = {},
-    regex_data: Optional[Pattern[str]] = None,
+    chapters_mapping: list[ChapterRange],
+    volume_num: int | float | None = None,
+    custom_data: dict[str, int] = {},
+    regex_data: Pattern[str] | None = None,
 ):  # pragma: no cover
     console.info(f"Collecting chapters from {archive_file.name}")
 
-    collected_chapters: Dict[str, exporter.CBZMangaExporter] = {}
-    skipped_chapters: List[str] = []
+    collected_chapters: dict[str, exporter.CBZMangaExporter] = {}
+    skipped_chapters: list[str] = []
     with file_handler.MangaArchive(archive_file) as archive:
         for image, _ in archive:
             filename = Path(image.filename)
@@ -158,11 +158,11 @@ def _collect_archive_to_chapters(
 
 
 def _handle_page_number_mode(
-    archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False
+    archive_file: Path, volume_num: int | None, custom_mode_enabled: bool = False
 ):  # pragma: no cover
     console.info(f"Handling in page number mode (custom enabled? {custom_mode_enabled!r})")
 
-    custom_data: Dict[str, int] = {}
+    custom_data: dict[str, int] = {}
     if custom_mode_enabled:
         custom_data = _collect_custom_page()
 
@@ -183,14 +183,14 @@ def _handle_page_number_mode(
 
 
 def _handle_regex_mode(
-    archive_file: Path, volume_num: Optional[int], custom_mode_enabled: bool = False
+    archive_file: Path, volume_num: int | None, custom_mode_enabled: bool = False
 ):  # pragma: no cover
     console.info(f"Handling in regex mode (custom enabled? {custom_mode_enabled!r})")
 
     default_regex = r"p(?:([\d]{1,4})(?:-)?([\d]{1,4})?).*"
     regex_data = console.inquire("Enter regex", default=default_regex)
 
-    custom_data: Dict[str, int] = {}
+    custom_data: dict[str, int] = {}
     if custom_mode_enabled:
         custom_data = _collect_custom_page()
 
@@ -229,7 +229,7 @@ def _handle_regex_mode(
     default=None,
 )
 @time_program
-def manual_split(path_or_archive: Path, volume_num: Optional[int] = None):  # pragma: no cover
+def manual_split(path_or_archive: Path, volume_num: int | None = None):  # pragma: no cover
     """
     Manually split volumes into chapters using multiple modes
     """

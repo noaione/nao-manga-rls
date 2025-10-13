@@ -26,7 +26,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import click
@@ -71,14 +71,14 @@ TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 def pack_releases(
     path_or_archive: Path,
     manga_title: str,
-    manga_year: Optional[int],
-    manga_volume: Optional[Union[int, float]],
-    manga_chapter: Optional[Union[int, float]],
+    manga_year: int | None,
+    manga_volume: int | float | None,
+    manga_chapter: int | float | None,
     manga_publication_type: MangaPublication,
     rls_credit: str,
     rls_email: str,
     rls_revision: int,
-    rls_extra_metadata: Optional[str],
+    rls_extra_metadata: str | None,
     bracket_type: Literal["square", "round", "curly"],
     output_mode: exporter.ExporterType,
 ):
@@ -166,7 +166,7 @@ def pack_releases_epub_mode(
     path_or_archive: Path,
     epub_title: str,
     epub_source: str,
-    manga_volume: Optional[Union[int, float]],
+    manga_volume: int | float | None,
     rls_credit: str,
 ):
     """
@@ -258,7 +258,7 @@ def pack_releases_epub_mode(
 @time_program
 def pack_releases_comment_archive(
     path_or_archive: Path,
-    archive_comment: Optional[str],
+    archive_comment: str | None,
     remove_comment: bool,
 ):
     """Comment an archive file."""

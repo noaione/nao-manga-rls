@@ -25,7 +25,6 @@ SOFTWARE.
 # Prepare manga for releasing to the public
 
 from pathlib import Path
-from typing import List
 
 import click
 
@@ -53,7 +52,7 @@ def timewizard_modify(path_or_archive: Path, timestamp: int):
     Uh oh, a time wizard is here to modify your file timestamp
     """
 
-    files_to_modify: List[Path] = []
+    files_to_modify: list[Path] = []
     if path_or_archive.is_dir():
         with file_handler.MangaArchive(path_or_archive) as archive:
             for image, _ in archive:

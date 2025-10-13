@@ -24,7 +24,6 @@ SOFTWARE.
 
 import re
 import sys
-from typing import Optional, Union
 
 __all__ = (
     "clean_title",
@@ -128,7 +127,7 @@ def is_not_volume_number(volume: str):
     return True
 
 
-def decode_or(any: Optional[Union[str, bytes]]) -> Optional[str]:
+def decode_or(any: str | bytes | None) -> str | None:
     if any is None:
         return None
     if isinstance(any, bytes):
@@ -136,7 +135,7 @@ def decode_or(any: Optional[Union[str, bytes]]) -> Optional[str]:
     return any
 
 
-def encode_or(any: Optional[Union[str, bytes]]) -> Optional[bytes]:
+def encode_or(any: str | bytes | None) -> bytes | None:
     if any is None:
         return None
     if isinstance(any, str):

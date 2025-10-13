@@ -23,7 +23,7 @@ SOFTWARE.
 """
 
 import functools
-from typing import Callable, List, Optional, Tuple
+from typing import Callable
 
 import click
 
@@ -143,7 +143,7 @@ def _loop_defaults_chapter_special_tag(config: config.Config) -> config.Config: 
 
 
 def _loop_defaults_release_publication_type(config: config.Config, default_now: str) -> str:  # pragma: no cover
-    choices_raw: List[term.ConsoleChoice] = []
+    choices_raw: list[term.ConsoleChoice] = []
     selected_choice = 0
     for idx, (key_name, key_value) in enumerate(MANGA_PUBLICATION_TYPES.items()):
         if key_name == default_now:
@@ -205,7 +205,7 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:  # pragma: 
 
 
 def _check_executables_inquire_validation(
-    text: str, validator_func: Callable[[str, bool], Optional[str]]
+    text: str, validator_func: Callable[[str, bool], str | None]
 ):  # pragma: no cover
     if not _check_defaults_inquire_validator(text):
         return False
@@ -221,8 +221,8 @@ def _check_executables_inquire_validation(
 def _loop_executables_check_single(
     executable: str,
     default: str,
-    validator_func: Callable[[str, bool], Optional[str]],
-) -> Optional[str]:  # pragma: no cover
+    validator_func: Callable[[str, bool], str | None],
+) -> str | None:  # pragma: no cover
     console.info(f"Configuring executable `{executable}`")
     console.info("You can skip or cancel this by typing `skip this` (without the backticks)")
     console.info("This section will check if the executable is valid or not")
@@ -324,7 +324,7 @@ def _loop_experimental_sections(config: config.Config):  # pragma: no cover
 # --- Main --- #
 
 
-def _loop_main_sections(config: config.Config) -> Tuple[bool, config.Config]:  # pragma: no cover
+def _loop_main_sections(config: config.Config) -> tuple[bool, config.Config]:  # pragma: no cover
     while True:
         select_option = console.choice(
             "Select what you want to configure",
