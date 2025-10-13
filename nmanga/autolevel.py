@@ -18,6 +18,7 @@ __all__ = (
     "apply_levels",
     "apply_levels",
     "create_magick_params",
+    "detect_nearest_bpc",
     "find_local_peak",
     "gamma_correction",
     "pad_shades_to_bpc",
@@ -58,7 +59,9 @@ def try_imports():
         raise ImportError("scipy is required to use autolevel. Please install scipy.")
 
 
-def find_local_peak(img_path: Union[Path, BytesIO, Image.Image], upper_limit: int = 60) -> Tuple[int, int, bool]:
+def find_local_peak(
+    img_path: Union[Path, BytesIO, Image.Image], upper_limit: int = 60, skip_white_peaks: bool = False
+) -> Tuple[int, int, bool]:
     """
     Automatically determine the optimal black level for an image by finding local peaks in its histogram.
 
@@ -92,6 +95,9 @@ def find_local_peak(img_path: Union[Path, BytesIO, Image.Image], upper_limit: in
             result[0] = result[0] + 1
 
         black_level = math.ceil(binedges[result[0]])
+
+    if skip_white_peaks:
+        return black_level, 255, force_gray
 
     upper_range_start = 255 - upper_limit
     upper_hist = hist[upper_range_start:]
@@ -165,14 +171,30 @@ def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> List[Sha
     img_array = NumpyLib.array(image)
 
     total_pixels = img_array.size
-    unique_shades, counter = NumpyLib.unique(img_array, return_counts=True)
+    hist, _ = NumpyLib.histogram(img_array, bins=256)
+
+    pixel_thresh = math.ceil(total_pixels * (threshold / 100.0))
+
+    # Find the shades (indices) that have more pixels than the threshold
+    significant_indices = NumpyLib.where(hist > pixel_thresh)[0]
+
+    # If no colors are significant, return an empty list
+    if significant_indices.size == 0:
+        return []
+
+    # Get the counts for just the significant shades
+    significant_counts = hist[significant_indices]
 
     filtered_shades = []
-    for shade, count in zip(unique_shades, counter):
-        percentage = (count / total_pixels) * 100
-        if percentage >= threshold:
-            # Get the RGB value of the shade
-            filtered_shades.append({"shade": int(shade), "percentage": percentage})
+    for i in range(len(significant_indices)):
+        count = significant_counts[i]
+        pct = (count / total_pixels) * 100
+        filtered_shades.append(
+            {
+                "shade": significant_indices[i],
+                "percentage": pct,
+            }
+        )
 
     # Sort by highest percentage first
     filtered_shades.sort(key=lambda x: x["percentage"], reverse=True)
@@ -191,6 +213,19 @@ def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
 
     quantized = image.quantize(colors=2**num_bits, dither=Image.Dither.FLOYDSTEINBERG)
     return quantized
+
+
+def npow2(num: int) -> int:
+    return 1 if num == 0 else 2 ** (num - 1).bit_length()
+
+
+def detect_nearest_bpc(shades: List[ShadeAnalysis]) -> int:
+    num_shades = len(shades)
+    if num_shades <= 1:
+        return 1  # 1 bpc
+    bpc = math.ceil(math.log2(num_shades))
+    bitdepth = npow2(bpc)
+    return bitdepth
 
 
 def pad_shades_to_bpc(shades: List[ShadeAnalysis]) -> List[int]:

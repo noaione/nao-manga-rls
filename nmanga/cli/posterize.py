@@ -39,6 +39,7 @@ from PIL import Image
 from .. import file_handler, term
 from ..autolevel import (
     analyze_gray_shades,
+    detect_nearest_bpc,
     pad_shades_to_bpc,
     posterize_image_by_bits,
     posterize_image_by_shades,
@@ -301,8 +302,10 @@ def analyze_shades(
             console.info(f"No significant shades found in {image_path}")
             continue
 
-        closest_bpc = pad_shades_to_bpc(shades)
+        closest_bpc = detect_nearest_bpc(shades)
         total_shades = len(shades)
         console.info(
-            f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {len(closest_bpc).bit_length() - 1})"
+            f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {closest_bpc}bpp)"
         )
+
+    console.stop_status(f"Analyzed {total_files} images!")

@@ -102,8 +102,8 @@ def _init_worker():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int) -> Tuple[int, int, Path, bool]:
-    black_level, white_level, force_gray = find_local_peak(img_path, upper_limit)
+def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int, skip_white: bool) -> Tuple[int, int, Path, bool]:
+    black_level, white_level, force_gray = find_local_peak(img_path, upper_limit, skip_white)
     return black_level, white_level, img_path, force_gray
 
 
@@ -141,6 +141,13 @@ def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int) -> Tuple[i
     type=click.Choice(["auto", "png", "jpg"]),
     help="The format of the output image, auto will detect the format from the input images",
 )
+@click.option(
+    "--no-white",
+    "no_white",
+    is_flag=True,
+    default=False,
+    help="Do not adjust white level, only adjust black level",
+)
 @options.threads
 @options.magick_path
 @time_program
@@ -150,6 +157,7 @@ def autolevel(
     upper_limit: int,
     peak_offset: int,
     image_fmt: str,
+    no_white: bool,
     threads: int,
     magick_path: str,
 ):  # pragma: no cover
@@ -180,11 +188,13 @@ def autolevel(
 
     console.status("Calculating black levels for images...")
     if threads <= 1:
-        results = [_find_local_peak_magick_wrapper(file, upper_limit) for file in all_files]
+        results = [_find_local_peak_magick_wrapper(file, upper_limit, no_white) for file in all_files]
     else:
         try:
             with mp.Pool(threads, initializer=_init_worker) as pool:
-                results = pool.starmap(_find_local_peak_magick_wrapper, [(file, upper_limit) for file in all_files])
+                results = pool.starmap(
+                    _find_local_peak_magick_wrapper, [(file, upper_limit, no_white) for file in all_files]
+                )
         except KeyboardInterrupt:
             console.warning("Autoleveling interrupted by user.")
             pool.terminate()
@@ -295,12 +305,16 @@ class Autolevel2Config:
 
 def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Config) -> AutoLevelResult:
     img = Image.open(img_path)
-    black_level, white_level, _ = find_local_peak(img, upper_limit=60)
+    black_level, white_level, _ = find_local_peak(img, upper_limit=60, skip_white_peaks=config.no_white)
 
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not config.no_white else False
 
-    if (is_black_bad and is_white_bad) or black_level > config.upper_limit:
+    if (
+        (is_black_bad and is_white_bad and not config.no_white)  # both levels are bad
+        or (is_black_bad and config.no_white)
+        or black_level > config.upper_limit
+    ):
         dest_path = dest_output / img_path.name
         if config.force_gray:
             img = img.convert("L")
