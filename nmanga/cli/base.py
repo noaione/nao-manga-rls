@@ -117,6 +117,16 @@ def test_or_find_exiftool(exiftool_path: str, force_search: bool = True) -> str 
         return None if not force_search else _find_exec_path("exiftool", ["-ver"])
 
 
+def test_or_find_cjpegli(cjpegli: str, force_search: bool = True) -> str | None:
+    try:
+        success = _test_exec([cjpegli, "-h"])
+        if not success:
+            return None if not force_search else _find_exec_path("cjpegli", ["-h"])
+        return cjpegli or (None if not force_search else _find_exec_path("cjpegli", ["-h"]))
+    except OSError:
+        return None if not force_search else _find_exec_path("cjpegli", ["-h"])
+
+
 def test_or_find_w2x_trt(w2x_trt_path: str | None, force_search: bool = True) -> str | None:
     if not w2x_trt_path:
         return None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"])

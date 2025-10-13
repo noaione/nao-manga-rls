@@ -31,6 +31,7 @@ from .. import config, term
 from ..constants import MANGA_PUBLICATION_TYPES
 from .base import (
     NMangaCommandHandler,
+    test_or_find_cjpegli,
     test_or_find_exiftool,
     test_or_find_magick,
     test_or_find_pingo,
@@ -246,6 +247,7 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
                 term.ConsoleChoice("pingo_path", "Configure `pingo` path"),
                 term.ConsoleChoice("exiftool_path", "Configure `exiftool` path"),
                 term.ConsoleChoice("magick_path", "Configure `magick` path"),
+                term.ConsoleChoice("cjpegli", "Configure `cjpegli` path"),
                 term.ConsoleChoice("w2x_trt_path", "Configure `waifu2x-tensorrt` path"),
                 SAVE_CHOICE,
             ],
@@ -266,6 +268,10 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
             result = _loop_executables_check_single("magick", config.executables.magick_path, test_or_find_magick)
             if result is not None:
                 config.executables.magick_path = result
+        elif option == "cjpegli":
+            result = _loop_executables_check_single("cjpegli", config.executables.cjpegli_path, test_or_find_cjpegli)
+            if result is not None:
+                config.executables.cjpegli_path = result
         elif option == "w2x_trt_path":
             result = _loop_executables_check_single(
                 "waifu2x-tensorrt", config.executables.w2x_trt_path or "", test_or_find_w2x_trt

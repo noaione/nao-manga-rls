@@ -62,6 +62,7 @@ class _ConfigExecutable:
     magick_path: str = field(default="magick")
     pingo_path: str = field(default="pingo")
     exiftool_path: str = field(default="exiftool")
+    cjpegli_path: str = field(default="cjpegli")
     w2x_trt_path: str | None = field(default=None)
 
     def to_dict(self) -> _ConfigExecutableT:
@@ -69,6 +70,7 @@ class _ConfigExecutable:
             "magick_path": self.magick_path,
             "pingo_path": self.pingo_path,
             "exiftool_path": self.exiftool_path,
+            "cjpegli_path": self.cjpegli_path,
             "w2x_trt_path": self.w2x_trt_path,
         }
 
