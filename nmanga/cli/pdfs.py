@@ -193,7 +193,7 @@ def export_pdf(
             # Remove alpha layer
             if img.mode == "LA":
                 img = img.convert("L")
-            black_level, _, _ = find_local_peak(img, upper_limit=60)
+            black_level, _, _ = find_local_peak(img, upper_limit=60, skip_white_peaks=True)
             if black_level > 60 or black_level <= 0:
                 # save
                 dest_file.write_bytes(image)
