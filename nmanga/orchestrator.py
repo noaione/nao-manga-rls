@@ -46,6 +46,7 @@ __all__ = (
     "ActionMoveColor",
     "ActionOptimize",
     "ActionPack",
+    "ActionPosterize",
     "ActionRename",
     "ActionShiftName",
     "ActionSpreads",
@@ -77,6 +78,8 @@ class ActionKind(str, Enum):
     """Denoise all images in a volume with denoise-trt"""
     AUTOLEVEL = "autolevel"
     """Auto level all images with Pillow"""
+    POSTERIZE = "posterize"
+    """Posterize all images with imagemagick or Pillow"""
     OPTIMIZE = "optimize"
     """Optimize all images with pingo"""
     TAGGING = "tagging"
@@ -182,6 +185,33 @@ class ActionAutolevel(BaseModel):
     """The number of threads to use for processing"""
 
 
+class ActionPosterize(BaseModel):
+    """
+    Action to posterize all images in a volume with imagemagick or Pillow
+    """
+
+    kind: Literal[ActionKind.POSTERIZE] = Field(ActionKind.POSTERIZE)
+    """The kind of action"""
+    base_path: Path = Field("posterized")
+    """The base path to save the posterized images to"""
+    bpc: int = Field(4, ge=1, le=8)
+    """The number of bitdepth to reduce the image to"""
+    pillow: bool = Field(False)
+    """Whether to use Pillow for posterizing instead of ImageMagick"""
+    threads: int = Field(default_factory=cpu_count, ge=1)
+    """The number of threads to use for processing"""
+
+    @model_validator(mode="after")
+    def check_bpc(self) -> Self:
+        if self.bpc not in (1, 2, 4, 8):
+            raise PydanticCustomError(
+                "invalid_bpc",
+                "Bits per channel (bpc) must be one of 1, 2, 4, or 8",
+                {"bpc": self.bpc},
+            )
+        return self
+
+
 class ActionOptimize(BaseModel):
     """
     Optimize all images in a volume with pingo
@@ -193,6 +223,15 @@ class ActionOptimize(BaseModel):
     """Whether to use the aggressive mode of pingo, which would force grayscale conversion for all images"""
     limiter: str | None = Field(None)
     """Limit the optimization to certain image types, e.g. png,jpg"""
+
+    @model_validator(mode="after")
+    def check_limiter(self) -> Self:
+        if self.limiter is not None and not self.limiter.startswith("."):
+            raise PydanticCustomError(
+                "invalid_limiter",
+                "Limiter must start with a dot, e.g. .png,.jpg",
+                {"limiter": self.limiter},
+            )
 
 
 class ActionTagging(BaseModel):
@@ -255,6 +294,7 @@ Actions = Annotated[
     | ActionRename
     | ActionDenoise
     | ActionAutolevel
+    | ActionPosterize
     | ActionOptimize
     | ActionTagging
     | ActionMoveColor

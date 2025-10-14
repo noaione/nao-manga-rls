@@ -7,6 +7,7 @@ Adapted for nmanga
 from __future__ import annotations
 
 import math
+import subprocess as sp
 from io import BytesIO
 from pathlib import Path
 from typing import TypedDict
@@ -24,6 +25,7 @@ __all__ = (
     "pad_shades_to_bpc",
     "posterize_image_by_bits",
     "posterize_image_by_shades",
+    "posterize_image_with_imagemagick",
     "try_imports",
 )
 
@@ -211,8 +213,34 @@ def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    quantized = image.quantize(colors=2**num_bits, dither=Image.Dither.FLOYDSTEINBERG)
+    palette = image.quantize(colors=2**num_bits)
+    quantized = image.quantize(colors=2**num_bits, palette=palette, dither=Image.Dither.FLOYDSTEINBERG)
     return quantized
+
+
+def posterize_image_with_imagemagick(
+    img_path: Path,
+    output_dir: Path,
+    num_bits: int,
+    magick_path: str = "magick",
+) -> None:
+    # use mogrify
+    magick_cmd = [
+        magick_path,
+        "mogrify",
+        "-format",
+        "png",
+        "+dither",
+        "-posterize",
+        str(2**num_bits),
+        "-depth",
+        str(num_bits),
+        "-path",
+        str(output_dir),
+        str(img_path),
+    ]
+
+    sp.run(magick_cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 
 
 def npow2(num: int) -> int:

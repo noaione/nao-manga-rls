@@ -42,7 +42,13 @@ from PIL import Image
 from nmanga import exporter
 
 from .. import file_handler, term
-from ..autolevel import apply_levels, find_local_peak, gamma_correction
+from ..autolevel import (
+    apply_levels,
+    find_local_peak,
+    gamma_correction,
+    posterize_image_by_bits,
+    posterize_image_with_imagemagick,
+)
 from ..common import (
     ChapterRange,
     RegexCollection,
@@ -145,26 +151,6 @@ def orchestrator_generate(
 
     console.info(f"Generated default orchestrator configuration to {output_file}")
     return 0
-
-
-def detect_needed_tools(actions: list[Actions]) -> set[str]:
-    needed_tools = set()
-    for action in actions:
-        match action.kind:
-            case ActionKind.SPREADS:
-                if action.pillow:
-                    continue  # Pillow is always available
-                needed_tools.add("magick")
-            case ActionKind.OPTIMIZE:
-                needed_tools.add("pingo")
-            case ActionKind.COLOR_JPEGIFY:
-                needed_tools.add("cjpegli")
-            case ActionKind.TAGGING:
-                needed_tools.add("exiftool")
-            case _:
-                # No tools needed
-                continue
-    return needed_tools
 
 
 def perform_skip_action(
@@ -636,6 +622,115 @@ def runner_autolevel(
         console.info(f"Autoleveled {autolevel_count} images.")
     if grayscaled_count > 0:
         console.info(f"Grayscaled {grayscaled_count} images.")
+    if ignored_count > 0:
+        console.info(f"Ignored {ignored_count} images.")
+
+
+def _runner_posterize_threaded(
+    img_path: Path,
+    output_dir: Path,
+    action: ActionPosterize,
+    imagick: str | None = None,
+    is_color: bool = False,
+    skip_action: SkipActionKind | None = None,
+) -> ThreadedResult:
+    if skip_action is not None:
+        perform_skip_action(img_path, output_dir, skip_action)
+        return ThreadedResult.COPIED if skip_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
+    if is_color:
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY)
+        return ThreadedResult.COPIED
+
+    dest_path = output_dir / f"{img_path.stem}.png"
+    if dest_path.exists():
+        console.warning(f"Skipping existing file: {dest_path}")
+        return ThreadedResult.COPIED
+
+    if imagick is not None:
+        posterize_image_with_imagemagick(img_path, output_dir=output_dir, num_bits=action.bpc, magick_path=imagick)
+        return ThreadedResult.PROCESSED
+    else:
+        img = Image.open(img_path)
+        quant = posterize_image_by_bits(img, num_bits=action.bpc)
+        quant.save(dest_path, format="PNG")
+        img.close()
+        quant.close()
+        return ThreadedResult.PROCESSED
+
+
+def runner_posterize(
+    input_dir: Path,
+    output_dir: Path,
+    action: ActionPosterize,
+    volume: VolumeConfig,
+    toolsets: dict[str, str],
+    skip_action: SkipActionConfig | None = None,
+) -> None:
+    imagick = toolsets.get("magick")
+    if imagick is None and not action.pillow:
+        console.error("ImageMagick is required for spreads joining, but not found!")
+        raise click.Abort()
+    all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(input_dir)]
+
+    page_re = RegexCollection.page_re()
+    total_images = len(all_images)
+
+    # Do pre-processing
+    images_complete: list[tuple[Path, bool, SkipActionKind | None]] = []
+    for image in all_images:
+        img_match = page_re.match(image.stem)
+        is_color = False
+        is_skip_action = None
+
+        if img_match is not None:
+            p01 = int(img_match.group("a"))
+            is_color = p01 in volume.colors
+            if skip_action is not None and p01 in skip_action.pages:
+                is_skip_action = skip_action.action
+
+        images_complete.append((image, is_color, is_skip_action))
+
+    console.status(f"Posterizing {total_images} images...")
+    results: list[ThreadedResult] = []
+    if action.threads > 1:
+        console.info(f"Using {action.threads} CPU threads for processing.")
+        with mp.Pool(processes=action.threads, initializer=_init_worker) as pool:
+            try:
+                for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
+                    # We need to also get the return value here
+                    pool.apply_async(
+                        _runner_posterize_threaded,
+                        args=(image, output_dir, action, imagick, is_color, is_skip_action),
+                        callback=results.append,
+                    )
+                pool.close()
+                pool.join()
+            except KeyboardInterrupt:
+                console.warning("Keyboard interrupt detected, terminating...")
+                pool.terminate()
+                pool.join()
+                raise click.Abort()
+            except Exception as e:
+                console.error(f"Error occurred: {e}, terminating...")
+                pool.terminate()
+                pool.join()
+                raise click.Abort()
+            finally:
+                pool.close()
+    else:
+        for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
+            console.status(f"Posterizing images... [{idx + 1}/{total_images}]")
+            results.append(_runner_posterize_threaded(image, output_dir, action, imagick, is_color, is_skip_action))
+
+    console.stop_status(f"Posterized {total_images} images.")
+    posterized_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
+    copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
+    ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
+    console.stop_status(f"Processed {total_images} images with autolevel2.")
+    if copied_count > 0:
+        console.info(f"Copied {copied_count} images without posterizing.")
+    if posterized_count > 0:
+        console.info(f"Posterized {posterized_count} images.")
     if ignored_count > 0:
         console.info(f"Ignored {ignored_count} images.")
 
