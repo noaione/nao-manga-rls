@@ -45,7 +45,9 @@ __all__ = (
     "format_volume_text",
     "inject_metadata",
     "inquire_chapter_ranges",
+    "is_pingo_alpha",
     "optimize_images",
+    "run_pingo_and_verify",
     "safe_int",
 )
 
@@ -317,7 +319,7 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
         proc.wait()
 
 
-def _run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
+def run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
     proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
 
@@ -341,7 +343,7 @@ def _run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
     return None  # unknown result
 
 
-def _is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
+def is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
     console.info("Checking if pingo is alpha version...")
     proc = sp.Popen([pingo_path, "-help"], stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
@@ -362,7 +364,7 @@ def _is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
 
 
 def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = False):  # pragma: no cover
-    alpha_ver = _is_pingo_alpha(pingo_path)
+    alpha_ver = is_pingo_alpha(pingo_path)
     resolve_dir = target_directory.resolve()
     any_jpg = len(list(resolve_dir.glob("*.jpg"))) > 0
     any_png = len(list(resolve_dir.glob("*.png"))) > 0
@@ -381,7 +383,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
                 pingo_cmd.append("-q=97")
         pingo_cmd.append(str(resolve_dir / "*.jpg"))
         console.status("Optimizing JP(e)G files...")
-        proc = _run_pingo_and_verify(pingo_cmd)
+        proc = run_pingo_and_verify(pingo_cmd)
         end_msg = "Optimized JPG files!"
         if proc is not None:
             end_msg += f" [{proc}]"
@@ -394,7 +396,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
             pingo_cmd.append("-sb")
         pingo_cmd.append(str(resolve_dir / "*.png"))
         console.status("Optimizing PNG files...")
-        proc = _run_pingo_and_verify(pingo_cmd)
+        proc = run_pingo_and_verify(pingo_cmd)
         end_msg = "Optimized PNG files!"
         if proc is not None:
             end_msg += f" [{proc}]"
@@ -410,7 +412,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
             pingo_cmd.append("-webp")
         pingo_cmd.append(str(resolve_dir / "*.webp"))
         console.status("Optimizing WEBP files...")
-        proc = _run_pingo_and_verify(pingo_cmd)
+        proc = run_pingo_and_verify(pingo_cmd)
         end_msg = "Optimized WEBP files!"
         if proc is not None:
             end_msg += f" [{proc}]"

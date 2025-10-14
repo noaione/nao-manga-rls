@@ -184,6 +184,14 @@ w2x_trt_path = click.option(
     help="Path to the waifu2x-tensorrt executable",
     show_default=True,
 )
+cjpegli_path = click.option(
+    "-cje",
+    "--cjpegli-exec",
+    "cjpegli_path",
+    default=config.executables.cjpegli_path,
+    help="Path to the cjpegli executable",
+    show_default=True,
+)
 debug_mode = click.option(
     "-v",
     "--verbose",

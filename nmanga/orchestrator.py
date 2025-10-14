@@ -24,6 +24,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from functools import cached_property, lru_cache
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Annotated, Literal
@@ -32,8 +33,10 @@ from pydantic import AfterValidator, BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
+from .common import ChapterRange
 from .constants import MANGA_PUBLICATION_TYPES
 from .exporter import ExporterType
+from .spreads import SpreadDirection
 
 __all__ = (
     "ActionAutolevel",
@@ -96,6 +99,8 @@ class ActionShiftName(BaseModel):
     """The kind of action"""
     start: int = Field(0, ge=0)
     """The starting index to rename the files to"""
+    title: str | None = Field(None)
+    """Optional override title for the shift rename action"""
 
 
 class ActionSpreads(BaseModel):
@@ -105,7 +110,7 @@ class ActionSpreads(BaseModel):
 
     kind: Literal[ActionKind.SPREADS] = Field(ActionKind.SPREADS)
     """The kind of action"""
-    reverse: bool = Field(False)
+    direction: SpreadDirection = Field(SpreadDirection.LTR)
     """Whether to use reverse mode when joining spreads"""
     quality: float = Field(100.0, ge=1.0, le=100.0)
     """The quality of the output images"""
@@ -149,6 +154,8 @@ class ActionDenoise(BaseModel):
     """The tile size to use for denoising"""
     background: Literal["white", "black"] = Field("black")
     """The background color to use for padding"""
+    contrast_strectch: bool = Field(False)
+    """Whether to apply contrast stretch after denoising"""
 
 
 class ActionAutolevel(BaseModel):
@@ -166,6 +173,8 @@ class ActionAutolevel(BaseModel):
     """The base path to save the leveled images to"""
     upper_limit: int = Field(60, ge=1, le=255)
     """The upper limit for finding local peaks in the histogram"""
+    peak_offset: int = Field(0, ge=-20, le=20)
+    """The offset to add to the found black level peak, can be negative"""
     skip_white: bool = Field(True)
     """Whether to skip white peaks when finding local peaks in the histogram"""
     skip_first: bool = Field(True)
@@ -301,6 +310,17 @@ class ChapterConfig(BaseModel):
             )
         return self
 
+    @lru_cache(maxsize=32)
+    def to_chapter_range(self) -> ChapterRange:
+        """
+        Convert to ChapterRange
+        """
+
+        ranges = [int(self.start)]
+        if self.end is not None:
+            ranges = list(range(self.start, self.end + 1))
+        return ChapterRange(number=self.number, name=self.title, range=ranges, is_single=self.end is None)
+
 
 class SkipActionConfig(BaseModel):
     """
@@ -339,6 +359,8 @@ class VolumeConfig(BaseModel):
     """The volume number"""
     year: int = Field(default_factory=current_year, ge=1000, le=9999)
     """The year of the volume, this is used for tagging"""
+    oneshot: bool = Field(False)
+    """Whether the volume is a oneshot"""
     spreads: list[tuple[int, int]] = Field(default_factory=list)
     """
     The list of spreads in the volume, each tuple is a pair of page numbers
@@ -361,6 +383,19 @@ class VolumeConfig(BaseModel):
     """The publication type of the volume, this is used for tagging"""
     skip_actions: list[SkipActionConfig] = Field(default_factory=list)
     """The list of actions to skip for this volume"""
+
+    @cached_property
+    def meta_name_maps(self) -> dict[int, str]:
+        """
+        A cached property mapping page number to metadata tag
+        """
+
+        mappings: dict[int, str] = {}
+        for meta in self.meta_naming:
+            pages = [meta.page] if isinstance(meta.page, int) else meta.page
+            for page in pages:
+                mappings[page] = meta.tag
+        return mappings
 
     @model_validator(mode="after")
     def check_duplicate_meta_naming(self) -> Self:
