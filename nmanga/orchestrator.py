@@ -40,8 +40,8 @@ from .spreads import SpreadDirection
 
 __all__ = (
     "ActionAutolevel",
+    "ActionColorJpegify",
     "ActionDenoise",
-    "ActionJpegify",
     "ActionKind",
     "ActionMoveColor",
     "ActionOptimize",
@@ -84,8 +84,8 @@ class ActionKind(str, Enum):
     """Pack the volume into an archive"""
     MOVE_COLOR = "move_color"
     """Move the tagged color images to a separate folder"""
-    JPEGIFY = "jpegify"
-    """Convert images to JPEG format with cjpegli"""
+    COLOR_JPEGIFY = "color_jpegify"
+    """Convert color images to JPEG format with cjpegli"""
 
 
 class ActionShiftName(BaseModel):
@@ -220,12 +220,12 @@ class ActionMoveColor(BaseModel):
     """The base path to save the color images to"""
 
 
-class ActionJpegify(BaseModel):
+class ActionColorJpegify(BaseModel):
     """
-    Action to convert images to JPEG format with cjpegli
+    Action to convert color images to JPEG format with cjpegli
     """
 
-    kind: Literal[ActionKind.JPEGIFY] = Field(ActionKind.JPEGIFY)
+    kind: Literal[ActionKind.COLOR_JPEGIFY] = Field(ActionKind.COLOR_JPEGIFY)
     """The kind of action"""
     base_path: Path | None = Field(None)
     """The base path to save the JPEG images to, this would use the last used base path if not provided"""
@@ -259,7 +259,7 @@ Actions = Annotated[
     | ActionOptimize
     | ActionTagging
     | ActionMoveColor
-    | ActionJpegify
+    | ActionColorJpegify
     | ActionPack,
     Field(discriminator="kind"),
 ]

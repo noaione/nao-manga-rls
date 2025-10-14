@@ -30,6 +30,7 @@ import importlib.util
 import multiprocessing as mp
 import shutil
 import signal
+import subprocess as sp
 from enum import Enum
 from pathlib import Path
 from time import time
@@ -38,13 +39,17 @@ from typing import Literal, TypedDict, cast
 import click
 from PIL import Image
 
+from nmanga import exporter
+
 from .. import file_handler, term
 from ..autolevel import apply_levels, find_local_peak, gamma_correction
 from ..common import (
     ChapterRange,
     RegexCollection,
+    format_archive_filename,
     format_daiz_like_filename,
     format_volume_text,
+    inject_metadata,
     is_pingo_alpha,
     run_pingo_and_verify,
 )
@@ -151,7 +156,7 @@ def detect_needed_tools(actions: list[Actions]) -> set[str]:
                 needed_tools.add("magick")
             case ActionKind.OPTIMIZE:
                 needed_tools.add("pingo")
-            case ActionKind.JPEGIFY:
+            case ActionKind.COLOR_JPEGIFY:
                 needed_tools.add("cjpegli")
             case ActionKind.TAGGING:
                 needed_tools.add("exiftool")
@@ -640,6 +645,177 @@ def runner_optimize(
     console.stop_status(end_msg)
 
 
+def runner_tagging(
+    input_dir: Path,
+    volume: VolumeConfig,
+    config: OrchestratorConfig,
+    toolsets: dict[str, str],
+) -> None:
+    exiftool = toolsets.get("exiftool")
+    if exiftool is None:
+        console.error("exiftool is required for image tagging, but not found!")
+        raise click.Abort()
+
+    volume_text = cast(str, format_volume_text(manga_volume=volume.number))
+
+    archive_filename = format_archive_filename(
+        manga_title=config.title,
+        manga_year=volume.year,
+        publication_type=volume.pub_type,
+        ripper_credit=config.credit,
+        bracket_type=config.bracket_type,
+        manga_volume_text=volume_text if not volume.oneshot else None,
+        extra_metadata=volume.extra_text,
+        rls_revision=volume.revision,
+    )
+    console.status(f"Tagging images in {input_dir} with exif metadata...")
+    inject_metadata(exiftool, input_dir, archive_filename, config.email)
+
+
+def runner_pack(
+    input_dir: Path,
+    volume: VolumeConfig,
+    config: OrchestratorConfig,
+    action: ActionPack,
+) -> None:
+    volume_text = cast(str, format_volume_text(manga_volume=volume.number))
+
+    console.info(f"Packing volume {volume.number} in {input_dir}...")
+    archive_filename = format_archive_filename(
+        manga_title=config.title,
+        manga_year=volume.year,
+        publication_type=volume.pub_type,
+        ripper_credit=config.credit,
+        bracket_type=config.bracket_type,
+        manga_volume_text=volume_text if not volume.oneshot else None,
+        extra_metadata=volume.extra_text,
+        rls_revision=volume.revision,
+    )
+    parent_dir = input_dir.parent
+    arc_target = exporter.exporter_factory(
+        archive_filename,
+        parent_dir,
+        mode=action.output_mode,
+        manga_title=config.title,
+    )
+    if action.output_mode == exporter.ExporterType.epub:
+        console.warning("Packing as EPUB, this will be a slower operation because of size checking!")
+
+    arc_target.set_comment(config.email)
+    console.status("Packing... (0/???)")
+    idx = 1
+    for img_file, _, total_img, _ in file_handler.collect_image_from_folder(input_dir):
+        arc_target.add_image(img_file.name, img_file)
+        console.status(f"Packing... ({idx}/{total_img})")
+        idx += 1
+    console.stop_status(f"Packed ({idx - 1}/{total_img})")
+    arc_target.close()
+
+
+def runner_move_color_image(
+    input_dir: Path,
+    output_dir: Path,
+    volume: VolumeConfig,
+) -> None:
+    cmx_re = RegexCollection.cmx_re()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    moved_count = 0
+    for img_file, _, total_img, _ in file_handler.collect_image_from_folder(input_dir):
+        title_match = cmx_re.match(img_file.stem)
+        if title_match is None:
+            console.error(f"Image {img_file} does not match page regex, aborting...")
+            continue
+
+        console.status(f"Moving color images... [{moved_count}/{total_img}]")
+        p01 = int(title_match.group("a"))
+        if p01 in volume.colors:
+            dest_path = output_dir / img_file.name
+            if dest_path.exists():
+                console.warning(f"Skipping existing file: {dest_path}")
+                continue
+            shutil.move(img_file, dest_path)
+            moved_count += 1
+
+    console.stop_status(f"Moved {moved_count} color images to {output_dir}.")
+
+
+def _runner_jpegify_threaded(
+    img_path: Path,
+    output_dir: Path,
+    cjpegli: str,
+    quality: int,
+) -> None:
+    dest_path = output_dir / f"{img_path.stem}.jpg"
+    if dest_path.exists():
+        console.warning(f"Skipping existing file: {dest_path}")
+        return
+
+    cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
+    sp.run(cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+
+
+def runner_jpegify(
+    input_dir: Path,
+    output_dir: Path,
+    volume: VolumeConfig,
+    action: ActionColorJpegify,
+    toolsets: dict[str, str],
+) -> None:
+    cjpegli = toolsets.get("cjpegli")
+    if cjpegli is None:
+        console.error("cjpegli is required for JPEG conversion, but not found!")
+        raise click.Abort()
+
+    cmx_re = RegexCollection.cmx_re()
+
+    image_candidates: list[Path] = []
+    for img_path, _, _, _ in file_handler.collect_image_from_folder(input_dir):
+        title_match = cmx_re.match(img_path.stem)
+        if title_match is None:
+            console.warn(f"Image {img_path} does not match page regex, ignoring...")
+            continue
+        p01 = int(title_match.group("a"))
+        if p01 in volume.colors:
+            image_candidates.append(img_path)
+
+    if not image_candidates:
+        console.warning(f"No color images found in {input_dir}, skipping...")
+        return
+
+    total_images = len(image_candidates)
+    console.status(f"Converting {total_images} images to JPEG with cjpegli...")
+    quality = max(0, min(100, action.quality))
+    if action.threads > 1:
+        console.info(f"Using {action.threads} CPU threads for processing.")
+        with mp.Pool(processes=action.threads, initializer=_init_worker) as pool:
+            try:
+                for image in image_candidates:
+                    pool.apply_async(
+                        _runner_jpegify_threaded,
+                        args=(image, output_dir, cjpegli, quality),
+                    )
+                pool.close()
+                pool.join()
+            except KeyboardInterrupt:
+                console.warning("Keyboard interrupt detected, terminating...")
+                pool.terminate()
+                pool.join()
+                raise click.Abort()
+            except Exception as e:
+                console.error(f"Error occurred: {e}, terminating...")
+                pool.terminate()
+                pool.join()
+                raise click.Abort()
+            finally:
+                pool.close()
+    else:
+        for idx, image in enumerate(image_candidates):
+            console.status(f"Converting image to JPEG... [{idx + 1}/{total_images}]")
+            _runner_jpegify_threaded(image, output_dir, cjpegli, quality)
+    console.stop_status(f"Converted {total_images} images to JPEG.")
+
+
 @orchestractor.command(
     name="run",
     help="Run the orchestrator with the given configuration file",
@@ -695,7 +871,7 @@ def orchestrator_runner(
                     console.error("Pingo is required for image optimization, but not found!")
                     raise click.Abort()
                 toolsets["pingo"] = pingo
-            case ActionKind.JPEGIFY:
+            case ActionKind.COLOR_JPEGIFY:
                 # Detect cjpegli
                 cjpegli = test_or_find_cjpegli(cjpegli_path)
                 if cjpegli is None:
@@ -797,6 +973,53 @@ def orchestrator_runner(
                 case ActionKind.OPTIMIZE:
                     runner_optimize(
                         input_dir=chapter_path,
+                        action=action,
+                        toolsets=toolsets,
+                    )
+                case ActionKind.TAGGING:
+                    runner_tagging(
+                        input_dir=chapter_path,
+                        volume=volume,
+                        config=config,
+                        toolsets=toolsets,
+                    )
+                case ActionKind.PACK:
+                    source_dir = chapter_path
+                    if action.source_dir is not None:
+                        source_dir = full_base / action.source_dir / volume.path
+                    if not source_dir.exists() or not source_dir.is_dir():
+                        console.error(
+                            f"Source directory {source_dir} does not exist or is not a directory, skipping packing..."
+                        )
+                        raise click.Abort()
+                    runner_pack(
+                        input_dir=source_dir,
+                        volume=volume,
+                        config=config,
+                        action=action,
+                    )
+                case ActionKind.MOVE_COLOR:
+                    target_dir = full_base / action.base_path / volume.path
+                    runner_move_color_image(
+                        input_dir=chapter_path,
+                        output_dir=target_dir,
+                        volume=volume,
+                    )
+                case ActionKind.COLOR_JPEGIFY:
+                    output_dir = chapter_path
+                    if action.base_path is not None:
+                        output_dir = full_base / action.base_path / volume.path
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    source_dir = full_base / action.source_path / volume.path
+                    if not source_dir.exists() or not source_dir.is_dir():
+                        console.error(
+                            f"Source directory {source_dir} does not exist or is not a directory, skipping..."
+                        )
+                        raise click.Abort()
+                    runner_jpegify(
+                        input_dir=source_dir,
+                        output_dir=output_dir,
+                        volume=volume,
                         action=action,
                         toolsets=toolsets,
                     )
