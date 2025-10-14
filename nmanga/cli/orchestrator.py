@@ -923,7 +923,7 @@ def orchestrator_runner(
             console.warning(f"Volume path {chapter_path} is not a directory, skipping...")
             continue
 
-        console.info(f"Processing volume {volume.volume} {chapter_path}...")
+        console.info(f"Processing volume {volume.number} {chapter_path}...")
         for action in config.actions:
             console.info(f" - Running action {action.kind.name}...")
             start_action = time()
