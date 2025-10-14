@@ -55,6 +55,7 @@ __all__ = (
     "MetadataNamingConfig",
     "OrchestratorConfig",
     "SkipActionConfig",
+    "SkipActionKind",
     "VolumeConfig",
 )
 
@@ -177,8 +178,6 @@ class ActionAutolevel(BaseModel):
     """The offset to add to the found black level peak, can be negative"""
     skip_white: bool = Field(True)
     """Whether to skip white peaks when finding local peaks in the histogram"""
-    skip_first: bool = Field(True)
-    """Always skip the first image in the volume, useful for omitting cover pages (and just copying)"""
     threads: int = Field(default_factory=cpu_count, ge=1)
     """The number of threads to use for processing"""
 
@@ -321,6 +320,19 @@ class ChapterConfig(BaseModel):
         return ChapterRange(number=self.number, name=self.title, range=ranges, is_single=self.end is None)
 
 
+class SkipActionKind(str, Enum):
+    """
+    What do you want to do when skipping an action
+    """
+
+    IGNORE = "ignore"
+    """Ignore the skip and perform the action as normal"""
+    COPY = "copy"
+    """Copy the original file to the output folder without performing the action"""
+    MOVE = "move"
+    """Move the original file to the output folder without performing the action"""
+
+
 class SkipActionConfig(BaseModel):
     """
     What actions to skip for a volume
@@ -328,8 +340,10 @@ class SkipActionConfig(BaseModel):
     Note: Not all actions support skipping, those that do not will be ignored
     """
 
-    step: int = Field(..., ge=1)
-    """The step number of the action to skip, 1-based index"""
+    action: SkipActionKind
+    """The action to take when skipping"""
+    step: str
+    """The action step name to skip, e.g. autolevel-1, optimize-2, etc."""
     pages: list[int] = Field(..., min_length=1)
     """The list of page numbers to skip the action on"""
 
@@ -500,4 +514,52 @@ class OrchestratorConfig(BaseModel):
                     {"volume": vol.number},
                 )
             existing_volumes.add(vol.number)
+        return self
+
+    @cached_property
+    def action_names(self) -> list[str]:
+        """
+        A cached property to get the list of action names
+        """
+
+        actions_counter: dict[ActionKind, int] = {}
+        actions_names = []
+        for action in self.actions:
+            step_number = actions_counter.get(action.kind, 0) + 1
+            actions_counter[action.kind] = step_number
+            actions_names.append(f"{action.kind.value}-{step_number}")
+        return actions_names
+
+    @cached_property
+    def actions_maps(self) -> dict[str, Actions]:
+        """
+        Get the list of actions with their names
+        """
+
+        action_names = self.action_names
+        if len(action_names) != len(self.actions):
+            raise ValueError("Action names and actions length mismatch")
+        return dict(zip(action_names, self.actions))
+
+    # Validate that skip actions refer to valid action steps
+    @model_validator(mode="after")
+    def check_skip_actions(self) -> Self:
+        valid_steps = set(self.action_names)
+        for vol in self.volumes:
+            for skip in vol.skip_actions:
+                if skip.step not in valid_steps:
+                    raise PydanticCustomError(
+                        "invalid_skip_step",
+                        "Invalid skip action step: {step}. Valid steps are: {valid}",
+                        {"step": skip.step, "valid": ", ".join(valid_steps)},
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def check_actions_order(self) -> Self:
+        if len(self.actions) != len(self.action_names):
+            raise PydanticCustomError(
+                "actions_order_mismatch",
+                "Actions and action names length mismatch",
+            )
         return self

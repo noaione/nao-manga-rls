@@ -75,6 +75,7 @@ def _init_worker():
 
 
 class ThreadedResult(int, Enum):
+    IGNORED = 0
     COPIED = 1
     GRAYSCALED = 2
     PROCESSED = 3
@@ -164,6 +165,25 @@ def detect_needed_tools(actions: list[Actions]) -> set[str]:
                 # No tools needed
                 continue
     return needed_tools
+
+
+def perform_skip_action(
+    img_path: Path,
+    output_dir: Path,
+    action: SkipActionKind,
+) -> None:
+    dest_path = output_dir / img_path.name
+    match action:
+        case SkipActionKind.IGNORE:
+            return
+        case SkipActionKind.COPY:
+            if dest_path.exists():
+                console.warning(f"Skipping existing file: {dest_path}")
+                return
+            shutil.copy2(img_path, dest_path)
+        case SkipActionKind.MOVE:
+            # Just force move
+            shutil.move(img_path, dest_path)
 
 
 def runner_shift_rename(
@@ -448,9 +468,11 @@ def runner_denoiser_trt(
     input_folder: Path,
     output_dir: Path,
     action: ActionDenoise,
+    skip_action: SkipActionConfig | None = None,
 ) -> None:
     console.info(f"Loading denoising model from {action.model}...")
 
+    page_re = RegexCollection.page_re()
     session = prepare_model_runtime(
         action.model,
         device_id=action.device_id,
@@ -460,6 +482,13 @@ def runner_denoiser_trt(
     current_index = 1
     for file_path, _, total_image, _ in file_handler.collect_image_from_folder(input_folder):
         console.status(f"Denoising images... [{current_index}/{total_image}]")
+
+        if title_match := page_re.match(file_path.stem):
+            first_part = int(title_match.group("a"))  # We only care about this
+            if skip_action is not None and first_part in skip_action.pages:
+                perform_skip_action(file_path, output_dir, skip_action.action)
+                continue
+
         img_file = Image.open(file_path)
         output_image = denoise_single_image(
             img_file,
@@ -481,17 +510,12 @@ def _runner_autolevel2_threaded(
     img_path: Path,
     output_dir: Path,
     action: ActionAutolevel,
-    is_first: bool,
     is_color: bool,
+    is_skipped_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
-    if is_first and action.skip_first:
-        dest_path = output_dir / img_path.name
-        if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
-            return ThreadedResult.COPIED
-
-        shutil.copy2(img_path, dest_path)
-        return ThreadedResult.COPIED
+    if is_skipped_action is not None:
+        perform_skip_action(img_path, output_dir, is_skipped_action)
+        return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     img = Image.open(img_path)
     black_level, white_level, _ = find_local_peak(
         img, upper_limit=action.upper_limit, skip_white_peaks=action.skip_white
@@ -546,8 +570,9 @@ def runner_autolevel(
     output_dir: Path,
     action: ActionAutolevel,
     volume: VolumeConfig,
+    skip_action: SkipActionConfig | None = None,
 ) -> None:
-    cmx_re = RegexCollection.cmx_re()
+    page_re = RegexCollection.page_re()
     console.status("Processing images with autolevel...")
 
     all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(input_dir)]
@@ -555,28 +580,30 @@ def runner_autolevel(
     all_images.sort(key=lambda x: x.stem)
 
     # Do pre-processing
-    images_complete: list[tuple[Path, bool, bool]] = []
-    for idx, image in enumerate(all_images):
-        img_match = cmx_re.match(image.stem)
+    images_complete: list[tuple[Path, bool, SkipActionKind | None]] = []
+    for image in all_images:
+        img_match = page_re.match(image.stem)
         is_color = False
-        is_first = idx == 0
+        is_skip_action = None
 
         if img_match is not None:
             p01 = int(img_match.group("a"))
             is_color = p01 in volume.colors
+            if skip_action is not None and p01 in skip_action.pages:
+                is_skip_action = skip_action.action
 
-        images_complete.append((image, is_first, is_color))
+        images_complete.append((image, is_color, is_skip_action))
 
     results: list[ThreadedResult] = []
     if action.threads > 1:
         console.info(f"Using {action.threads} CPU threads for processing.")
         with mp.Pool(processes=action.threads, initializer=_init_worker) as pool:
             try:
-                for idx, (image, is_first, is_color) in enumerate(images_complete):
+                for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
                     # We need to also get the return value here
                     pool.apply_async(
                         _runner_autolevel2_threaded,
-                        args=(image, output_dir, action, is_first, is_color),
+                        args=(image, output_dir, action, is_color, is_skip_action),
                         callback=results.append,
                     )
                 pool.close()
@@ -594,13 +621,14 @@ def runner_autolevel(
             finally:
                 pool.close()
     else:
-        for idx, (image, is_first, is_color) in enumerate(images_complete):
+        for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
             console.status(f"Processing image with autolevel... [{idx + 1}/{total_images}]")
-            results.append(_runner_autolevel2_threaded(image, output_dir, action, is_first, is_color))
+            results.append(_runner_autolevel2_threaded(image, output_dir, action, is_color, is_skip_action))
 
     autolevel_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
     copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
     grayscaled_count = sum(1 for result in results if result == ThreadedResult.GRAYSCALED)
+    ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
     console.stop_status(f"Processed {total_images} images with autolevel2.")
     if copied_count > 0:
         console.info(f"Copied {copied_count} images without autolevel.")
@@ -608,6 +636,8 @@ def runner_autolevel(
         console.info(f"Autoleveled {autolevel_count} images.")
     if grayscaled_count > 0:
         console.info(f"Grayscaled {grayscaled_count} images.")
+    if ignored_count > 0:
+        console.info(f"Ignored {ignored_count} images.")
 
 
 def runner_optimize(
@@ -920,10 +950,14 @@ def orchestrator_runner(
             console.warning(f"Volume path {chapter_path} is not a directory, skipping...")
             continue
 
+        skips_mappings: dict[str, SkipActionConfig] = {}
+        for skips in volume.skip_actions:
+            skips_mappings[skips.step] = skips
         console.info(f"Processing volume {volume.number} {chapter_path}...")
-        for action in config.actions:
+        for action_name, action in config.actions_maps:
             console.info(f" - Running action {action.kind.name}...")
             start_action = time()
+            skip_action = skips_mappings.get(action_name)
             match action.kind:
                 case ActionKind.SHIFT_RENAME:
                     runner_shift_rename(
@@ -953,6 +987,7 @@ def orchestrator_runner(
                         input_folder=chapter_path,
                         output_dir=output_dir,
                         action=action,
+                        skip_action=skip_action,
                     )
                     # New chapter path base
                     chapter_path = output_dir
@@ -964,6 +999,7 @@ def orchestrator_runner(
                         output_dir=output_dir,
                         action=action,
                         volume=volume,
+                        skip_action=skip_action,
                     )
                     # New chapter path base
                     chapter_path = output_dir
