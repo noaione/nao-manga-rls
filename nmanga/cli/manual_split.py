@@ -62,8 +62,12 @@ def extract_page_num(
     if filename.endswith("-"):
         filename = filename[:-1]
     try:
-        first, second = filename.split("-")
-        return [int(first), int(second)]
+        matching_part = re.match(r"(\d+)[-~](\d+)", filename)
+        if matching_part is None:
+            return [int(filename)]
+        first_part = matching_part.group(1)
+        second_part = matching_part.group(2)
+        return [int(first_part), int(second_part)]
     except ValueError:
         return [int(filename)]
 
