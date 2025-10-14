@@ -37,7 +37,7 @@ from .cli.autolevel import autolevel, autolevel2, force_gray
 from .cli.base import NMangaCommandHandler
 from .cli.config import cli_config
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
-from .cli.image_optimizer import image_optimizer
+from .cli.image_optimizer import image_jpegify, image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
@@ -115,6 +115,7 @@ main.add_command(spreads)
 main.add_command(image_tagging)
 main.add_command(image_tagging_raw)
 main.add_command(image_optimizer)
+main.add_command(image_jpegify)
 main.add_command(timewizard_modify)
 main.add_command(autolevel)
 main.add_command(autolevel2)

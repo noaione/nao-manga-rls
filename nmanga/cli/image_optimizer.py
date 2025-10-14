@@ -25,17 +25,25 @@ SOFTWARE.
 # Image optimizer command
 # This file is part of nmanga.
 
+import multiprocessing as mp
+import signal
+import subprocess as sp
 from pathlib import Path
 
 import click
 
-from .. import term
+from .. import file_handler, term
 from ..common import optimize_images
 from . import options
 from ._deco import check_config_first, time_program
-from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_pingo
+from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_cjpegli, test_or_find_pingo
 
 console = term.get_console()
+
+
+def _init_worker():
+    """Initialize worker processes to handle keyboard interrupts properly."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 @click.command(
@@ -78,3 +86,102 @@ def image_optimizer(
     console.info(f"Using pingo at {pingo_exe}")
     console.info("Optimizing images...")
     optimize_images(pingo_exe, path_or_archive, aggresive_mode)
+
+
+def _wrapper_jpegify_threaded(
+    img_path: Path,
+    output_dir: Path,
+    cjpegli: str,
+    quality: int,
+) -> None:
+    dest_path = output_dir / f"{img_path.stem}.jpg"
+    if dest_path.exists():
+        console.warning(f"Skipping existing file: {dest_path}")
+        return
+
+    cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
+    sp.run(cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+
+
+@click.command(
+    name="jpegify",
+    help="Convert images to JPEG to save space",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-q",
+    "--quality",
+    "jpeg_quality",
+    default=98,
+    show_default=True,
+    type=click.IntRange(1, 100),
+    help="Quality of the output JPEG images (1-100)",
+)
+@options.dest_output(optional=False)
+@options.cjpegli_path
+@options.threads
+@check_config_first
+@time_program
+def image_jpegify(
+    path_or_archive: Path,
+    jpeg_quality: int,
+    dest_output: Path,
+    cjpegli_path: str,
+    threads: int,
+):  # pragma: no cover
+    """
+    Convert images to JPEG to save space
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    force_search = not is_executeable_global_path(cjpegli_path, "cjpegli")
+    cjpegli_exe = test_or_find_cjpegli(cjpegli_path, force_search)
+    if cjpegli_exe is None:
+        console.error("cjpegli not found, unable to convert images to JPEG!")
+        raise click.exceptions.Exit(1)
+
+    console.info(f"Using cjpegli at {cjpegli_exe}")
+
+    image_candidates: list[Path] = [
+        img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)
+    ]
+
+    dest_output.mkdir(parents=True, exist_ok=True)
+
+    total_images = len(image_candidates)
+    console.status(f"Converting {total_images} images to JPEG with cjpegli...")
+    quality = max(0, min(100, jpeg_quality))
+    if threads > 1:
+        console.info(f"Using {threads} CPU threads for processing.")
+        with mp.Pool(processes=threads, initializer=_init_worker) as pool:
+            try:
+                for image in image_candidates:
+                    pool.apply_async(
+                        _wrapper_jpegify_threaded,
+                        args=(image, dest_output, cjpegli_exe, quality),
+                    )
+                pool.close()
+                pool.join()
+            except KeyboardInterrupt:
+                console.warning("Keyboard interrupt detected, terminating...")
+                pool.terminate()
+                pool.join()
+                raise click.Abort()
+            except Exception as e:
+                console.error(f"Error occurred: {e}, terminating...")
+                pool.terminate()
+                pool.join()
+                raise click.Abort()
+            finally:
+                pool.close()
+    else:
+        for idx, image in enumerate(image_candidates):
+            console.status(f"Converting image to JPEG... [{idx + 1}/{total_images}]")
+            _wrapper_jpegify_threaded(image, dest_output, cjpegli_exe, quality)
+    console.stop_status(f"Converted {total_images} images to JPEG.")
