@@ -1049,7 +1049,7 @@ def orchestrator_runner(
         for skips in volume.skip_actions:
             skips_mappings[skips.step] = skips
         console.info(f"Processing volume {volume.number} {chapter_path}...")
-        for action_name, action in config.actions_maps:
+        for action_name, action in config.actions_maps.items():
             console.info(f" - Running action {action.kind.name}...")
             start_action = time()
             skip_action = skips_mappings.get(action_name)
@@ -1094,6 +1094,19 @@ def orchestrator_runner(
                         output_dir=output_dir,
                         action=action,
                         volume=volume,
+                        skip_action=skip_action,
+                    )
+                    # New chapter path base
+                    chapter_path = output_dir
+                case ActionKind.POSTERIZE:
+                    output_dir = full_base / action.base_path / volume.path
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    runner_posterize(
+                        input_dir=chapter_path,
+                        output_dir=output_dir,
+                        action=action,
+                        volume=volume,
+                        toolsets=toolsets,
                         skip_action=skip_action,
                     )
                     # New chapter path base
@@ -1158,3 +1171,130 @@ def orchestrator_runner(
             console.info(f" - Finished action {action.kind.name} in {end_action - start_action:.2f}s")
             console.enter()
     console.info("Orchestrator finished all tasks.")
+
+
+@orchestractor.command(
+    name="validate",
+    help="Validate the orchestrator configuration file",
+    cls=NMangaCommandHandler,
+)
+@click.argument(
+    "input_file",
+    metavar="INPUT_FILE",
+    required=True,
+    type=click.Path(resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--simulate",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@check_config_first
+@time_program
+def orchestrator_validate(
+    input_file: Path,
+    simulate: bool,
+):
+    if not input_file.exists():
+        console.error(f"{input_file} does not exist, please provide a valid file")
+        raise click.Abort()
+
+    with input_file.open("r", encoding="utf-8") as f:
+        config = OrchestratorConfig.model_validate_json(f.read(), strict=True)
+
+    console.info(f"Orchestrator configuration for {config.title} is valid!")
+
+    if not simulate:
+        return
+
+    full_base = input_file.resolve().parent
+    console.info(f" - Title: {config.title}")
+    console.info(f" - Publisher: {config.publisher}")
+    console.info(f" - Credit: {config.credit}")
+    console.info(f" - Bracket Type: {config.bracket_type}")
+    console.info(f" - Email: {config.email}")
+    console.info(f" - Base Path: {config.base_path}")
+
+    # Simulate the volume processing
+    console.info(f" - Volumes: {len(config.volumes)}")
+    for volume in config.volumes:
+        console.info(f"   - Volume {volume.number}:")
+        console.info(f"     - Path: {volume.path}")
+        console.info(f"     - Year: {volume.year}")
+        console.info(f"     - Publication: {volume.pub_type}")
+        console.info(f"     - Quality: {volume.quality}")
+        console.info(f"     - Revision: {volume.revision}")
+        console.info(f"     - Oneshot: {'Yes' if volume.oneshot else 'No'}")
+        console.info(f"     - Colors: {', '.join(map(str, volume.colors)) if volume.colors else 'None'}")
+        console.info(f"     - Spreads: {len(volume.spreads) if volume.spreads else 0} total")
+        if volume.extra_text:
+            console.info(f"     - Extra Text: {volume.extra_text}")
+        if volume.skip_actions:
+            console.info(f"     - Skip Actions: {len(volume.skip_actions)}")
+            for skip in volume.skip_actions:
+                console.info(f"       - Step: {skip.step}, Action: {skip.action.name}, Pages: {skip.pages}")
+
+    console.enter()
+    console.info(f" - Actions: {len(config.actions)} actions defined")
+    input_dir = full_base / config.base_path
+    # Use first volume
+    first_vol = config.volumes[0]
+    chapter_path = input_dir / first_vol.path
+
+    for action_name, action in config.actions_maps.items():
+        console.info(f'   - Action "{action_name}" ({action.kind.name}):')
+        console.info(f"     >> Input Path: {chapter_path}")
+        match action.kind:
+            case ActionKind.SHIFT_RENAME:
+                console.info(f"     - Start Index: {action.start}")
+                console.info(f"     - Title: {action.title or config.title}")
+            case ActionKind.SPREADS:
+                console.info(f"     - Base Path: {action.base_path}")
+                console.info(f"     - Use Pillow: {'Yes' if action.pillow else 'No'}")
+                if not action.pillow:
+                    console.info(f"     - Method: {action.method.name}")
+                    console.info(f"     - Fuzz: {action.fuzz}%")
+            case ActionKind.RENAME:
+                console.info("     - No additional parameters")
+            case ActionKind.DENOISE:
+                console.info(f"     - Model: {action.model}")
+                console.info(f"     - Device ID: {action.device_id}")
+                console.info(f"     - Batch Size: {action.batch_size}")
+                console.info(f"     - Tile Size: {action.tile_size}")
+                console.info(f"     - Background: {action.background}")
+                console.info(f"     - Base Path: {action.base_path}")
+                chapter_path = full_base / action.base_path / first_vol.path
+            case ActionKind.AUTOLEVEL:
+                console.info(f"     - Upper Limit: {action.upper_limit}")
+                console.info(f"     - Peak Offset: {action.peak_offset}")
+                console.info(f"     - Skip White Peaks: {'Yes' if action.skip_white else 'No'}")
+                console.info(f"     - Threads: {action.threads}")
+                console.info(f"     - Base Path: {action.base_path}")
+                chapter_path = full_base / action.base_path / first_vol.path
+            case ActionKind.POSTERIZE:
+                console.info(f"     - Bits Per Channel: {action.bpc}")
+                console.info(f"     - Use Pillow: {'Yes' if action.pillow else 'No'}")
+                console.info(f"     - Threads: {action.threads}")
+                console.info(f"     - Base Path: {action.base_path}")
+                chapter_path = full_base / action.base_path / first_vol.path
+            case ActionKind.OPTIMIZE:
+                console.info(f"     - Aggresive: {'Yes' if action.aggresive else 'No'}")
+                console.info(f"     - Limiter: {action.limiter or 'None'}")
+            case ActionKind.TAGGING:
+                console.info("     - No additional parameters")
+            case ActionKind.PACK:
+                console.info(f"     - Output Mode: {action.output_mode.name}")
+                console.info(f"     - Source Dir: {action.source_dir or 'Same as chapter'}")
+            case ActionKind.MOVE_COLOR:
+                console.info(f"     - Base Path: {action.base_path}")
+            case ActionKind.COLOR_JPEGIFY:
+                console.info(f"     - Quality: {action.quality}")
+                console.info(f"     - Threads: {action.threads}")
+                console.info(f"     - Source Path: {action.source_path}")
+                if action.base_path is not None:
+                    console.info(f"     - Base Path: {action.base_path}")
+                    chapter_path = full_base / action.base_path / first_vol.path
+            case _:
+                console.info("     - No additional parameters")
+                continue

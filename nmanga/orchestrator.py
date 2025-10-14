@@ -27,7 +27,7 @@ from enum import Enum
 from functools import cached_property
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -232,6 +232,7 @@ class ActionOptimize(BaseModel):
                 "Limiter must start with a dot, e.g. .png,.jpg",
                 {"limiter": self.limiter},
             )
+        return self
 
 
 class ActionTagging(BaseModel):
@@ -288,7 +289,7 @@ class ActionPack(BaseModel):
     """The source directory to pack, this would use the last used base path if not provided"""
 
 
-Actions = Annotated[
+ActionType: TypeAlias = (
     ActionShiftName
     | ActionSpreads
     | ActionRename
@@ -299,9 +300,9 @@ Actions = Annotated[
     | ActionTagging
     | ActionMoveColor
     | ActionColorJpegify
-    | ActionPack,
-    Field(discriminator="kind"),
-]
+    | ActionPack
+)
+Actions = Annotated[ActionType, Field(discriminator="kind")]
 """
 The list of all supported actions.
 """
@@ -570,7 +571,7 @@ class OrchestratorConfig(BaseModel):
             actions_names.append(f"{action.kind.value}-{step_number}")
         return actions_names
 
-    @cached_property
+    @property
     def actions_maps(self) -> dict[str, Actions]:
         """
         Get the list of actions with their names
@@ -580,6 +581,19 @@ class OrchestratorConfig(BaseModel):
         if len(action_names) != len(self.actions):
             raise ValueError("Action names and actions length mismatch")
         return dict(zip(action_names, self.actions))
+
+    @model_validator(mode="after")
+    def check_no_actions(self) -> Self:
+        for idx, action in enumerate(self.actions):
+            if not action:
+                raise PydanticCustomError(
+                    "empty_action",
+                    "Action {index} cannot be empty",
+                    {
+                        "index": idx,
+                    },
+                )
+        return self
 
     # Validate that skip actions refer to valid action steps
     @model_validator(mode="after")
