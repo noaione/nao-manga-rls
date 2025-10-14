@@ -24,7 +24,7 @@ SOFTWARE.
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from functools import cached_property, lru_cache
+from functools import cached_property
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Annotated, Literal
@@ -34,7 +34,7 @@ from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
 from .common import ChapterRange
-from .constants import MANGA_PUBLICATION_TYPES
+from .constants import MANGA_PUBLICATION_TYPES, MangaPublication
 from .exporter import ExporterType
 from .spreads import SpreadDirection
 
@@ -310,7 +310,6 @@ class ChapterConfig(BaseModel):
             )
         return self
 
-    @lru_cache(maxsize=32)
     def to_chapter_range(self) -> ChapterRange:
         """
         Convert to ChapterRange
@@ -383,6 +382,13 @@ class VolumeConfig(BaseModel):
     """The publication type of the volume, this is used for tagging"""
     skip_actions: list[SkipActionConfig] = Field(default_factory=list)
     """The list of actions to skip for this volume"""
+
+    @cached_property
+    def publication(self) -> MangaPublication:
+        """
+        A cached property to get the MangaPublication for the volume
+        """
+        return MANGA_PUBLICATION_TYPES[self.pub_type]
 
     @cached_property
     def meta_name_maps(self) -> dict[int, str]:

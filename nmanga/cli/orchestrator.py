@@ -360,7 +360,7 @@ def runner_daiz_rename(
     # console.status("Renaming with daiz-like format: 1/???")
     cmx_re = RegexCollection.cmx_re()
 
-    packing_extra = dict[int, list[ChapterRange]] = {}
+    packing_extra: dict[int, list[ChapterRange]] = {}
     for chapter in volume.chapters:
         as_range = chapter.to_chapter_range()
         if as_range.base not in packing_extra:
@@ -383,9 +383,6 @@ def runner_daiz_rename(
         if page_back is not None:
             page_num = f"{page_num}-{page_back}"
 
-        volume_number = cast(str, format_volume_text(manga_volume=volume.number))
-        if volume.oneshot:
-            volume_number = ""
         selected_range: ChapterConfig | None = None
         for chapter in volume.chapters:
             if chapter.end is None:
@@ -411,10 +408,10 @@ def runner_daiz_rename(
             manga_year=volume.year,
             chapter_info=selected_range.to_chapter_range(),
             page_number=page_num,
-            publication_type=volume.pub_type,
+            publication_type=volume.publication,
             ripper_credit=config.credit,
             bracket_type=config.bracket_type,
-            manga_volume=volume_number if not volume.oneshot else None,
+            manga_volume=volume.number if not volume.oneshot else None,
             extra_metadata=extra_name,
             image_quality=volume.quality,
             rls_revision=volume.revision,
@@ -661,7 +658,7 @@ def runner_tagging(
     archive_filename = format_archive_filename(
         manga_title=config.title,
         manga_year=volume.year,
-        publication_type=volume.pub_type,
+        publication_type=volume.publication,
         ripper_credit=config.credit,
         bracket_type=config.bracket_type,
         manga_volume_text=volume_text if not volume.oneshot else None,
@@ -684,7 +681,7 @@ def runner_pack(
     archive_filename = format_archive_filename(
         manga_title=config.title,
         manga_year=volume.year,
-        publication_type=volume.pub_type,
+        publication_type=volume.publication,
         ripper_credit=config.credit,
         bracket_type=config.bracket_type,
         manga_volume_text=volume_text if not volume.oneshot else None,
