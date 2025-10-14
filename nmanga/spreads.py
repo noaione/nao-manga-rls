@@ -22,13 +22,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import subprocess as sp
 from enum import Enum
+from pathlib import Path
 
 from PIL import Image
+
+from .file_handler import random_name
 
 __all__ = (
     "SpreadDirection",
     "join_spreads",
+    "join_spreads_imagemagick",
+    "select_exts",
 )
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
@@ -38,6 +44,20 @@ Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 class SpreadDirection(str, Enum):
     RTL = "rtl"
     LTR = "ltr"
+
+
+def select_exts(files: list[Path]) -> str:
+    extensions = [x.suffix for x in files]
+    select_ext = ".jpg"
+    if ".png" in extensions:
+        select_ext = ".png"
+    # Check if only webp
+    if all(".webp" in x for x in extensions):
+        select_ext = ".webp"
+    # Check if has webp and mix with other formats
+    if ".webp" in extensions and select_ext != ".webp":
+        select_ext = ".png"
+    return select_ext
 
 
 def join_spreads(images: list[Image.Image], direction: SpreadDirection = SpreadDirection.LTR) -> Image.Image:
@@ -75,3 +95,51 @@ def join_spreads(images: list[Image.Image], direction: SpreadDirection = SpreadD
         new_im.paste(im, (x_offset, 0))
         x_offset += im.size[0]
     return new_im
+
+
+def join_spreads_imagemagick(
+    images: list[Path],
+    output_directory: Path,
+    quality: float = 100.0,
+    direction: SpreadDirection = SpreadDirection.LTR,
+    output_format: str = "auto",
+    magick_path: str = "magick",
+) -> str:
+    """Join images into spreads using ImageMagick.
+
+    Parameters
+    ----------
+    images: :class:`list` of :class:`pathlib.Path`
+        The list of image paths to join.
+    output_directory: :class:`pathlib.Path`
+        The output directory to save the joined image.
+    quality: :class:`float`
+        The quality of the output image. Defaults to 100.0.
+    direction: :class:`SpreadDirection`
+        The direction of the spread. Defaults to `SpreadDirection.LTR`.
+    output_format: :class:`str`
+        The output format of the image. Defaults to "auto", which will select the best format based on input images.
+        Supported formats are "jpg", "png", and "webp".
+    magick_path: :class:`str`
+        The path to the ImageMagick `magick` executable. Defaults to "magick".
+
+    Returns
+    -------
+    :class:`str`
+        The output image path.
+    """
+
+    selected_extensions = select_exts(images) if output_format == "auto" else f".{output_format.lower()}"
+    output_name = random_name(length=12) + selected_extensions
+
+    images.sort(key=lambda x: x.name, reverse=direction == SpreadDirection.RTL)
+
+    commands = [magick_path]
+    commands.extend(x.name for x in images)
+    commands.extend("-quality", f"{quality:.2f}%", "+append", f"{output_directory / output_name}")
+
+    try:
+        sp.run(commands, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    except sp.CalledProcessError as e:
+        raise RuntimeError("Failed to join spreads using ImageMagick.") from e
+    return output_name

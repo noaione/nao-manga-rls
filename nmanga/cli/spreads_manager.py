@@ -36,7 +36,7 @@ from PIL import Image
 
 from .. import file_handler, term
 from ..common import RegexCollection
-from ..spreads import SpreadDirection, join_spreads
+from ..spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -70,47 +70,6 @@ class _ExportedImage:
     path: Path
     prefix: str | None = None
     postfix: str | None = None
-
-
-def select_exts(files: list[Path]) -> str:
-    extensions = [x.suffix for x in files]
-    select_ext = ".jpg"
-    if ".png" in extensions:
-        select_ext = ".png"
-    # Check if only webp
-    if all(".webp" in x for x in extensions):
-        select_ext = ".webp"
-    # Check if has webp and mix with other formats
-    if ".webp" in extensions and select_ext != ".webp":
-        console.warning("Mixed format detected, using png as output format")
-        select_ext = ".png"
-    return select_ext
-
-
-def execute_spreads_join(
-    magick_dir: str,
-    quality: float,
-    input_imgs: list[_ExportedImage],
-    out_dir: Path,
-    reverse_mode: bool,
-    output_fmt: str = "auto",
-):
-    select_ext = select_exts([x.path for x in input_imgs])
-    if output_fmt != "auto":
-        select_ext = f".{output_fmt}"
-    output_name = file_handler.random_name() + select_ext
-    execute_this = make_prefix_convert(magick_dir)
-    input_imgs.sort(key=lambda x: x.path.name)
-    if reverse_mode:
-        input_imgs.reverse()
-    execute_this += list(map(lambda x: str(x.path), input_imgs))
-    execute_this += ["-quality", f"{quality:.2f}%", "+append", f"{out_dir / output_name}"]
-    try:
-        sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
-    except sp.CalledProcessError as e:
-        console.error(f"Error: {e.output.decode('utf-8')}")
-        raise e
-    return output_name
 
 
 def execute_spreads_split(
@@ -286,9 +245,9 @@ def spreads_join(
 
         final_filename = f"{pre_t}p{first_val:03d}-{last_val:03d}{post_t}"
 
+        all_img_paths = [x.path for x in imgs["imgs"]]
         if use_pil:
             # Load all images
-            all_img_paths = [x.path for x in imgs["imgs"]]
             loaded_images = [Image.open(p) for p in all_img_paths]
 
             joined_image = join_spreads(loaded_images, direction)
@@ -299,7 +258,14 @@ def spreads_join(
 
             joined_image.save(path_or_archive / final_filename, quality=int(quality))
         else:
-            temp_output = execute_spreads_join(magick_exe, quality, imgs["imgs"], path_or_archive, reverse, image_fmt)
+            temp_output = join_spreads_imagemagick(
+                all_img_paths,
+                output_directory=path_or_archive,
+                quality=quality,
+                direction=direction,
+                output_format=image_fmt,
+                magick_path=magick_exe,
+            )
             extension = Path(temp_output).suffix
 
             final_filename += extension
