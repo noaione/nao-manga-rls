@@ -1,0 +1,404 @@
+{
+    "$schema": "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema",
+    "title": "I Want to Love You Till Your Dying Day",
+    "publisher": "Kodansha Comics",
+    "credit": "nao",
+    "email": "noaione@protonmail.ch",
+    "bracket_type": "round",
+    "base_path": "source",
+    "volumes": [
+        {
+            "path": "v01",
+            "number": 1,
+            "year": 2025,
+            "spreads": [
+                [22, 23],
+                [152, 153]
+            ],
+            "colors": [0, 1, 2, 3],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Afterword",
+                    "page": [162, 163]
+                },
+                {
+                    "tag": "Omake",
+                    "page": 164
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 178
+                }
+            ],
+            "quality": "HQ",
+            "chapters": [
+                {
+                    "number": 1,
+                    "title": "Nice to Meet You",
+                    "start": 0,
+                    "end": 42
+                },
+                {
+                    "number": 2,
+                    "title": "Kiss",
+                    "start": 43,
+                    "end": 76
+                },
+                {
+                    "number": 3,
+                    "title": "I Am Me",
+                    "start": 77,
+                    "end": 102
+                },
+                {
+                    "number": 4,
+                    "title": "Yeah, It Hurts",
+                    "start": 103,
+                    "end": 132
+                },
+                {
+                    "number": 5,
+                    "title": "The Immortal Girl",
+                    "start": 133
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
+        },
+        {
+            "path": "v02",
+            "number": 2,
+            "year": 2025,
+            "spreads": [
+                [2, 3]
+            ],
+            "colors": [0, 1, 2, 3, 4],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Afterword",
+                    "page": 164
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 180
+                }
+            ],
+            "quality": "HQ",
+            "chapters": [
+                {
+                    "number": 6,
+                    "title": "Friends",
+                    "start": 0,
+                    "end": 34
+                },
+                {
+                    "number": 7,
+                    "title": "Accomplices",
+                    "start": 35,
+                    "end": 64
+                },
+                {
+                    "number": 8,
+                    "title": "An Enduring Tale",
+                    "start": 65,
+                    "end": 92
+                },
+                {
+                    "number": 9,
+                    "title": "You'll Understand One Day",
+                    "start": 93,
+                    "end": 126
+                },
+                {
+                    "number": 10,
+                    "title": "A Never-ending Night",
+                    "start": 127,
+                    "end": 159
+                },
+                {
+                    "number": 10.5,
+                    "title": "Bonus Comic",
+                    "start": 160
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
+        },
+        {
+            "path": "v03",
+            "number": 3,
+            "year": 2025,
+            "spreads": [
+                [2, 3],
+                [18, 19],
+                [84, 85],
+                [126, 127]
+            ],
+            "colors": [0, 1, 2, 3, 4],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 180
+                }
+            ],
+            "quality": "HQ",
+            "chapters": [
+                {
+                    "number": 11,
+                    "title": "Welcome Back",
+                    "start": 0,
+                    "end": 34
+                },
+                {
+                    "number": 12,
+                    "title": "Motive",
+                    "start": 35,
+                    "end": 64
+                },
+                {
+                    "number": 13,
+                    "title": "After the Tears",
+                    "start": 65,
+                    "end": 100
+                },
+                {
+                    "number": 14,
+                    "title": "I'm Not Scared Anymore",
+                    "start": 101,
+                    "end": 132
+                },
+                {
+                    "number": 14.5,
+                    "title": "A Patch of Sunlight",
+                    "start": 133
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
+        },
+        {
+            "path": "v04",
+            "number": 4,
+            "year": 2025,
+            "spreads": [
+                [2, 3],
+                [80, 81]
+            ],
+            "colors": [0, 1, 2, 3, 4],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Afterword",
+                    "page": 164
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 180
+                }
+            ],
+            "quality": "HQ",
+            "chapters": [
+                {
+                    "number": 15,
+                    "title": "I'm Back",
+                    "start": 0,
+                    "end": 36
+                },
+                {
+                    "number": 16,
+                    "title": "A Choice",
+                    "start": 37,
+                    "end": 66
+                },
+                {
+                    "number": 17,
+                    "title": "My Magic",
+                    "start": 67,
+                    "end": 98
+                },
+                {
+                    "number": 17.5,
+                    "title": "A Dream",
+                    "start": 99,
+                    "end": 106
+                },
+                {
+                    "number": 18,
+                    "title": "A Patch of Sunlight",
+                    "start": 107,
+                    "end": 132
+                },
+                {
+                    "number": 19,
+                    "title": "An Unforgettable Day",
+                    "start": 133
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
+        },
+        {
+            "path": "v05",
+            "number": 5,
+            "year": 2025,
+            "spreads": [
+                [2, 3]
+            ],
+            "colors": [0, 1, 2, 3, 4],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Afterword",
+                    "page": 164
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 180
+                }
+            ],
+            "quality": "HQ",
+            "chapters": [
+                {
+                    "number": 20,
+                    "title": "I'm Okay",
+                    "start": 0,
+                    "end": 38
+                },
+                {
+                    "number": 21,
+                    "title": "Innocence",
+                    "start": 39,
+                    "end": 68
+                },
+                {
+                    "number": 22,
+                    "title": "A Lost Child",
+                    "start": 69,
+                    "end": 96
+                },
+                {
+                    "number": 23,
+                    "title": "On My Own",
+                    "start": 97,
+                    "end": 130
+                },
+                {
+                    "number": 24,
+                    "title": "I Want to See You",
+                    "start": 131
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "kind": "autolevel",
+            "threads": 4
+        },
+        {
+            "kind": "denoise",
+            "base_path": "denoised",
+            "model": "I:\\Manga\\_Toolsets\\models\\umzi_denoiser\\1x_umzi_digital_decompress_gaterv3_1_fp16_op17_rtx3050m_cudnn92_trt10-9.onnx",
+            "batch_size": 64,
+            "tile_size": 128,
+            "device_id": 0
+        },
+        {
+            "kind": "move_color",
+            "base_path": "colors"
+        },
+        {
+            "kind": "color_jpegify",
+            "quality": 98,
+            "source_path": "colors",
+            "base_path": "denoised",
+            "threads": 4
+        },
+        {
+            "kind": "optimize",
+            "aggresive": false,
+            "limiter": ".jpg"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": true,
+            "limiter": ".png"
+        },
+        {
+            "kind": "rename"
+        },
+        {
+            "kind": "tagging"
+        },
+        {
+            "kind": "pack",
+            "output_mode": "cbz",
+            "source_dir": "denoised"
+        }
+    ]
+}

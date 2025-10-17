@@ -1,0 +1,110 @@
+{
+    "$schema": "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema",
+    "title": "I Want to Love You Till Your Dying Day",
+    "publisher": "Kodansha Comics",
+    "credit": "nao",
+    "email": "noaione@protonmail.ch",
+    "bracket_type": "round",
+    "base_path": "denoised",
+    "volumes": [
+        {
+            "path": "v01",
+            "number": 1,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3,
+                165,
+                168, 169, 170, 171, 172, 173, 174, 175, 176, 177
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "extra_text": "PNG4",
+            "pub_type": "digital",
+            "skip_actions": []
+        },
+        {
+            "path": "v02",
+            "number": 2,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3, 4,
+                165,
+                168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "extra_text": "PNG4",
+            "pub_type": "digital",
+            "skip_actions": []
+        },
+        {
+            "path": "v03",
+            "number": 3,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3, 4,
+                165,
+                168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "extra_text": "PNG4",
+            "pub_type": "digital",
+            "skip_actions": []
+        },
+        {
+            "path": "v04",
+            "number": 4,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3, 4,
+                165,
+                168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "extra_text": "PNG4",
+            "pub_type": "digital",
+            "skip_actions": []
+        },
+        {
+            "path": "v05",
+            "number": 5,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3, 4,
+                165,
+                168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "extra_text": "PNG4",
+            "pub_type": "digital",
+            "skip_actions": []
+        }
+    ],
+    "actions": [
+        {
+            "kind": "posterize",
+            "bpc": 4,
+            "threads": 4
+        },
+        {
+            "kind": "optimize",
+            "aggresive": false,
+            "limiter": ".jpg"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": true,
+            "limiter": ".png"
+        },
+        {
+            "kind": "tagging"
+        },
+        {
+            "kind": "pack",
+            "output_mode": "cbz"
+        }
+    ]
+}

@@ -678,7 +678,7 @@ class OrchestratorConfig(BaseModel):
     model_config = ConfigDict(
         title="nmanga Orchestrator Configuration",
         strict=True,
-        extra="forbid",
+        extra="ignore",
         validate_default=True,
     )
 
