@@ -27,6 +27,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import importlib.util
+import json
 import multiprocessing as mp
 import shutil
 import signal
@@ -145,7 +146,11 @@ def orchestrator_generate(
     )
 
     with output_file.open("w", encoding="utf-8") as f:
-        f.write(config.model_dump_json(indent=4, exclude_none=True))
+        data = config.model_dump(exclude_none=True)
+        data["$schema"] = (
+            "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema"
+        )
+        f.write(json.dumps(data, indent=4))
 
     console.info(f"Generated default orchestrator configuration to {output_file}")
     return 0
