@@ -1,0 +1,832 @@
+{
+    "$defs": {
+        "ActionAutolevel": {
+            "description": "Action to auto level all images in a volume with Pillow\n\nThis version is \"smarter\" than the CLI version:\n- It would force convert the image to grayscale for half-tones/b&w images before processing\n- All tagged color images will be leveled in keep colorspace mode",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "autolevel",
+                    "default": "autolevel",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "base_path": {
+                    "default": "leveled",
+                    "format": "path",
+                    "title": "Base Path",
+                    "type": "string"
+                },
+                "upper_limit": {
+                    "default": 60,
+                    "maximum": 255,
+                    "minimum": 1,
+                    "title": "Upper Limit",
+                    "type": "integer"
+                },
+                "peak_offset": {
+                    "default": 0,
+                    "maximum": 20,
+                    "minimum": -20,
+                    "title": "Peak Offset",
+                    "type": "integer"
+                },
+                "min_peak_pct": {
+                    "default": 0.25,
+                    "maximum": 100.0,
+                    "minimum": 0.0,
+                    "title": "Min Peak Pct",
+                    "type": "number"
+                },
+                "skip_white": {
+                    "default": true,
+                    "title": "Skip White",
+                    "type": "boolean"
+                },
+                "skip_color": {
+                    "default": false,
+                    "title": "Skip Color",
+                    "type": "boolean"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Threads",
+                    "type": "integer"
+                }
+            },
+            "title": "ActionAutolevel",
+            "type": "object"
+        },
+        "ActionColorJpegify": {
+            "description": "Action to convert color images to JPEG format with cjpegli",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "color_jpegify",
+                    "default": "color_jpegify",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "base_path": {
+                    "anyOf": [
+                        {
+                            "format": "path",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Base Path"
+                },
+                "quality": {
+                    "default": 95,
+                    "maximum": 100,
+                    "minimum": 1,
+                    "title": "Quality",
+                    "type": "integer"
+                },
+                "source_path": {
+                    "default": "colors",
+                    "format": "path",
+                    "title": "Source Path",
+                    "type": "string"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Threads",
+                    "type": "integer"
+                }
+            },
+            "title": "ActionColorJpegify",
+            "type": "object"
+        },
+        "ActionDenoise": {
+            "description": "Action to denoise all images in a volume with denoise-trt",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "denoise",
+                    "default": "denoise",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "model": {
+                    "format": "path",
+                    "title": "Model",
+                    "type": "string"
+                },
+                "base_path": {
+                    "default": "denoised",
+                    "format": "path",
+                    "title": "Base Path",
+                    "type": "string"
+                },
+                "device_id": {
+                    "default": 0,
+                    "minimum": 0,
+                    "title": "Device Id",
+                    "type": "integer"
+                },
+                "batch_size": {
+                    "default": 64,
+                    "minimum": 1,
+                    "title": "Batch Size",
+                    "type": "integer"
+                },
+                "tile_size": {
+                    "default": 128,
+                    "minimum": 64,
+                    "title": "Tile Size",
+                    "type": "integer"
+                },
+                "background": {
+                    "default": "black",
+                    "enum": [
+                        "white",
+                        "black"
+                    ],
+                    "title": "Background",
+                    "type": "string"
+                },
+                "contrast_strectch": {
+                    "default": false,
+                    "title": "Contrast Strectch",
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "model"
+            ],
+            "title": "ActionDenoise",
+            "type": "object"
+        },
+        "ActionInterrupt": {
+            "description": "Action to interrupt the action chain\n\nThis will \"pause\" the action chain in-place, this would also allow you to quit the action chain",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "interrupt",
+                    "default": "interrupt",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "whole_chain": {
+                    "default": true,
+                    "title": "Whole Chain",
+                    "type": "boolean"
+                }
+            },
+            "title": "ActionInterrupt",
+            "type": "object"
+        },
+        "ActionMoveColor": {
+            "description": "Action to move the tagged color images to a separate folder\n\nEverything would be derived from the main config so they are not included here.",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "move_color",
+                    "default": "move_color",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "base_path": {
+                    "default": "colors",
+                    "format": "path",
+                    "title": "Base Path",
+                    "type": "string"
+                }
+            },
+            "title": "ActionMoveColor",
+            "type": "object"
+        },
+        "ActionOptimize": {
+            "description": "Optimize all images in a volume with pingo",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "optimize",
+                    "default": "optimize",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "aggresive": {
+                    "default": false,
+                    "title": "Aggresive",
+                    "type": "boolean"
+                },
+                "limiter": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Limiter"
+                }
+            },
+            "title": "ActionOptimize",
+            "type": "object"
+        },
+        "ActionPack": {
+            "description": "Action to pack the volume into an archive",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "pack",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "output_mode": {
+                    "$ref": "#/$defs/ExporterType",
+                    "default": "cbz"
+                },
+                "source_dir": {
+                    "anyOf": [
+                        {
+                            "format": "path",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Source Dir"
+                }
+            },
+            "required": [
+                "kind"
+            ],
+            "title": "ActionPack",
+            "type": "object"
+        },
+        "ActionPosterize": {
+            "description": "Action to posterize all images in a volume with imagemagick or Pillow",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "posterize",
+                    "default": "posterize",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "base_path": {
+                    "default": "posterized",
+                    "format": "path",
+                    "title": "Base Path",
+                    "type": "string"
+                },
+                "bpc": {
+                    "default": 4,
+                    "maximum": 8,
+                    "minimum": 1,
+                    "title": "Bpc",
+                    "type": "integer"
+                },
+                "pillow": {
+                    "default": false,
+                    "title": "Pillow",
+                    "type": "boolean"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Threads",
+                    "type": "integer"
+                }
+            },
+            "title": "ActionPosterize",
+            "type": "object"
+        },
+        "ActionRename": {
+            "description": "Action to rename all images in a volume\n\nThis use the daiz-like renaming scheme.\n\nAll the other options are derived from the main config so they are not included here.",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "rename",
+                    "default": "rename",
+                    "title": "Kind",
+                    "type": "string"
+                }
+            },
+            "title": "ActionRename",
+            "type": "object"
+        },
+        "ActionShiftName": {
+            "description": "Action to shift rename of a volume\n\nTitle and volume are derived from the main config so they are not included here.",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "shift_rename",
+                    "default": "shift_rename",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "start": {
+                    "default": 0,
+                    "minimum": 0,
+                    "title": "Start",
+                    "type": "integer"
+                },
+                "title": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Title"
+                }
+            },
+            "title": "ActionShiftName",
+            "type": "object"
+        },
+        "ActionSpreads": {
+            "description": "Action to join spreads of a volume",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "spreads",
+                    "default": "spreads",
+                    "title": "Kind",
+                    "type": "string"
+                },
+                "direction": {
+                    "$ref": "#/$defs/SpreadDirection",
+                    "default": "ltr"
+                },
+                "quality": {
+                    "default": 100.0,
+                    "maximum": 100.0,
+                    "minimum": 1.0,
+                    "title": "Quality",
+                    "type": "number"
+                },
+                "output_fmt": {
+                    "default": "auto",
+                    "enum": [
+                        "auto",
+                        "jpg",
+                        "png"
+                    ],
+                    "title": "Output Fmt",
+                    "type": "string"
+                },
+                "pillow": {
+                    "default": false,
+                    "title": "Pillow",
+                    "type": "boolean"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Threads",
+                    "type": "integer"
+                }
+            },
+            "title": "ActionSpreads",
+            "type": "object"
+        },
+        "ActionTagging": {
+            "description": "Action to add metadata tags to the images with exiftool\n\nEverything would be derived from the main config so they are not included here.",
+            "properties": {
+                "conditional": {
+                    "default": false,
+                    "title": "Conditional",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "tagging",
+                    "default": "tagging",
+                    "title": "Kind",
+                    "type": "string"
+                }
+            },
+            "title": "ActionTagging",
+            "type": "object"
+        },
+        "ChapterConfig": {
+            "description": "The configuration for a chapter",
+            "properties": {
+                "number": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "number"
+                        }
+                    ],
+                    "ge": 0.0,
+                    "title": "Number"
+                },
+                "title": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Title"
+                },
+                "start": {
+                    "minimum": 0,
+                    "title": "Start",
+                    "type": "integer"
+                },
+                "end": {
+                    "anyOf": [
+                        {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "End"
+                }
+            },
+            "required": [
+                "number",
+                "start"
+            ],
+            "title": "ChapterConfig",
+            "type": "object"
+        },
+        "ExporterType": {
+            "enum": [
+                "folder",
+                "cbz",
+                "cb7",
+                "epub"
+            ],
+            "title": "ExporterType",
+            "type": "string"
+        },
+        "MetadataNamingConfig": {
+            "description": "The configuration for metadata naming\n\nThis is used to add extra metadata to the filename, e.g. [Color], [LQ], etc.",
+            "properties": {
+                "tag": {
+                    "title": "Tag",
+                    "type": "string"
+                },
+                "page": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "type": "array"
+                        }
+                    ],
+                    "title": "Page"
+                }
+            },
+            "required": [
+                "tag",
+                "page"
+            ],
+            "title": "MetadataNamingConfig",
+            "type": "object"
+        },
+        "SkipActionConfig": {
+            "description": "What actions to skip for a volume\n\nNote: Not all actions support skipping, those that do not will be ignored",
+            "properties": {
+                "action": {
+                    "$ref": "#/$defs/SkipActionKind"
+                },
+                "step": {
+                    "title": "Step",
+                    "type": "string"
+                },
+                "pages": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "minItems": 1,
+                    "title": "Pages",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "action",
+                "step",
+                "pages"
+            ],
+            "title": "SkipActionConfig",
+            "type": "object"
+        },
+        "SkipActionKind": {
+            "description": "What do you want to do when skipping an action",
+            "enum": [
+                "ignore",
+                "copy",
+                "move"
+            ],
+            "title": "SkipActionKind",
+            "type": "string"
+        },
+        "SpreadDirection": {
+            "enum": [
+                "rtl",
+                "ltr"
+            ],
+            "title": "SpreadDirection",
+            "type": "string"
+        },
+        "VolumeConfig": {
+            "description": "The configuration for a volume",
+            "properties": {
+                "path": {
+                    "format": "path",
+                    "title": "Path",
+                    "type": "string"
+                },
+                "number": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "number"
+                        }
+                    ],
+                    "title": "Number"
+                },
+                "year": {
+                    "maximum": 9999,
+                    "minimum": 1000,
+                    "title": "Year",
+                    "type": "integer"
+                },
+                "oneshot": {
+                    "default": false,
+                    "title": "Oneshot",
+                    "type": "boolean"
+                },
+                "spreads": {
+                    "items": {
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "prefixItems": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "integer"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    "title": "Spreads",
+                    "type": "array"
+                },
+                "colors": {
+                    "items": {
+                        "type": "integer"
+                    },
+                    "title": "Colors",
+                    "type": "array"
+                },
+                "meta_naming": {
+                    "items": {
+                        "$ref": "#/$defs/MetadataNamingConfig"
+                    },
+                    "title": "Meta Naming",
+                    "type": "array"
+                },
+                "chapters": {
+                    "items": {
+                        "$ref": "#/$defs/ChapterConfig"
+                    },
+                    "minItems": 1,
+                    "title": "Chapters",
+                    "type": "array"
+                },
+                "extra_text": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Extra Text"
+                },
+                "revision": {
+                    "default": 1,
+                    "minimum": 1,
+                    "title": "Revision",
+                    "type": "integer"
+                },
+                "quality": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "LQ",
+                                "HQ"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Quality"
+                },
+                "pub_type": {
+                    "default": "digital",
+                    "title": "Pub Type",
+                    "type": "string"
+                },
+                "skip_actions": {
+                    "items": {
+                        "$ref": "#/$defs/SkipActionConfig"
+                    },
+                    "title": "Skip Actions",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "path",
+                "number",
+                "chapters"
+            ],
+            "title": "VolumeConfig",
+            "type": "object"
+        }
+    },
+    "description": "The configuration for the orchestrator",
+    "properties": {
+        "title": {
+            "title": "Title",
+            "type": "string"
+        },
+        "publisher": {
+            "title": "Publisher",
+            "type": "string"
+        },
+        "credit": {
+            "title": "Credit",
+            "type": "string"
+        },
+        "email": {
+            "title": "Email",
+            "type": "string"
+        },
+        "bracket_type": {
+            "default": "round",
+            "enum": [
+                "square",
+                "round",
+                "curly"
+            ],
+            "title": "Bracket Type",
+            "type": "string"
+        },
+        "base_path": {
+            "default": "source",
+            "format": "path",
+            "title": "Base Path",
+            "type": "string"
+        },
+        "volumes": {
+            "items": {
+                "$ref": "#/$defs/VolumeConfig"
+            },
+            "minItems": 1,
+            "title": "Volumes",
+            "type": "array"
+        },
+        "actions": {
+            "items": {
+                "discriminator": {
+                    "mapping": {
+                        "autolevel": "#/$defs/ActionAutolevel",
+                        "color_jpegify": "#/$defs/ActionColorJpegify",
+                        "denoise": "#/$defs/ActionDenoise",
+                        "interrupt": "#/$defs/ActionInterrupt",
+                        "move_color": "#/$defs/ActionMoveColor",
+                        "optimize": "#/$defs/ActionOptimize",
+                        "pack": "#/$defs/ActionPack",
+                        "posterize": "#/$defs/ActionPosterize",
+                        "rename": "#/$defs/ActionRename",
+                        "shift_rename": "#/$defs/ActionShiftName",
+                        "spreads": "#/$defs/ActionSpreads",
+                        "tagging": "#/$defs/ActionTagging"
+                    },
+                    "propertyName": "kind"
+                },
+                "oneOf": [
+                    {
+                        "$ref": "#/$defs/ActionShiftName"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionSpreads"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionRename"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionDenoise"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionAutolevel"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionPosterize"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionOptimize"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionTagging"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionMoveColor"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionColorJpegify"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionPack"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionInterrupt"
+                    }
+                ]
+            },
+            "minItems": 1,
+            "title": "Actions",
+            "type": "array"
+        }
+    },
+    "required": [
+        "title",
+        "publisher",
+        "credit",
+        "email"
+    ],
+    "title": "OrchestratorConfig",
+    "type": "object"
+}

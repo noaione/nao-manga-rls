@@ -29,7 +29,7 @@ from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
@@ -110,6 +110,13 @@ class ActionShiftName(BaseAction):
     Title and volume are derived from the main config so they are not included here.
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Simple Shift Renamer Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.SHIFT_RENAME] = Field(ActionKind.SHIFT_RENAME)
     """The kind of action"""
     start: int = Field(0, ge=0)
@@ -122,6 +129,13 @@ class ActionSpreads(BaseAction):
     """
     Action to join spreads of a volume
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Image Spreads Joiner Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     kind: Literal[ActionKind.SPREADS] = Field(ActionKind.SPREADS)
     """The kind of action"""
@@ -146,6 +160,13 @@ class ActionRename(BaseAction):
     All the other options are derived from the main config so they are not included here.
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Daiz-like Rename Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.RENAME] = Field(ActionKind.RENAME)
     """The kind of action"""
 
@@ -154,6 +175,13 @@ class ActionDenoise(BaseAction):
     """
     Action to denoise all images in a volume with denoise-trt
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Denoise Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     kind: Literal[ActionKind.DENOISE] = Field(ActionKind.DENOISE)
     """The kind of action"""
@@ -182,6 +210,13 @@ class ActionAutolevel(BaseAction):
     - All tagged color images will be leveled in keep colorspace mode
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Auto Level Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.AUTOLEVEL] = Field(ActionKind.AUTOLEVEL)
     """The kind of action"""
     base_path: Path = Field("leveled")
@@ -204,6 +239,13 @@ class ActionPosterize(BaseAction):
     """
     Action to posterize all images in a volume with imagemagick or Pillow
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Posterize Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     kind: Literal[ActionKind.POSTERIZE] = Field(ActionKind.POSTERIZE)
     """The kind of action"""
@@ -232,6 +274,13 @@ class ActionOptimize(BaseAction):
     Optimize all images in a volume with pingo
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Optimize Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.OPTIMIZE] = Field(ActionKind.OPTIMIZE)
     """The kind of action"""
     aggresive: bool = Field(False)
@@ -257,6 +306,13 @@ class ActionTagging(BaseAction):
     Everything would be derived from the main config so they are not included here.
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Image Tagging Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.TAGGING] = Field(ActionKind.TAGGING)
     """The kind of action"""
 
@@ -268,6 +324,13 @@ class ActionMoveColor(BaseAction):
     Everything would be derived from the main config so they are not included here.
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Move Color Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.MOVE_COLOR] = Field(ActionKind.MOVE_COLOR)
     """The kind of action"""
     base_path: Path = Field("colors")
@@ -278,6 +341,13 @@ class ActionColorJpegify(BaseAction):
     """
     Action to convert color images to JPEG format with cjpegli
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Jpegify Color Images Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     kind: Literal[ActionKind.COLOR_JPEGIFY] = Field(ActionKind.COLOR_JPEGIFY)
     """The kind of action"""
@@ -296,6 +366,13 @@ class ActionPack(BaseAction):
     Action to pack the volume into an archive
     """
 
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Pack Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     kind: Literal[ActionKind.PACK]
     """The kind of action"""
     output_mode: ExporterType = Field(ExporterType.cbz)
@@ -310,6 +387,13 @@ class ActionInterrupt(BaseAction):
 
     This will "pause" the action chain in-place, this would also allow you to quit the action chain
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Interrupt Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     kind: Literal[ActionKind.INTERRUPT] = Field(ActionKind.INTERRUPT)
     """The kind of action"""
@@ -353,6 +437,13 @@ class ChapterConfig(BaseModel):
     """
     The configuration for a chapter
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator Chapter Configuration",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     number: int | float = Field(..., ge=0.0)
     """The chapter number"""
@@ -410,6 +501,12 @@ class SkipActionConfig(BaseModel):
     Note: Not all actions support skipping, those that do not will be ignored
     """
 
+    model_config = ConfigDict(
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     action: SkipActionKind
     """The action to take when skipping"""
     step: str
@@ -425,6 +522,12 @@ class MetadataNamingConfig(BaseModel):
     This is used to add extra metadata to the filename, e.g. [Color], [LQ], etc.
     """
 
+    model_config = ConfigDict(
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
     tag: str
     """The tag to add to the filename"""
     page: int | list[int]
@@ -435,6 +538,13 @@ class VolumeConfig(BaseModel):
     """
     The configuration for a volume
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator Volume Configuration",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     path: Path
     """The directory of the volume, relative to the base_path"""
@@ -555,6 +665,13 @@ class OrchestratorConfig(BaseModel):
     """
     The configuration for the orchestrator
     """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator Configuration",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
 
     title: str
     """The title of the manga"""

@@ -30,5 +30,8 @@
     "black-formatter.args": [
         "--config",
         "pyproject.toml"
-    ]
+    ],
+    "files.associations": {
+        "*.jsonschema": "json"
+    }
 }
