@@ -133,9 +133,7 @@ def orchestrator_generate(
             VolumeConfig(
                 number=1,
                 path=Path("v01"),
-                chapters=[
-                    ChapterConfig(number=1, start=0),
-                ],
+                chapters=[],
             )
         ],
         actions=[

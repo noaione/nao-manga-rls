@@ -454,7 +454,7 @@ class VolumeConfig(BaseModel):
     """The list of color tagged pages in the volume"""
     meta_naming: list[MetadataNamingConfig] = Field(default_factory=list)
     """The list of metadata naming configurations"""
-    chapters: list[ChapterConfig] = Field(..., min_length=1)
+    chapters: list[ChapterConfig] = Field(default_factory=list)
     """The list of chapters in the volume"""
     extra_text: str | None = Field(None)
     """Extra text to add to the filename"""
