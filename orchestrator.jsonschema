@@ -1,6 +1,7 @@
 {
     "$defs": {
         "ActionAutolevel": {
+            "additionalProperties": false,
             "description": "Action to auto level all images in a volume with Pillow\n\nThis version is \"smarter\" than the CLI version:\n- It would force convert the image to grayscale for half-tones/b&w images before processing\n- All tagged color images will be leveled in keep colorspace mode",
             "properties": {
                 "conditional": {
@@ -57,10 +58,11 @@
                     "type": "integer"
                 }
             },
-            "title": "ActionAutolevel",
+            "title": "nmanga Orchestrator - Auto Level Images Action",
             "type": "object"
         },
         "ActionColorJpegify": {
+            "additionalProperties": false,
             "description": "Action to convert color images to JPEG format with cjpegli",
             "properties": {
                 "conditional": {
@@ -106,10 +108,11 @@
                     "type": "integer"
                 }
             },
-            "title": "ActionColorJpegify",
+            "title": "nmanga Orchestrator - Jpegify Color Images Action",
             "type": "object"
         },
         "ActionDenoise": {
+            "additionalProperties": false,
             "description": "Action to denoise all images in a volume with denoise-trt",
             "properties": {
                 "conditional": {
@@ -170,10 +173,11 @@
             "required": [
                 "model"
             ],
-            "title": "ActionDenoise",
+            "title": "nmanga Orchestrator - Denoise Images Action",
             "type": "object"
         },
         "ActionInterrupt": {
+            "additionalProperties": false,
             "description": "Action to interrupt the action chain\n\nThis will \"pause\" the action chain in-place, this would also allow you to quit the action chain",
             "properties": {
                 "conditional": {
@@ -193,10 +197,11 @@
                     "type": "boolean"
                 }
             },
-            "title": "ActionInterrupt",
+            "title": "nmanga Orchestrator - Interrupt Action",
             "type": "object"
         },
         "ActionMoveColor": {
+            "additionalProperties": false,
             "description": "Action to move the tagged color images to a separate folder\n\nEverything would be derived from the main config so they are not included here.",
             "properties": {
                 "conditional": {
@@ -217,10 +222,11 @@
                     "type": "string"
                 }
             },
-            "title": "ActionMoveColor",
+            "title": "nmanga Orchestrator - Move Color Images Action",
             "type": "object"
         },
         "ActionOptimize": {
+            "additionalProperties": false,
             "description": "Optimize all images in a volume with pingo",
             "properties": {
                 "conditional": {
@@ -252,10 +258,11 @@
                     "title": "Limiter"
                 }
             },
-            "title": "ActionOptimize",
+            "title": "nmanga Orchestrator - Optimize Images Action",
             "type": "object"
         },
         "ActionPack": {
+            "additionalProperties": false,
             "description": "Action to pack the volume into an archive",
             "properties": {
                 "conditional": {
@@ -289,10 +296,11 @@
             "required": [
                 "kind"
             ],
-            "title": "ActionPack",
+            "title": "nmanga Orchestrator - Pack Action",
             "type": "object"
         },
         "ActionPosterize": {
+            "additionalProperties": false,
             "description": "Action to posterize all images in a volume with imagemagick or Pillow",
             "properties": {
                 "conditional": {
@@ -330,10 +338,11 @@
                     "type": "integer"
                 }
             },
-            "title": "ActionPosterize",
+            "title": "nmanga Orchestrator - Posterize Images Action",
             "type": "object"
         },
         "ActionRename": {
+            "additionalProperties": false,
             "description": "Action to rename all images in a volume\n\nThis use the daiz-like renaming scheme.\n\nAll the other options are derived from the main config so they are not included here.",
             "properties": {
                 "conditional": {
@@ -348,10 +357,11 @@
                     "type": "string"
                 }
             },
-            "title": "ActionRename",
+            "title": "nmanga Orchestrator - Daiz-like Rename Images Action",
             "type": "object"
         },
         "ActionShiftName": {
+            "additionalProperties": false,
             "description": "Action to shift rename of a volume\n\nTitle and volume are derived from the main config so they are not included here.",
             "properties": {
                 "conditional": {
@@ -384,10 +394,11 @@
                     "title": "Title"
                 }
             },
-            "title": "ActionShiftName",
+            "title": "nmanga Orchestrator - Simple Shift Renamer Action",
             "type": "object"
         },
         "ActionSpreads": {
+            "additionalProperties": false,
             "description": "Action to join spreads of a volume",
             "properties": {
                 "conditional": {
@@ -433,10 +444,11 @@
                     "type": "integer"
                 }
             },
-            "title": "ActionSpreads",
+            "title": "nmanga Orchestrator - Image Spreads Joiner Action",
             "type": "object"
         },
         "ActionTagging": {
+            "additionalProperties": false,
             "description": "Action to add metadata tags to the images with exiftool\n\nEverything would be derived from the main config so they are not included here.",
             "properties": {
                 "conditional": {
@@ -451,10 +463,11 @@
                     "type": "string"
                 }
             },
-            "title": "ActionTagging",
+            "title": "nmanga Orchestrator - Image Tagging Action",
             "type": "object"
         },
         "ChapterConfig": {
+            "additionalProperties": false,
             "description": "The configuration for a chapter",
             "properties": {
                 "number": {
@@ -504,7 +517,7 @@
                 "number",
                 "start"
             ],
-            "title": "ChapterConfig",
+            "title": "nmanga Orchestrator Chapter Configuration",
             "type": "object"
         },
         "ExporterType": {
@@ -518,6 +531,7 @@
             "type": "string"
         },
         "MetadataNamingConfig": {
+            "additionalProperties": false,
             "description": "The configuration for metadata naming\n\nThis is used to add extra metadata to the filename, e.g. [Color], [LQ], etc.",
             "properties": {
                 "tag": {
@@ -547,6 +561,7 @@
             "type": "object"
         },
         "SkipActionConfig": {
+            "additionalProperties": false,
             "description": "What actions to skip for a volume\n\nNote: Not all actions support skipping, those that do not will be ignored",
             "properties": {
                 "action": {
@@ -592,6 +607,7 @@
             "type": "string"
         },
         "VolumeConfig": {
+            "additionalProperties": false,
             "description": "The configuration for a volume",
             "properties": {
                 "path": {
@@ -656,7 +672,6 @@
                     "items": {
                         "$ref": "#/$defs/ChapterConfig"
                     },
-                    "minItems": 1,
                     "title": "Chapters",
                     "type": "array"
                 },
@@ -709,13 +724,13 @@
             },
             "required": [
                 "path",
-                "number",
-                "chapters"
+                "number"
             ],
-            "title": "VolumeConfig",
+            "title": "nmanga Orchestrator Volume Configuration",
             "type": "object"
         }
     },
+    "additionalProperties": false,
     "description": "The configuration for the orchestrator",
     "properties": {
         "title": {
@@ -827,6 +842,6 @@
         "credit",
         "email"
     ],
-    "title": "OrchestratorConfig",
+    "title": "nmanga Orchestrator Configuration",
     "type": "object"
 }
