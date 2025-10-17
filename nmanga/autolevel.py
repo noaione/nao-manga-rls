@@ -72,8 +72,10 @@ def is_grayscale_palette(palette: list[int]) -> bool:
 
 def find_local_peak(
     img_path: Path | BytesIO | Image.Image,
+    *,
     upper_limit: int = 60,
     peak_percentage: float = 0.25,
+    skip_white_check: bool = False,
 ) -> tuple[int, int, bool]:
     """
     Automatically determine the optimal black level for an image by finding local peaks in its histogram.
@@ -143,8 +145,38 @@ def find_local_peak(
         # temp image, close
         image.close()
 
-    # TODO: Add back white level detection
     white_level = 255
+    if skip_white_check:
+        return black_level, white_level, force_gray
+
+    # White level detection: find the highest peak near white
+    roi_min_w, roi_max_w = 195, 256
+    roi_mask_w = (binedges[:-1] >= roi_min_w) & (binedges[:-1] < roi_max_w)
+    hist_roi_w = hist[roi_mask_w]
+    binedges_roi_w = binedges[:-1][roi_mask_w]
+    if hist_roi_w.size == 0:
+        return black_level, white_level, force_gray
+
+    hist_padded_w = NumpyLib.pad(hist_roi_w, (1, 1), mode="constant", constant_values=0)
+    peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=min_px_count, prominence=min_prominence)
+
+    peaks_w = peaks_padded_w - 1
+    valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
+    peaks_w = peaks_w[valid_w]
+
+    if len(peaks_w) > 0:
+        peak_val_w = math.ceil(binedges_roi_w[peaks_w[-1]])
+        white_level = peak_val_w
+    else:
+        # Find without max height constraint
+        peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=0)
+
+        peaks_w = peaks_padded_w - 1
+        valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
+        peaks_w = peaks_w[valid_w]
+        if len(peaks_w) > 0:
+            peak_val_w = math.ceil(binedges_roi_w[peaks_w[-1]])
+            white_level = peak_val_w
 
     return black_level, white_level, force_gray
 

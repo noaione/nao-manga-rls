@@ -104,7 +104,9 @@ def _init_worker():
 def _find_local_peak_magick_wrapper(
     img_path: Path, upper_limit: int, peak_min_pct: float, skip_white: bool
 ) -> tuple[int, int, Path, bool]:
-    black_level, white_level, force_gray = find_local_peak(img_path, upper_limit, peak_min_pct, skip_white)
+    black_level, white_level, force_gray = find_local_peak(
+        img_path, upper_limit=upper_limit, peak_percentage=peak_min_pct, skip_white_check=skip_white
+    )
     return black_level, white_level, img_path, force_gray
 
 
@@ -317,7 +319,9 @@ class Autolevel2Config:
 
 def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Config) -> AutoLevelResult:
     img = Image.open(img_path)
-    black_level, white_level, _ = find_local_peak(img, upper_limit=60, peak_percentage=config.peak_min_pct)
+    black_level, white_level, _ = find_local_peak(
+        img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
+    )
 
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not config.no_white else False
@@ -603,3 +607,122 @@ def force_gray(
             dest_path = backup_dir / img_path.name
             img_path.rename(dest_path)
         console.stop_status(f"Backed up original files to {backup_dir}.")
+
+
+def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config) -> AutoLevelResult:
+    img = Image.open(img_path)
+    black_level, white_level, force_gray = find_local_peak(
+        img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
+    )
+    img.close()
+    gamma_correct = gamma_correction(black_level)
+    return {
+        "image": str(img_path),
+        "black": black_level,
+        "white": white_level,
+        "gamma": gamma_correct,
+        "force_gray": force_gray,
+    }
+
+
+@click.command(
+    name="analyze-peaks",
+    help="Do a peak level analysis on images in a directory and output the results to a JSON file",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-ul",
+    "--upper-limit",
+    "upper_limit",
+    type=click.IntRange(1, 255),
+    default=60,
+    show_default=True,
+    help="The upper limit for finding local peaks in the histogram",
+)
+@click.option(
+    "-pmp",
+    "--peak-min-pct",
+    "peak_min_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.25,
+    show_default=True,
+    help="The minimum percentage of pixels for a peak to be considered valid",
+)
+@click.option(
+    "-po",
+    "--peak-offset",
+    "peak_offset",
+    type=click.IntRange(-100, 100),
+    default=0,
+    show_default=True,
+    help="The offset to add to the detected black level percentage",
+)
+@click.option(
+    "--no-white",
+    "no_white",
+    is_flag=True,
+    default=False,
+    help="Do not adjust white level, only adjust black level",
+)
+@options.threads
+@time_program
+def analyze_level(
+    path_or_archive: Path,
+    upper_limit: int,
+    peak_min_pct: float,
+    peak_offset: int,
+    no_white: bool,
+    threads: int,
+):  # pragma: no cover
+    """
+    Analyze the peak levels of all images in a directory and output the results to a JSON file.
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    total_files = len(all_files)
+    console.info(f"Found {total_files} files in the directory.")
+
+    full_config = Autolevel2Config(
+        upper_limit=upper_limit,
+        peak_offset=peak_offset,
+        peak_min_pct=peak_min_pct,
+        no_white=no_white,
+        # Mocked values
+        force_gray=False,
+        keep_colorspace=False,
+        image_fmt="png",
+    )
+
+    console.status("Analyzing images peak levels...")
+    results: list[AutoLevelResult] = []
+    if threads <= 1:
+        for idx, img_path in enumerate(all_files):
+            console.status(f"Processing image... [{idx + 1}/{total_files}]")
+            results.append(_analyze_levels_wrapper(img_path, full_config))
+    else:
+        console.info(f"Using {threads} CPU threads for processing.")
+        try:
+            with mp.Pool(threads, initializer=_init_worker) as pool:
+                results = pool.starmap(
+                    _analyze_levels_wrapper,
+                    [(img_path, full_config) for img_path in all_files],
+                )
+        except KeyboardInterrupt:
+            console.warning("Analyze interrupted by user.")
+            pool.terminate()
+            pool.join()
+            return 1
+
+    console.stop_status(f"Analyzed {total_files} images peak levels.")
+    complete_name = f"{path_or_archive.name}_autolevel.json"
+    dump_path = Path.cwd() / complete_name
+    dumped_data = json.dumps(results, indent=4)
+    dump_path.write_text(dumped_data, encoding="utf-8")
+    console.info(f"Dumped autolevel analysis data to: {dump_path}")
