@@ -90,6 +90,8 @@ class ActionKind(str, Enum):
     """Move the tagged color images to a separate folder"""
     COLOR_JPEGIFY = "color_jpegify"
     """Convert color images to JPEG format with cjpegli"""
+    INTERRUPT = "interrupt"
+    """Interrupt the action chain"""
 
 
 class BaseAction(BaseModel):
@@ -302,6 +304,19 @@ class ActionPack(BaseAction):
     """The source directory to pack, this would use the last used base path if not provided"""
 
 
+class ActionInterrupt(BaseAction):
+    """
+    Action to interrupt the action chain
+
+    This will "pause" the action chain in-place, this would also allow you to quit the action chain
+    """
+
+    kind: Literal[ActionKind.INTERRUPT] = Field(ActionKind.INTERRUPT)
+    """The kind of action"""
+    whole_chain: bool = Field(True)
+    """When quitting, just don't stop at the current volume but the whole volume"""
+
+
 ActionType: TypeAlias = (
     ActionShiftName
     | ActionSpreads
@@ -314,6 +329,7 @@ ActionType: TypeAlias = (
     | ActionMoveColor
     | ActionColorJpegify
     | ActionPack
+    | ActionInterrupt
 )
 Actions = Annotated[ActionType, Field(discriminator="kind")]
 """

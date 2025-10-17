@@ -1168,6 +1168,16 @@ def orchestrator_runner(
                         action=action,
                         toolsets=toolsets,
                     )
+                case ActionKind.INTERRUPT:
+                    console.warning("Interrupt action encountered, do you want to quit?...")
+                    if action.whole_chain:
+                        console.warning(" This will stop the entire orchestrator process.")
+                    continue_it = console.confirm("Do you want to continue?")
+                    if not continue_it:
+                        console.info("Orchestrator process aborted by user.")
+                        if action.whole_chain:
+                            raise click.Abort()  # Quit entire orchestrator
+                        break  # Only quir this volume processing
                 case _:
                     console.error(f"Action {action.kind.name} is not implemented yet, skipping...")
                     continue
@@ -1300,6 +1310,9 @@ def orchestrator_validate(
                 if action.base_path is not None:
                     console.info(f"     - Base Path: {action.base_path}")
                     chapter_path = full_base / action.base_path / first_vol.path
+            case ActionKind.INTERRUPT:
+                console.info("     - Interrupt action, no operation performed")
+                console.info(f"     - Quit whole chain: {'Yes' if action.whole_chain else 'No'}")
             case _:
                 console.info("     - No additional parameters")
                 continue
