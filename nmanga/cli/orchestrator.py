@@ -502,6 +502,10 @@ def _runner_autolevel2_threaded(
     if is_skipped_action is not None:
         perform_skip_action(img_path, output_dir, is_skipped_action)
         return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
+    if is_color and action.skip_color:
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY)
+        return ThreadedResult.COPIED
+
     img = Image.open(img_path)
     black_level, white_level, _ = find_local_peak(
         img, upper_limit=action.upper_limit, peak_percentage=action.min_peak_pct
@@ -1226,7 +1230,7 @@ def orchestrator_validate(
         console.info(f"     - Quality: {volume.quality}")
         console.info(f"     - Revision: {volume.revision}")
         console.info(f"     - Oneshot: {'Yes' if volume.oneshot else 'No'}")
-        console.info(f"     - Colors: {', '.join(map(str, volume.colors)) if volume.colors else 'None'}")
+        console.info(f"     - Colors: Page {', Page '.join(map(str, volume.colors)) if volume.colors else 'None'}")
         console.info(f"     - Spreads: {len(volume.spreads) if volume.spreads else 0} total")
         if volume.extra_text:
             console.info(f"     - Extra Text: {volume.extra_text}")
@@ -1269,6 +1273,7 @@ def orchestrator_validate(
                 console.info(f"     - Upper Limit: {action.upper_limit}")
                 console.info(f"     - Peak Offset: {action.peak_offset}")
                 console.info(f"     - Skip White Peaks: {'Yes' if action.skip_white else 'No'}")
+                console.info(f"     - Skip Color: {'Yes' if action.skip_color else 'No'}")
                 console.info(f"     - Threads: {action.threads}")
                 console.info(f"     - Base Path: {action.base_path}")
                 chapter_path = full_base / action.base_path / first_vol.path

@@ -92,7 +92,16 @@ class ActionKind(str, Enum):
     """Convert color images to JPEG format with cjpegli"""
 
 
-class ActionShiftName(BaseModel):
+class BaseAction(BaseModel):
+    """
+    The base action model
+    """
+
+    conditional: bool = Field(False)
+    """Run the action only if a certain condition is met"""
+
+
+class ActionShiftName(BaseAction):
     """
     Action to shift rename of a volume
 
@@ -107,7 +116,7 @@ class ActionShiftName(BaseModel):
     """Optional override title for the shift rename action"""
 
 
-class ActionSpreads(BaseModel):
+class ActionSpreads(BaseAction):
     """
     Action to join spreads of a volume
     """
@@ -126,7 +135,7 @@ class ActionSpreads(BaseModel):
     """The number of threads to use for processing"""
 
 
-class ActionRename(BaseModel):
+class ActionRename(BaseAction):
     """
     Action to rename all images in a volume
 
@@ -139,7 +148,7 @@ class ActionRename(BaseModel):
     """The kind of action"""
 
 
-class ActionDenoise(BaseModel):
+class ActionDenoise(BaseAction):
     """
     Action to denoise all images in a volume with denoise-trt
     """
@@ -162,7 +171,7 @@ class ActionDenoise(BaseModel):
     """Whether to apply contrast stretch after denoising"""
 
 
-class ActionAutolevel(BaseModel):
+class ActionAutolevel(BaseAction):
     """
     Action to auto level all images in a volume with Pillow
 
@@ -183,11 +192,13 @@ class ActionAutolevel(BaseModel):
     """The minimum percentage of pixels for a peak to be considered valid"""
     skip_white: bool = Field(True)
     """Whether to skip white peaks when finding local peaks in the histogram"""
+    skip_color: bool = Field(False)
+    """Skip color images when auto leveling, only level half-tones/b&w images"""
     threads: int = Field(default_factory=cpu_count, ge=1)
     """The number of threads to use for processing"""
 
 
-class ActionPosterize(BaseModel):
+class ActionPosterize(BaseAction):
     """
     Action to posterize all images in a volume with imagemagick or Pillow
     """
@@ -214,7 +225,7 @@ class ActionPosterize(BaseModel):
         return self
 
 
-class ActionOptimize(BaseModel):
+class ActionOptimize(BaseAction):
     """
     Optimize all images in a volume with pingo
     """
@@ -237,7 +248,7 @@ class ActionOptimize(BaseModel):
         return self
 
 
-class ActionTagging(BaseModel):
+class ActionTagging(BaseAction):
     """
     Action to add metadata tags to the images with exiftool
 
@@ -248,7 +259,7 @@ class ActionTagging(BaseModel):
     """The kind of action"""
 
 
-class ActionMoveColor(BaseModel):
+class ActionMoveColor(BaseAction):
     """
     Action to move the tagged color images to a separate folder
 
@@ -261,7 +272,7 @@ class ActionMoveColor(BaseModel):
     """The base path to save the color images to"""
 
 
-class ActionColorJpegify(BaseModel):
+class ActionColorJpegify(BaseAction):
     """
     Action to convert color images to JPEG format with cjpegli
     """
@@ -278,7 +289,7 @@ class ActionColorJpegify(BaseModel):
     """The number of threads to use for processing"""
 
 
-class ActionPack(BaseModel):
+class ActionPack(BaseAction):
     """
     Action to pack the volume into an archive
     """
