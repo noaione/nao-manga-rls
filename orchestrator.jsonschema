@@ -12,20 +12,20 @@
                 "kind": {
                     "const": "autolevel",
                     "default": "autolevel",
-                    "title": "Kind",
+                    "title": "Auto Level Images Action",
                     "type": "string"
                 },
                 "base_path": {
                     "default": "leveled",
                     "format": "path",
-                    "title": "Base Path",
+                    "title": "Output Base Path",
                     "type": "string"
                 },
                 "upper_limit": {
                     "default": 60,
                     "maximum": 255,
                     "minimum": 1,
-                    "title": "Upper Limit",
+                    "title": "Upper Limit for Peak Finding",
                     "type": "integer"
                 },
                 "peak_offset": {
@@ -39,22 +39,22 @@
                     "default": 0.25,
                     "maximum": 100.0,
                     "minimum": 0.0,
-                    "title": "Min Peak Pct",
+                    "title": "Minimum Pixels Peak Percentage",
                     "type": "number"
                 },
                 "skip_white": {
                     "default": true,
-                    "title": "Skip White",
+                    "title": "Skip White Levels During Peak Finding",
                     "type": "boolean"
                 },
                 "skip_color": {
                     "default": false,
-                    "title": "Skip Color",
+                    "title": "Skip Color Images",
                     "type": "boolean"
                 },
                 "threads": {
                     "minimum": 1,
-                    "title": "Threads",
+                    "title": "Processing Threads",
                     "type": "integer"
                 }
             },
@@ -73,7 +73,7 @@
                 "kind": {
                     "const": "color_jpegify",
                     "default": "color_jpegify",
-                    "title": "Kind",
+                    "title": "Jpegify Color Images Action",
                     "type": "string"
                 },
                 "base_path": {
@@ -87,13 +87,13 @@
                         }
                     ],
                     "default": null,
-                    "title": "Base Path"
+                    "title": "Output Base Path"
                 },
                 "quality": {
                     "default": 95,
                     "maximum": 100,
                     "minimum": 1,
-                    "title": "Quality",
+                    "title": "JPEG Quality",
                     "type": "integer"
                 },
                 "source_path": {
@@ -104,7 +104,7 @@
                 },
                 "threads": {
                     "minimum": 1,
-                    "title": "Threads",
+                    "title": "Processing Threads",
                     "type": "integer"
                 }
             },
@@ -123,24 +123,24 @@
                 "kind": {
                     "const": "denoise",
                     "default": "denoise",
-                    "title": "Kind",
+                    "title": "Denoise Images Action",
                     "type": "string"
                 },
                 "model": {
                     "format": "path",
-                    "title": "Model",
+                    "title": "The ONNX Model Path",
                     "type": "string"
                 },
                 "base_path": {
                     "default": "denoised",
                     "format": "path",
-                    "title": "Base Path",
+                    "title": "Output Base Path",
                     "type": "string"
                 },
                 "device_id": {
                     "default": 0,
                     "minimum": 0,
-                    "title": "Device Id",
+                    "title": "Device ID",
                     "type": "integer"
                 },
                 "batch_size": {
@@ -161,12 +161,12 @@
                         "white",
                         "black"
                     ],
-                    "title": "Background",
+                    "title": "Padding Background Color",
                     "type": "string"
                 },
                 "contrast_strectch": {
                     "default": false,
-                    "title": "Contrast Strectch",
+                    "title": "Contrast Stretch After Denoising",
                     "type": "boolean"
                 }
             },
@@ -193,7 +193,7 @@
                 },
                 "whole_chain": {
                     "default": true,
-                    "title": "Whole Chain",
+                    "title": "Interrupt Whole Chain",
                     "type": "boolean"
                 }
             },
@@ -212,13 +212,13 @@
                 "kind": {
                     "const": "move_color",
                     "default": "move_color",
-                    "title": "Kind",
+                    "title": "Move Color Images Action",
                     "type": "string"
                 },
                 "base_path": {
                     "default": "colors",
                     "format": "path",
-                    "title": "Base Path",
+                    "title": "Output Base Path",
                     "type": "string"
                 }
             },
@@ -237,12 +237,12 @@
                 "kind": {
                     "const": "optimize",
                     "default": "optimize",
-                    "title": "Kind",
+                    "title": "Optimize Images Action",
                     "type": "string"
                 },
                 "aggresive": {
                     "default": false,
-                    "title": "Aggresive",
+                    "title": "Aggressive Mode",
                     "type": "boolean"
                 },
                 "limiter": {
@@ -255,6 +255,10 @@
                         }
                     ],
                     "default": null,
+                    "examples": [
+                        ".png",
+                        ".jpg"
+                    ],
                     "title": "Limiter"
                 }
             },
@@ -272,12 +276,14 @@
                 },
                 "kind": {
                     "const": "pack",
-                    "title": "Kind",
+                    "default": "pack",
+                    "title": "Pack Action",
                     "type": "string"
                 },
                 "output_mode": {
                     "$ref": "#/$defs/ExporterType",
-                    "default": "cbz"
+                    "default": "cbz",
+                    "title": "Output Mode"
                 },
                 "source_dir": {
                     "anyOf": [
@@ -290,12 +296,9 @@
                         }
                     ],
                     "default": null,
-                    "title": "Source Dir"
+                    "title": "Source Directory"
                 }
             },
-            "required": [
-                "kind"
-            ],
             "title": "nmanga Orchestrator - Pack Action",
             "type": "object"
         },
@@ -311,30 +314,36 @@
                 "kind": {
                     "const": "posterize",
                     "default": "posterize",
-                    "title": "Kind",
+                    "title": "Posterize Images Action",
                     "type": "string"
                 },
                 "base_path": {
                     "default": "posterized",
                     "format": "path",
-                    "title": "Base Path",
+                    "title": "Output Base Path",
                     "type": "string"
                 },
                 "bpc": {
                     "default": 4,
+                    "examples": [
+                        1,
+                        2,
+                        4,
+                        8
+                    ],
                     "maximum": 8,
                     "minimum": 1,
-                    "title": "Bpc",
+                    "title": "Bits Per Channel",
                     "type": "integer"
                 },
                 "pillow": {
                     "default": false,
-                    "title": "Pillow",
+                    "title": "Use Python Pillow",
                     "type": "boolean"
                 },
                 "threads": {
                     "minimum": 1,
-                    "title": "Threads",
+                    "title": "Processing Threads",
                     "type": "integer"
                 }
             },
@@ -353,7 +362,7 @@
                 "kind": {
                     "const": "rename",
                     "default": "rename",
-                    "title": "Kind",
+                    "title": "Daiz-like Rename Images Action",
                     "type": "string"
                 }
             },
@@ -372,13 +381,13 @@
                 "kind": {
                     "const": "shift_rename",
                     "default": "shift_rename",
-                    "title": "Kind",
+                    "title": "Simple Shift Renamer Action",
                     "type": "string"
                 },
                 "start": {
                     "default": 0,
                     "minimum": 0,
-                    "title": "Start",
+                    "title": "Starting Index",
                     "type": "integer"
                 },
                 "title": {
@@ -391,7 +400,7 @@
                         }
                     ],
                     "default": null,
-                    "title": "Title"
+                    "title": "Title of the Series"
                 }
             },
             "title": "nmanga Orchestrator - Simple Shift Renamer Action",
@@ -409,18 +418,19 @@
                 "kind": {
                     "const": "spreads",
                     "default": "spreads",
-                    "title": "Kind",
+                    "title": "Image Spreads Joiner Action",
                     "type": "string"
                 },
                 "direction": {
                     "$ref": "#/$defs/SpreadDirection",
-                    "default": "ltr"
+                    "default": "ltr",
+                    "title": "Spread Direction"
                 },
                 "quality": {
                     "default": 100.0,
                     "maximum": 100.0,
                     "minimum": 1.0,
-                    "title": "Quality",
+                    "title": "Output Quality",
                     "type": "number"
                 },
                 "output_fmt": {
@@ -430,17 +440,17 @@
                         "jpg",
                         "png"
                     ],
-                    "title": "Output Fmt",
+                    "title": "Output Format",
                     "type": "string"
                 },
                 "pillow": {
                     "default": false,
-                    "title": "Pillow",
+                    "title": "Use Python Pillow",
                     "type": "boolean"
                 },
                 "threads": {
                     "minimum": 1,
-                    "title": "Threads",
+                    "title": "Processing Threads",
                     "type": "integer"
                 }
             },
@@ -459,7 +469,7 @@
                 "kind": {
                     "const": "tagging",
                     "default": "tagging",
-                    "title": "Kind",
+                    "title": "Image Tagging Action",
                     "type": "string"
                 }
             },
@@ -480,7 +490,7 @@
                         }
                     ],
                     "ge": 0.0,
-                    "title": "Number"
+                    "title": "Chapter Number"
                 },
                 "title": {
                     "anyOf": [
@@ -492,11 +502,11 @@
                         }
                     ],
                     "default": null,
-                    "title": "Title"
+                    "title": "Chapter Title"
                 },
                 "start": {
                     "minimum": 0,
-                    "title": "Start",
+                    "title": "Starting Page Number",
                     "type": "integer"
                 },
                 "end": {
@@ -510,7 +520,7 @@
                         }
                     ],
                     "default": null,
-                    "title": "End"
+                    "title": "Ending Page Number"
                 }
             },
             "required": [
@@ -521,6 +531,7 @@
             "type": "object"
         },
         "ExporterType": {
+            "description": "The type of exporter to use.",
             "enum": [
                 "folder",
                 "cbz",
@@ -532,10 +543,10 @@
         },
         "MetadataNamingConfig": {
             "additionalProperties": false,
-            "description": "The configuration for metadata naming\n\nThis is used to add extra metadata to the filename, e.g. [Color], [LQ], etc.",
+            "description": "The configuration for metadata naming\n\nThis is used to add extra metadata to the filename, e.g. [Cover], [ToC], etc.",
             "properties": {
                 "tag": {
-                    "title": "Tag",
+                    "title": "Metadata Tag",
                     "type": "string"
                 },
                 "page": {
@@ -550,7 +561,7 @@
                             "type": "array"
                         }
                     ],
-                    "title": "Page"
+                    "title": "Page Number"
                 }
             },
             "required": [
@@ -565,10 +576,16 @@
             "description": "What actions to skip for a volume\n\nNote: Not all actions support skipping, those that do not will be ignored",
             "properties": {
                 "action": {
-                    "$ref": "#/$defs/SkipActionKind"
+                    "$ref": "#/$defs/SkipActionKind",
+                    "title": "Skip Action"
                 },
                 "step": {
-                    "title": "Step",
+                    "examples": [
+                        "autolevel-1",
+                        "optimize-1",
+                        "optimize-2"
+                    ],
+                    "title": "Action Step Name",
                     "type": "string"
                 },
                 "pages": {
@@ -576,7 +593,7 @@
                         "type": "integer"
                     },
                     "minItems": 1,
-                    "title": "Pages",
+                    "title": "Pages to Skip On",
                     "type": "array"
                 }
             },
@@ -599,9 +616,10 @@
             "type": "string"
         },
         "SpreadDirection": {
+            "description": "The direction of the spread to join images.",
             "enum": [
-                "rtl",
-                "ltr"
+                "ltr",
+                "rtl"
             ],
             "title": "SpreadDirection",
             "type": "string"
@@ -612,7 +630,7 @@
             "properties": {
                 "path": {
                     "format": "path",
-                    "title": "Path",
+                    "title": "Volume Directory",
                     "type": "string"
                 },
                 "number": {
@@ -624,20 +642,36 @@
                             "type": "number"
                         }
                     ],
-                    "title": "Number"
+                    "title": "Volume Number"
                 },
                 "year": {
                     "maximum": 9999,
                     "minimum": 1000,
-                    "title": "Year",
+                    "title": "Volume Year",
                     "type": "integer"
                 },
                 "oneshot": {
                     "default": false,
-                    "title": "Oneshot",
+                    "title": "Is Oneshot",
                     "type": "boolean"
                 },
                 "spreads": {
+                    "examples": [
+                        [
+                            [
+                                1,
+                                2
+                            ],
+                            [
+                                5,
+                                6
+                            ],
+                            [
+                                13,
+                                15
+                            ]
+                        ]
+                    ],
                     "items": {
                         "maxItems": 2,
                         "minItems": 2,
@@ -651,28 +685,33 @@
                         ],
                         "type": "array"
                     },
-                    "title": "Spreads",
+                    "title": "Volume Spreads",
                     "type": "array"
                 },
                 "colors": {
+                    "examples": [
+                        [
+                            0
+                        ]
+                    ],
                     "items": {
                         "type": "integer"
                     },
-                    "title": "Colors",
+                    "title": "Volume Color Pages",
                     "type": "array"
                 },
                 "meta_naming": {
                     "items": {
                         "$ref": "#/$defs/MetadataNamingConfig"
                     },
-                    "title": "Meta Naming",
+                    "title": "Metadata Naming Configurations",
                     "type": "array"
                 },
                 "chapters": {
                     "items": {
                         "$ref": "#/$defs/ChapterConfig"
                     },
-                    "title": "Chapters",
+                    "title": "Volume Chapters",
                     "type": "array"
                 },
                 "extra_text": {
@@ -685,12 +724,17 @@
                         }
                     ],
                     "default": null,
+                    "examples": [
+                        "Omnibus",
+                        "2-in-1 Edition",
+                        "PNG4"
+                    ],
                     "title": "Extra Text"
                 },
                 "revision": {
                     "default": 1,
                     "minimum": 1,
-                    "title": "Revision",
+                    "title": "Volume Revision Number",
                     "type": "integer"
                 },
                 "quality": {
@@ -707,18 +751,28 @@
                         }
                     ],
                     "default": null,
-                    "title": "Quality"
+                    "title": "Volume Quality"
                 },
                 "pub_type": {
                     "default": "digital",
-                    "title": "Pub Type",
+                    "examples": [
+                        "digital",
+                        "magazine",
+                        "scan",
+                        "web",
+                        "digital-raw",
+                        "magazine-raw",
+                        "mix",
+                        "none"
+                    ],
+                    "title": "Publication Type",
                     "type": "string"
                 },
                 "skip_actions": {
                     "items": {
                         "$ref": "#/$defs/SkipActionConfig"
                     },
-                    "title": "Skip Actions",
+                    "title": "Skip Actions Configurations",
                     "type": "array"
                 }
             },
@@ -734,19 +788,31 @@
     "description": "The configuration for the orchestrator",
     "properties": {
         "title": {
-            "title": "Title",
+            "examples": [
+                "I Want to Love You Till Your Dying Day"
+            ],
+            "title": "Manga Title",
             "type": "string"
         },
         "publisher": {
-            "title": "Publisher",
+            "examples": [
+                "Kodansha Comics"
+            ],
+            "title": "Manga Publisher",
             "type": "string"
         },
         "credit": {
-            "title": "Credit",
+            "examples": [
+                "Ripper"
+            ],
+            "title": "Ripper Credit",
             "type": "string"
         },
         "email": {
-            "title": "Email",
+            "examples": [
+                "ripper-mail@example.com"
+            ],
+            "title": "Ripper Email",
             "type": "string"
         },
         "bracket_type": {
@@ -756,7 +822,7 @@
                 "round",
                 "curly"
             ],
-            "title": "Bracket Type",
+            "title": "Bracket Type in Filename",
             "type": "string"
         },
         "base_path": {
@@ -775,6 +841,7 @@
         },
         "actions": {
             "items": {
+                "description": "The collection of all supported actions.",
                 "discriminator": {
                     "mapping": {
                         "autolevel": "#/$defs/ActionAutolevel",

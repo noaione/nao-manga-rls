@@ -117,11 +117,11 @@ class ActionShiftName(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.SHIFT_RENAME] = Field(ActionKind.SHIFT_RENAME)
+    kind: Literal[ActionKind.SHIFT_RENAME] = Field(ActionKind.SHIFT_RENAME, title="Simple Shift Renamer Action")
     """The kind of action"""
-    start: int = Field(0, ge=0)
+    start: int = Field(0, ge=0, title="Starting Index")
     """The starting index to rename the files to"""
-    title: str | None = Field(None)
+    title: str | None = Field(None, title="Title of the Series")
     """Optional override title for the shift rename action"""
 
 
@@ -137,17 +137,17 @@ class ActionSpreads(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.SPREADS] = Field(ActionKind.SPREADS)
+    kind: Literal[ActionKind.SPREADS] = Field(ActionKind.SPREADS, title="Image Spreads Joiner Action")
     """The kind of action"""
-    direction: SpreadDirection = Field(SpreadDirection.LTR)
+    direction: SpreadDirection = Field(SpreadDirection.LTR, title="Spread Direction")
     """Whether to use reverse mode when joining spreads"""
-    quality: float = Field(100.0, ge=1.0, le=100.0)
+    quality: float = Field(100.0, ge=1.0, le=100.0, title="Output Quality")
     """The quality of the output images"""
-    output_fmt: Literal["auto", "jpg", "png"] = Field("auto")
+    output_fmt: Literal["auto", "jpg", "png"] = Field("auto", title="Output Format")
     """The output format of the joined images, auto will use the parent extensions"""
-    pillow: bool = Field(False)
+    pillow: bool = Field(False, title="Use Python Pillow")
     """Whether to use Pillow for joining spreads instead of ImageMagick"""
-    threads: int = Field(default_factory=cpu_count, ge=1)
+    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
 
@@ -167,7 +167,7 @@ class ActionRename(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.RENAME] = Field(ActionKind.RENAME)
+    kind: Literal[ActionKind.RENAME] = Field(ActionKind.RENAME, title="Daiz-like Rename Images Action")
     """The kind of action"""
 
 
@@ -183,21 +183,21 @@ class ActionDenoise(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.DENOISE] = Field(ActionKind.DENOISE)
+    kind: Literal[ActionKind.DENOISE] = Field(ActionKind.DENOISE, title="Denoise Images Action")
     """The kind of action"""
-    model: Path
+    model: Path = Field(..., title="The ONNX Model Path")
     """The path to the ONNX model"""
-    base_path: Path = Field("denoised")
+    base_path: Path = Field("denoised", title="Output Base Path")
     """The base path to save the denoised images to"""
-    device_id: int = Field(0, ge=0)
+    device_id: int = Field(0, ge=0, title="Device ID")
     """The device ID to use for denoising"""
-    batch_size: int = Field(64, ge=1)
+    batch_size: int = Field(64, ge=1, title="Batch Size")
     """The batch size to use for denoising"""
-    tile_size: int = Field(128, ge=64)
+    tile_size: int = Field(128, ge=64, title="Tile Size")
     """The tile size to use for denoising"""
-    background: Literal["white", "black"] = Field("black")
+    background: Literal["white", "black"] = Field("black", title="Padding Background Color")
     """The background color to use for padding"""
-    contrast_strectch: bool = Field(False)
+    contrast_strectch: bool = Field(False, title="Contrast Stretch After Denoising")
     """Whether to apply contrast stretch after denoising"""
 
 
@@ -217,21 +217,21 @@ class ActionAutolevel(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.AUTOLEVEL] = Field(ActionKind.AUTOLEVEL)
+    kind: Literal[ActionKind.AUTOLEVEL] = Field(ActionKind.AUTOLEVEL, title="Auto Level Images Action")
     """The kind of action"""
-    base_path: Path = Field("leveled")
+    base_path: Path = Field("leveled", title="Output Base Path")
     """The base path to save the leveled images to"""
-    upper_limit: int = Field(60, ge=1, le=255)
+    upper_limit: int = Field(60, ge=1, le=255, title="Upper Limit for Peak Finding")
     """The upper limit for finding local peaks in the histogram"""
-    peak_offset: int = Field(0, ge=-20, le=20)
+    peak_offset: int = Field(0, ge=-20, le=20, title="Peak Offset")
     """The offset to add to the found black level peak, can be negative"""
-    min_peak_pct: float = Field(0.25, ge=0.0, le=100.0)
+    min_peak_pct: float = Field(0.25, ge=0.0, le=100.0, title="Minimum Pixels Peak Percentage")
     """The minimum percentage of pixels for a peak to be considered valid"""
-    skip_white: bool = Field(True)
+    skip_white: bool = Field(True, title="Skip White Levels During Peak Finding")
     """Whether to skip white peaks when finding local peaks in the histogram"""
-    skip_color: bool = Field(False)
+    skip_color: bool = Field(False, title="Skip Color Images")
     """Skip color images when auto leveling, only level half-tones/b&w images"""
-    threads: int = Field(default_factory=cpu_count, ge=1)
+    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
 
@@ -247,15 +247,15 @@ class ActionPosterize(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.POSTERIZE] = Field(ActionKind.POSTERIZE)
+    kind: Literal[ActionKind.POSTERIZE] = Field(ActionKind.POSTERIZE, title="Posterize Images Action")
     """The kind of action"""
-    base_path: Path = Field("posterized")
+    base_path: Path = Field("posterized", title="Output Base Path")
     """The base path to save the posterized images to"""
-    bpc: int = Field(4, ge=1, le=8)
+    bpc: int = Field(4, ge=1, le=8, title="Bits Per Channel", examples=[1, 2, 4, 8])
     """The number of bitdepth to reduce the image to"""
-    pillow: bool = Field(False)
+    pillow: bool = Field(False, title="Use Python Pillow")
     """Whether to use Pillow for posterizing instead of ImageMagick"""
-    threads: int = Field(default_factory=cpu_count, ge=1)
+    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     @model_validator(mode="after")
@@ -281,12 +281,12 @@ class ActionOptimize(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.OPTIMIZE] = Field(ActionKind.OPTIMIZE)
+    kind: Literal[ActionKind.OPTIMIZE] = Field(ActionKind.OPTIMIZE, title="Optimize Images Action")
     """The kind of action"""
-    aggresive: bool = Field(False)
+    aggresive: bool = Field(False, title="Aggressive Mode")
     """Whether to use the aggressive mode of pingo, which would force grayscale conversion for all images"""
-    limiter: str | None = Field(None)
-    """Limit the optimization to certain image types, e.g. png,jpg"""
+    limiter: str | None = Field(None, title="Limiter", examples=[".png", ".jpg"])
+    """Limit the optimization to certain image types, e.g. .png"""
 
     @model_validator(mode="after")
     def check_limiter(self) -> Self:
@@ -313,7 +313,7 @@ class ActionTagging(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.TAGGING] = Field(ActionKind.TAGGING)
+    kind: Literal[ActionKind.TAGGING] = Field(ActionKind.TAGGING, title="Image Tagging Action")
     """The kind of action"""
 
 
@@ -331,9 +331,9 @@ class ActionMoveColor(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.MOVE_COLOR] = Field(ActionKind.MOVE_COLOR)
+    kind: Literal[ActionKind.MOVE_COLOR] = Field(ActionKind.MOVE_COLOR, title="Move Color Images Action")
     """The kind of action"""
-    base_path: Path = Field("colors")
+    base_path: Path = Field("colors", title="Output Base Path")
     """The base path to save the color images to"""
 
 
@@ -349,15 +349,15 @@ class ActionColorJpegify(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.COLOR_JPEGIFY] = Field(ActionKind.COLOR_JPEGIFY)
+    kind: Literal[ActionKind.COLOR_JPEGIFY] = Field(ActionKind.COLOR_JPEGIFY, title="Jpegify Color Images Action")
     """The kind of action"""
-    base_path: Path | None = Field(None)
+    base_path: Path | None = Field(None, title="Output Base Path")
     """The base path to save the JPEG images to, this would use the last used base path if not provided"""
-    quality: int = Field(95, ge=1, le=100)
+    quality: int = Field(95, ge=1, le=100, title="JPEG Quality")
     """The quality of the output JPEG images"""
-    source_path: Path = Field("colors")
+    source_path: Path = Field("colors", title="Source Path")
     """The source path to look for images to convert"""
-    threads: int = Field(default_factory=cpu_count, ge=1)
+    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
 
@@ -373,11 +373,11 @@ class ActionPack(BaseAction):
         validate_default=True,
     )
 
-    kind: Literal[ActionKind.PACK]
+    kind: Literal[ActionKind.PACK] = Field(ActionKind.PACK, title="Pack Action")
     """The kind of action"""
-    output_mode: ExporterType = Field(ExporterType.cbz)
+    output_mode: ExporterType = Field(ExporterType.cbz, title="Output Mode")
     """The output mode to use for packing the archive"""
-    source_dir: Path | None = Field(None)
+    source_dir: Path | None = Field(None, title="Source Directory")
     """The source directory to pack, this would use the last used base path if not provided"""
 
 
@@ -397,7 +397,7 @@ class ActionInterrupt(BaseAction):
 
     kind: Literal[ActionKind.INTERRUPT] = Field(ActionKind.INTERRUPT)
     """The kind of action"""
-    whole_chain: bool = Field(True)
+    whole_chain: bool = Field(True, title="Interrupt Whole Chain")
     """When quitting, just don't stop at the current volume but the whole volume"""
 
 
@@ -415,7 +415,7 @@ ActionType: TypeAlias = (
     | ActionPack
     | ActionInterrupt
 )
-Actions = Annotated[ActionType, Field(discriminator="kind")]
+Actions = Annotated[ActionType, Field(discriminator="kind", description="The collection of all supported actions.")]
 """
 The list of all supported actions.
 """
@@ -445,13 +445,13 @@ class ChapterConfig(BaseModel):
         validate_default=True,
     )
 
-    number: int | float = Field(..., ge=0.0)
+    number: int | float = Field(..., ge=0.0, title="Chapter Number")
     """The chapter number"""
-    title: str | None = Field(None)
+    title: str | None = Field(None, title="Chapter Title")
     """The title of the chapter, this is optional"""
-    start: int = Field(..., ge=0)
+    start: int = Field(..., ge=0, title="Starting Page Number")
     """The starting page number of the chapter"""
-    end: int | None = Field(None, ge=1)
+    end: int | None = Field(None, ge=1, title="Ending Page Number")
     """
     The ending page number of the chapter, this is optional.
     If not provided it would be the same as start till the end of the volume
@@ -507,11 +507,11 @@ class SkipActionConfig(BaseModel):
         validate_default=True,
     )
 
-    action: SkipActionKind
+    action: SkipActionKind = Field(..., title="Skip Action")
     """The action to take when skipping"""
-    step: str
+    step: str = Field(..., title="Action Step Name", examples=["autolevel-1", "optimize-1", "optimize-2"])
     """The action step name to skip, e.g. autolevel-1, optimize-2, etc."""
-    pages: list[int] = Field(..., min_length=1)
+    pages: list[int] = Field(..., min_length=1, title="Pages to Skip On")
     """The list of page numbers to skip the action on"""
 
 
@@ -519,7 +519,7 @@ class MetadataNamingConfig(BaseModel):
     """
     The configuration for metadata naming
 
-    This is used to add extra metadata to the filename, e.g. [Color], [LQ], etc.
+    This is used to add extra metadata to the filename, e.g. [Cover], [ToC], etc.
     """
 
     model_config = ConfigDict(
@@ -528,9 +528,9 @@ class MetadataNamingConfig(BaseModel):
         validate_default=True,
     )
 
-    tag: str
+    tag: str = Field(..., title="Metadata Tag")
     """The tag to add to the filename"""
-    page: int | list[int]
+    page: int | list[int] = Field(..., title="Page Number")
     """The page number to add the tag to, can be a list for multiple pages"""
 
 
@@ -546,35 +546,44 @@ class VolumeConfig(BaseModel):
         validate_default=True,
     )
 
-    path: Path
+    path: Path = Field(..., title="Volume Directory")
     """The directory of the volume, relative to the base_path"""
-    number: int | float
-    """The volume number"""
-    year: int = Field(default_factory=current_year, ge=1000, le=9999)
-    """The year of the volume, this is used for tagging"""
-    oneshot: bool = Field(False)
+    number: int | float = Field(..., title="Volume Number")
+    """The volume number, can be float for decimals"""
+    year: int = Field(default_factory=current_year, ge=1000, le=9999, title="Volume Year")
+    """The year of the volume release, this is used for tagging"""
+    oneshot: bool = Field(False, title="Is Oneshot")
     """Whether the volume is a oneshot"""
-    spreads: list[tuple[int, int]] = Field(default_factory=list)
+    spreads: list[tuple[int, int]] = Field(
+        default_factory=list, title="Volume Spreads", examples=[[(1, 2), (5, 6), (13, 15)]]
+    )
     """
     The list of spreads in the volume, each tuple is a pair of page numbers
 
     This would be made into a range from the first to the second number inclusive.
     """
-    colors: list[int] = Field(default_factory=list)
+    colors: list[int] = Field(default_factory=list, title="Volume Color Pages", examples=[[0]])
     """The list of color tagged pages in the volume"""
-    meta_naming: list[MetadataNamingConfig] = Field(default_factory=list)
+    meta_naming: list[MetadataNamingConfig] = Field(default_factory=list, title="Metadata Naming Configurations")
     """The list of metadata naming configurations"""
-    chapters: list[ChapterConfig] = Field(default_factory=list)
+    chapters: list[ChapterConfig] = Field(default_factory=list, title="Volume Chapters")
     """The list of chapters in the volume"""
-    extra_text: str | None = Field(None)
+    extra_text: str | None = Field(None, title="Extra Text", examples=["Omnibus", "2-in-1 Edition", "PNG4"])
     """Extra text to add to the filename"""
-    revision: int = Field(1, ge=1)
-    """The revision number of the volume, this is used for tagging"""
-    quality: Literal["LQ", "HQ"] | None = Field(None)
+    revision: int = Field(1, ge=1, title="Volume Revision Number")
+    """The revision number of the volume, this is used for tagging
+
+    Only applied if greater than 1
+    """
+    quality: Literal["LQ", "HQ"] | None = Field(None, title="Volume Quality")
     """The quality of the volume, this is used for tagging"""
-    pub_type: Annotated[str, AfterValidator(is_publication_type)] = Field("digital")
+    pub_type: Annotated[str, AfterValidator(is_publication_type)] = Field(
+        "digital",
+        title="Publication Type",
+        examples=["digital", "magazine", "scan", "web", "digital-raw", "magazine-raw", "mix", "none"],
+    )
     """The publication type of the volume, this is used for tagging"""
-    skip_actions: list[SkipActionConfig] = Field(default_factory=list)
+    skip_actions: list[SkipActionConfig] = Field(default_factory=list, title="Skip Actions Configurations")
     """The list of actions to skip for this volume"""
 
     @cached_property
@@ -673,16 +682,19 @@ class OrchestratorConfig(BaseModel):
         validate_default=True,
     )
 
-    title: str
+    title: str = Field(..., title="Manga Title", examples=["I Want to Love You Till Your Dying Day"])
     """The title of the manga"""
-    publisher: str
+    publisher: str = Field(..., title="Manga Publisher", examples=["Kodansha Comics"])
     """The publisher of the manga"""
-    credit: str
+    credit: str = Field(..., title="Ripper Credit", examples=["Ripper"])
     """The ripper credit for the manga"""
-    email: str
+    email: str = Field(..., title="Ripper Email", examples=["ripper-mail@example.com"])
     """The ripper email for the manga"""
-    bracket_type: Literal["square", "round", "curly"] = Field("round")
-    """The bracket type to use for the ripper credit"""
+    bracket_type: Literal["square", "round", "curly"] = Field("round", title="Bracket Type in Filename")
+    """The bracket type to use for the ripper credit
+
+    This is used in the filename, e.g. [Ripper], (Ripper), {Ripper}
+    """
     base_path: Path = Field("source")
     """The first path to look for volumes, relative to the orchestrator config file"""
     volumes: list[VolumeConfig] = Field(default_factory=list, min_length=1)

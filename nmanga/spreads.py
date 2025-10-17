@@ -42,8 +42,14 @@ Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 
 
 class SpreadDirection(str, Enum):
-    RTL = "rtl"
+    """
+    The direction of the spread to join images.
+    """
+
     LTR = "ltr"
+    """Spread direction from left to right."""
+    RTL = "rtl"
+    """Spread direction from right to left, or reversed."""
 
 
 def select_exts(files: list[Path]) -> str:

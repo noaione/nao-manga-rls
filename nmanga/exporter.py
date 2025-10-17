@@ -52,11 +52,19 @@ Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 
 
 class ExporterType(str, Enum):
+    """
+    The type of exporter to use.
+    """
+
     raw = "folder"
+    """Export as folder of images."""
     cbz = "cbz"
+    """Export as CBZ (zip) archive."""
     # cbr = 2
     cb7 = "cb7"
+    """Export as CB7 (7-zip) archive."""
     epub = "epub"
+    """Export as EPUB file."""
 
     @classmethod
     def from_choice(cls: type["ExporterType"], ext: str):
