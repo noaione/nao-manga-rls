@@ -101,8 +101,10 @@ def _init_worker():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int, skip_white: bool) -> tuple[int, int, Path, bool]:
-    black_level, white_level, force_gray = find_local_peak(img_path, upper_limit, skip_white)
+def _find_local_peak_magick_wrapper(
+    img_path: Path, upper_limit: int, peak_min_pct: float, skip_white: bool
+) -> tuple[int, int, Path, bool]:
+    black_level, white_level, force_gray = find_local_peak(img_path, upper_limit, peak_min_pct, skip_white)
     return black_level, white_level, img_path, force_gray
 
 
@@ -121,6 +123,15 @@ def _find_local_peak_magick_wrapper(img_path: Path, upper_limit: int, skip_white
     default=60,
     show_default=True,
     help="The upper limit for finding local peaks in the histogram",
+)
+@click.option(
+    "-pmp",
+    "--peak-min-pct",
+    "peak_min_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.25,
+    show_default=True,
+    help="The minimum percentage of pixels for a peak to be considered valid",
 )
 @click.option(
     "-po",
@@ -154,6 +165,7 @@ def autolevel(
     path_or_archive: Path,
     dest_output: Path,
     upper_limit: int,
+    peak_min_pct: float,
     peak_offset: int,
     image_fmt: str,
     no_white: bool,
@@ -187,12 +199,12 @@ def autolevel(
 
     console.status("Calculating black levels for images...")
     if threads <= 1:
-        results = [_find_local_peak_magick_wrapper(file, upper_limit, no_white) for file in all_files]
+        results = [_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white) for file in all_files]
     else:
         try:
             with mp.Pool(threads, initializer=_init_worker) as pool:
                 results = pool.starmap(
-                    _find_local_peak_magick_wrapper, [(file, upper_limit, no_white) for file in all_files]
+                    _find_local_peak_magick_wrapper, [(file, upper_limit, peak_min_pct, no_white) for file in all_files]
                 )
         except KeyboardInterrupt:
             console.warning("Autoleveling interrupted by user.")
@@ -296,6 +308,7 @@ def autolevel(
 class Autolevel2Config:
     upper_limit: int
     peak_offset: int
+    peak_min_pct: float
     force_gray: bool
     keep_colorspace: bool
     image_fmt: str
@@ -304,7 +317,7 @@ class Autolevel2Config:
 
 def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Config) -> AutoLevelResult:
     img = Image.open(img_path)
-    black_level, white_level, _ = find_local_peak(img, upper_limit=60, skip_white_peaks=config.no_white)
+    black_level, white_level, _ = find_local_peak(img, upper_limit=60, peak_percentage=config.peak_min_pct)
 
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not config.no_white else False
@@ -374,6 +387,15 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
     help="The upper limit for finding local peaks in the histogram",
 )
 @click.option(
+    "-pmp",
+    "--peak-min-pct",
+    "peak_min_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.25,
+    show_default=True,
+    help="The minimum percentage of pixels for a peak to be considered valid",
+)
+@click.option(
     "-po",
     "--peak-offset",
     "peak_offset",
@@ -420,6 +442,7 @@ def autolevel2(
     path_or_archive: Path,
     dest_output: Path,
     upper_limit: int,
+    peak_min_pct: float,
     peak_offset: int,
     force_gray: bool,
     keep_colorspace: bool,
@@ -440,6 +463,7 @@ def autolevel2(
     full_config = Autolevel2Config(
         upper_limit=upper_limit,
         peak_offset=peak_offset,
+        peak_min_pct=peak_min_pct,
         force_gray=force_gray,
         keep_colorspace=keep_colorspace,
         image_fmt=image_fmt,

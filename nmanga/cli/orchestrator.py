@@ -504,7 +504,7 @@ def _runner_autolevel2_threaded(
         return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     img = Image.open(img_path)
     black_level, white_level, _ = find_local_peak(
-        img, upper_limit=action.upper_limit, skip_white_peaks=action.skip_white
+        img, upper_limit=action.upper_limit, peak_percentage=action.min_peak_pct
     )
 
     is_black_bad = black_level <= 0

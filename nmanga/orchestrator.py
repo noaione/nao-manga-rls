@@ -179,6 +179,8 @@ class ActionAutolevel(BaseModel):
     """The upper limit for finding local peaks in the histogram"""
     peak_offset: int = Field(0, ge=-20, le=20)
     """The offset to add to the found black level peak, can be negative"""
+    min_peak_pct: float = Field(0.25, ge=0.0, le=100.0)
+    """The minimum percentage of pixels for a peak to be considered valid"""
     skip_white: bool = Field(True)
     """Whether to skip white peaks when finding local peaks in the histogram"""
     threads: int = Field(default_factory=cpu_count, ge=1)

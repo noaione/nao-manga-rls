@@ -61,14 +61,26 @@ def try_imports():
         raise ImportError("scipy is required to use autolevel. Please install scipy.")
 
 
+def is_grayscale_palette(palette: list[int]) -> bool:
+    for i in range(0, len(palette), 3):
+        r, g, b = palette[i : i + 3]
+        if (r != g) or (g != b):
+            return False
+
+    return True
+
+
 def find_local_peak(
-    img_path: Path | BytesIO | Image.Image, upper_limit: int = 60, skip_white_peaks: bool = False
+    img_path: Path | BytesIO | Image.Image,
+    upper_limit: int = 60,
+    peak_percentage: float = 0.25,
 ) -> tuple[int, int, bool]:
     """
     Automatically determine the optimal black level for an image by finding local peaks in its histogram.
 
-    Returns a tuple of (black_level, img_path, force_gray).
+    Courtesy of anon.
     """
+
     global NumpyLib, ScipySignalLib
 
     if NumpyLib is None or ScipySignalLib is None:
@@ -76,44 +88,63 @@ def find_local_peak(
 
     image = img_path if isinstance(img_path, Image.Image) else Image.open(img_path)
     force_gray = image.mode != "L"
+
+    if image.mode == "P":
+        palette = image.getpalette()
+        if (palette is not None) and is_grayscale_palette(palette):
+            force_gray = True
+
     if force_gray:
         image = image.convert("L")  # force grayscale
 
-    img_array = NumpyLib.array(image)
-    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 255))
+    if peak_percentage <= 0 and peak_percentage >= 100:
+        peak_percentage = 0.25  # default value
 
-    width = NumpyLib.arange(start=1, stop=upper_limit, step=1)
-    result = ScipySignalLib.find_peaks_cwt(hist, widths=width)
+    img_width, img_height = image.size
+
+    min_px_count = math.ceil((img_width * img_height) * (peak_percentage / 100.0))
+    min_prominence = int(min_px_count / 2)
+
+    img_array = NumpyLib.array(image)
+    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 256))
+
+    # Region of interest: only consider peaks in the lower range for black level
+    roi_min, roi_max = 0, upper_limit
+    roi_mask = (binedges[:-1] >= roi_min) & (binedges[:-1] < roi_max)
+    hist_roi = hist[roi_mask]
+    binedges_roi = binedges[:-1][roi_mask]
+
+    # Pad left and right to avoid edge peaks
+    hist_padded = NumpyLib.pad(hist_roi, (1, 1), mode="constant", constant_values=0)
+
+    # Find peaks on padded array
+    peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=min_px_count, prominence=min_prominence)
+
+    peaks = peaks_padded - 1  # Adjust indices back to original hist_roi
+    valid = (peaks >= 0) & (peaks < len(hist_roi))
+    peaks = peaks[valid]
+
+    black_level = 0
+    if len(peaks) > 0:
+        peak_val = math.ceil(binedges_roi[peaks[0]])
+        black_level = peak_val
+    else:
+        # Find without max height constraint
+        peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=0)
+
+        peaks = peaks_padded - 1  # Adjust indices back to original hist_roi
+        valid = (peaks >= 0) & (peaks < len(hist_roi))
+        peaks = peaks[valid]
+        if len(peaks) > 0:
+            peak_val = math.ceil(binedges_roi[peaks[0]])
+            black_level = peak_val
 
     if not isinstance(img_path, Image.Image):
         # temp image, close
         image.close()
 
-    black_level = 0
-    if result.any():
-        if hist[result[0] - 1] > hist[result[0]]:
-            result[0] = result[0] - 1
-        elif hist[result[0] + 1] > hist[result[0]]:
-            result[0] = result[0] + 1
-
-        black_level = math.ceil(binedges[result[0]])
-
-    if skip_white_peaks:
-        return black_level, 255, force_gray
-
-    upper_range_start = 255 - upper_limit
-    upper_hist = hist[upper_range_start:]
+    # TODO: Add back white level detection
     white_level = 255
-    if upper_hist.any():
-        white_peak = NumpyLib.argmax(upper_hist)
-        if hist[upper_range_start + white_peak - 1] > hist[upper_range_start + white_peak]:
-            white_peak = white_peak - 1
-        elif hist[upper_range_start + white_peak + 1] > hist[upper_range_start + white_peak]:
-            white_peak = white_peak + 1
-
-        white_level = math.floor(binedges[upper_range_start + white_peak])
-    if white_level - black_level < 50:
-        black_level = 0  # Ignore, too close to white point
 
     return black_level, white_level, force_gray
 
