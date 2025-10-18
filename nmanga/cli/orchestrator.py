@@ -167,66 +167,40 @@ def orchestrator_runner(
 
     # Tools detection
     toolsets = {}
+    tested_pkg = set()
     console.info("Detecting needed tools...")
     for action in config.actions:
-        match action.kind:
-            case ActionKind.SPREADS:
-                if action.pillow:
-                    continue  # Pillow is always available
-                # Detect ImageMagick
-                imagick = test_or_find_magick(magick_path)
-                if imagick is None:
-                    console.error("ImageMagick is required for spreads joining, but not found!")
-                    raise click.Abort()
-                toolsets["magick"] = imagick
-            case ActionKind.OPTIMIZE:
-                # Detect Pingo
-                pingo = test_or_find_pingo(pingo_path)
-                if pingo is None:
-                    console.error("Pingo is required for image optimization, but not found!")
-                    raise click.Abort()
-                toolsets["pingo"] = pingo
-            case ActionKind.COLOR_JPEGIFY:
-                # Detect cjpegli
-                cjpegli = test_or_find_cjpegli(cjpegli_path)
-                if cjpegli is None:
-                    console.error("cjpegli is required for JPEG conversion, but not found!")
-                    raise click.Abort()
-                toolsets["cjpegli"] = cjpegli
-            case ActionKind.TAGGING:
-                # Detect ExifTool
-                exiftool = test_or_find_exiftool(exiftool_path)
-                if exiftool is None:
-                    console.error("ExifTool is required for tagging, but not found!")
-                    raise click.Abort()
-                toolsets["exiftool"] = exiftool_path
-            case ActionKind.DENOISE:
-                # Check if all the imports are available (onnxruntime, einops, numpy)
-                packages = {
-                    "onnxruntime": importlib.util.find_spec("onnxruntime"),
-                    "einops": importlib.util.find_spec("einops"),
-                    "numpy": importlib.util.find_spec("numpy"),
-                }
-                for pkg_name, pkg in packages.items():
-                    if pkg is None:
-                        console.error(f"Denoising requires additional dependencies: {pkg_name}, please install them!")
+        action_name = action.kind.name
+        needed_tools = action.get_tools()
+        for tool_name, tool_kind in needed_tools.items():
+            match tool_kind:
+                case ToolsKind.PACKAGE:
+                    if tool_name in tested_pkg:
+                        continue
+                    test_pkg = importlib.util.find_spec(tool_name)
+                    if test_pkg is None:
+                        console.error(f"Required package '{tool_name}' for action '{action_name}' not found!")
                         raise click.Abort()
-            case ActionKind.AUTOLEVEL:
-                # Check if all the imports are available (scipy, numpy)
-                packages = {
-                    "scipy": importlib.util.find_spec("scipy"),
-                    "numpy": importlib.util.find_spec("numpy"),
-                }
-                for pkg_name, pkg in packages.items():
-                    if pkg is None:
-                        console.error(
-                            f"Auto-leveling requires additional dependencies: {pkg_name}, please install them!"
-                        )
+                    tested_pkg.add(tool_name)
+                case ToolsKind.BINARY:
+                    match tool_name:
+                        case "magick":
+                            tool_path = test_or_find_magick(magick_path)
+                        case "pingo":
+                            tool_path = test_or_find_pingo(pingo_path)
+                        case "exiftool":
+                            tool_path = test_or_find_exiftool(exiftool_path)
+                        case "cjpegli":
+                            tool_path = test_or_find_cjpegli(cjpegli_path)
+                        case _:
+                            console.error(f"Unknown tool '{tool_name}' for action '{action_name}'!")
+                            raise click.Abort()
+                    if tool_path is None:
+                        console.error(f"Required binary '{tool_name}' for action '{action_name}' not found!")
                         raise click.Abort()
-            case _:
-                # No tools needed
-                continue
+                    toolsets[tool_name] = tool_path
     console.info(f"Detected tools: {', '.join(toolsets.keys()) if toolsets else 'None'}")
+    console.info(f"Detected packages: {', '.join(tested_pkg) if tested_pkg else 'None'}")
 
     input_dir = full_base / config.base_path
     for volume in config.volumes:
