@@ -1,0 +1,102 @@
+"""
+MIT License
+
+Copyright (c) 2022-present noaione
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+from pydantic import ConfigDict, Field
+
+from ... import exporter, file_handler
+from ...common import format_archive_filename, format_volume_text
+from ._base import ActionKind, BaseAction, WorkerContext
+
+if TYPE_CHECKING:
+    from .. import OrchestratorConfig, VolumeConfig
+
+__all__ = ("ActionPack",)
+
+
+class ActionPack(BaseAction):
+    """
+    Action to pack the volume into an archive
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Pack Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    kind: Literal[ActionKind.PACK] = Field(ActionKind.PACK, title="Pack Action")
+    """The kind of action"""
+    output_mode: exporter.ExporterType = Field(exporter.ExporterType.cbz, title="Output Mode")
+    """The output mode to use for packing the archive"""
+    source_dir: Path | None = Field(None, title="Source Directory")
+    """The source directory to pack, this would use the last used base path if not provided"""
+
+    def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
+        """
+        Run the action on a volume
+
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        """
+
+        source_dir = (self.source_dir or context.current_dir).resolve()
+        volume_text = format_volume_text(manga_volume=volume.number)
+
+        context.terminal.info(f"Packing volume {volume.number} in {source_dir}...")
+        archive_filename = format_archive_filename(
+            manga_title=orchestrator.title,
+            manga_year=volume.year,
+            publication_type=volume.publication,
+            ripper_credit=orchestrator.credit,
+            bracket_type=orchestrator.bracket_type,
+            manga_volume_text=volume_text if not volume.oneshot else None,
+            extra_metadata=volume.extra_text,
+            rls_revision=volume.revision,
+        )
+        parent_dir = source_dir.parent
+        arc_target = exporter.exporter_factory(
+            archive_filename,
+            parent_dir,
+            mode=self.output_mode,
+            manga_title=orchestrator.title,
+        )
+        if self.output_mode == exporter.ExporterType.epub:
+            context.terminal.warning("Packing as EPUB, this will be a slower operation because of size checking!")
+
+        arc_target.set_comment(orchestrator.email)
+        context.terminal.status("Packing... (0/???)")
+        idx = 1
+        for img_file, _, total_img, _ in file_handler.collect_image_from_folder(source_dir):
+            arc_target.add_image(img_file.name, img_file)
+            context.terminal.status(f"Packing... ({idx}/{total_img})")
+            idx += 1
+        context.terminal.stop_status(f"Packed ({idx - 1}/{total_img})")
+        arc_target.close()

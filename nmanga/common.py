@@ -456,6 +456,26 @@ def format_archive_filename(
     return archive_filename
 
 
+@overload
+def format_volume_text(
+    manga_volume: int | float,
+) -> str: ...
+
+
+@overload
+def format_volume_text(
+    manga_volume: int | float,
+    manga_chapter: None = None,
+) -> str: ...
+
+
+@overload
+def format_volume_text(
+    manga_volume: None,
+    manga_chapter: int | float,
+) -> str: ...
+
+
 def format_volume_text(
     manga_volume: int | float | None = None,
     manga_chapter: int | float | None = None,

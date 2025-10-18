@@ -4,10 +4,40 @@
             "additionalProperties": false,
             "description": "Action to auto level all images in a volume with Pillow\n\nThis version is \"smarter\" than the CLI version:\n- It would force convert the image to grayscale for half-tones/b&w images before processing\n- All tagged color images will be leveled in keep colorspace mode",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "autolevel",
@@ -65,10 +95,40 @@
             "additionalProperties": false,
             "description": "Action to convert color images to JPEG format with cjpegli",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "color_jpegify",
@@ -115,10 +175,40 @@
             "additionalProperties": false,
             "description": "Action to denoise all images in a volume with denoise-trt",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "denoise",
@@ -180,10 +270,40 @@
             "additionalProperties": false,
             "description": "Action to interrupt the action chain\n\nThis will \"pause\" the action chain in-place, this would also allow you to quit the action chain",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "interrupt",
@@ -204,10 +324,40 @@
             "additionalProperties": false,
             "description": "Action to move the tagged color images to a separate folder\n\nEverything would be derived from the main config so they are not included here.",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "move_color",
@@ -229,10 +379,40 @@
             "additionalProperties": false,
             "description": "Optimize all images in a volume with pingo",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "optimize",
@@ -269,10 +449,40 @@
             "additionalProperties": false,
             "description": "Action to pack the volume into an archive",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "pack",
@@ -306,10 +516,40 @@
             "additionalProperties": false,
             "description": "Action to posterize all images in a volume with imagemagick or Pillow",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "posterize",
@@ -354,16 +594,58 @@
             "additionalProperties": false,
             "description": "Action to rename all images in a volume\n\nThis use the daiz-like renaming scheme.\n\nAll the other options are derived from the main config so they are not included here.",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "rename",
                     "default": "rename",
                     "title": "Daiz-like Rename Images Action",
                     "type": "string"
+                },
+                "title": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Title of the Series"
                 }
             },
             "title": "nmanga Orchestrator - Daiz-like Rename Images Action",
@@ -373,10 +655,40 @@
             "additionalProperties": false,
             "description": "Action to shift rename of a volume\n\nTitle and volume are derived from the main config so they are not included here.",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "shift_rename",
@@ -410,10 +722,40 @@
             "additionalProperties": false,
             "description": "Action to join spreads of a volume",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "spreads",
@@ -461,19 +803,108 @@
             "additionalProperties": false,
             "description": "Action to add metadata tags to the images with exiftool\n\nEverything would be derived from the main config so they are not included here.",
             "properties": {
-                "conditional": {
-                    "default": false,
-                    "title": "Conditional",
-                    "type": "boolean"
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
                 },
                 "kind": {
                     "const": "tagging",
                     "default": "tagging",
                     "title": "Image Tagging Action",
                     "type": "string"
+                },
+                "title": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Override Title"
                 }
             },
             "title": "nmanga Orchestrator - Image Tagging Action",
+            "type": "object"
+        },
+        "AndModel": {
+            "description": "Pydantic model for a logical AND.\n\nThis will be converted to an `And` DSL object.",
+            "properties": {
+                "op": {
+                    "const": "and",
+                    "title": "Operator",
+                    "type": "string"
+                },
+                "rules": {
+                    "items": {
+                        "discriminator": {
+                            "mapping": {
+                                "and": "#/$defs/AndModel",
+                                "condition": "#/$defs/ConditionModel",
+                                "not": "#/$defs/NotModel",
+                                "or": "#/$defs/OrModel"
+                            },
+                            "propertyName": "op"
+                        },
+                        "oneOf": [
+                            {
+                                "$ref": "#/$defs/ConditionModel"
+                            },
+                            {
+                                "$ref": "#/$defs/AndModel"
+                            },
+                            {
+                                "$ref": "#/$defs/OrModel"
+                            },
+                            {
+                                "$ref": "#/$defs/NotModel"
+                            }
+                        ],
+                        "title": "Rule"
+                    },
+                    "minItems": 1,
+                    "title": "Sub-rules",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "op",
+                "rules"
+            ],
+            "title": "AndModel",
             "type": "object"
         },
         "ChapterConfig": {
@@ -530,6 +961,40 @@
             "title": "nmanga Orchestrator Chapter Configuration",
             "type": "object"
         },
+        "ConditionModel": {
+            "description": "Pydantic model for a simple condition.\n\nThis will be converted to a `Condition` DSL object.\n\nThe `value` field can either be a direct value (str, int, etc.)\nor a reference to another context variable using the format \"ctx:variable_name\".",
+            "properties": {
+                "op": {
+                    "const": "condition",
+                    "title": "Operator",
+                    "type": "string"
+                },
+                "field": {
+                    "title": "Field",
+                    "type": "string"
+                },
+                "operator": {
+                    "title": "Operator Type",
+                    "type": "string"
+                },
+                "value": {
+                    "examples": [
+                        "ctx:other_variable",
+                        42,
+                        "some_string"
+                    ],
+                    "title": "Value"
+                }
+            },
+            "required": [
+                "op",
+                "field",
+                "operator",
+                "value"
+            ],
+            "title": "ConditionModel",
+            "type": "object"
+        },
         "ExporterType": {
             "description": "The type of exporter to use.",
             "enum": [
@@ -569,6 +1034,95 @@
                 "page"
             ],
             "title": "MetadataNamingConfig",
+            "type": "object"
+        },
+        "NotModel": {
+            "description": "Pydantic model for a logical NOT.\n\nThis will be converted to a `Not` DSL object.",
+            "properties": {
+                "op": {
+                    "const": "not",
+                    "title": "Operator",
+                    "type": "string"
+                },
+                "rule": {
+                    "discriminator": {
+                        "mapping": {
+                            "and": "#/$defs/AndModel",
+                            "condition": "#/$defs/ConditionModel",
+                            "not": "#/$defs/NotModel",
+                            "or": "#/$defs/OrModel"
+                        },
+                        "propertyName": "op"
+                    },
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/ConditionModel"
+                        },
+                        {
+                            "$ref": "#/$defs/AndModel"
+                        },
+                        {
+                            "$ref": "#/$defs/OrModel"
+                        },
+                        {
+                            "$ref": "#/$defs/NotModel"
+                        }
+                    ],
+                    "title": "Sub-rule"
+                }
+            },
+            "required": [
+                "op",
+                "rule"
+            ],
+            "title": "NotModel",
+            "type": "object"
+        },
+        "OrModel": {
+            "description": "Pydantic model for a logical OR.\n\nThis will be converted to a `Or` DSL object.",
+            "properties": {
+                "op": {
+                    "const": "or",
+                    "title": "Operator",
+                    "type": "string"
+                },
+                "rules": {
+                    "items": {
+                        "discriminator": {
+                            "mapping": {
+                                "and": "#/$defs/AndModel",
+                                "condition": "#/$defs/ConditionModel",
+                                "not": "#/$defs/NotModel",
+                                "or": "#/$defs/OrModel"
+                            },
+                            "propertyName": "op"
+                        },
+                        "oneOf": [
+                            {
+                                "$ref": "#/$defs/ConditionModel"
+                            },
+                            {
+                                "$ref": "#/$defs/AndModel"
+                            },
+                            {
+                                "$ref": "#/$defs/OrModel"
+                            },
+                            {
+                                "$ref": "#/$defs/NotModel"
+                            }
+                        ],
+                        "title": "Rule"
+                    },
+                    "minItems": 1,
+                    "title": "Sub-rules",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "op",
+                "rules"
+            ],
+            "title": "OrModel",
             "type": "object"
         },
         "SkipActionConfig": {
@@ -784,7 +1338,6 @@
             "type": "object"
         }
     },
-    "additionalProperties": false,
     "description": "The configuration for the orchestrator",
     "properties": {
         "title": {
