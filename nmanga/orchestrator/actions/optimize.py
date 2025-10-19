@@ -66,6 +66,11 @@ class ActionOptimize(BaseAction):
         :param orchestrator: The orchestrator configuration
         """
 
+        if context.dry_run:
+            context.terminal.info(f"- Aggressive Mode: {'Yes' if self.aggresive else 'No'}")
+            context.terminal.info(f"- Limiter: {self.limiter if self.limiter else 'None'}")
+            return
+
         pingo = context.toolsets.get("pingo")
         if pingo is None:
             context.terminal.error("Pingo is required for image optimization, but not found!")

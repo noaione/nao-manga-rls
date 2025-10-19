@@ -73,6 +73,11 @@ class ActionShiftName(BaseAction):
         :param orchestrator: The orchestrator configuration
         """
 
+        if context.dry_run:
+            context.terminal.info(f"- Starting Index: {self.start}")
+            context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
+            return
+
         all_images: list[Path] = []
         for image_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             all_images.append(image_file.resolve())
@@ -145,6 +150,11 @@ class ActionRename(BaseAction):
         :param volume: The volume configuration
         :param orchestrator: The orchestrator configuration
         """
+
+        if context.dry_run:
+            context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
+            context.terminal.info(f"- Total {len(volume.chapters)} chapters would be used for renaming.")
+            return
 
         cmx_re = RegexCollection.cmx_re()
 

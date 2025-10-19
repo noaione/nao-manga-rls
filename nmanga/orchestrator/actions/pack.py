@@ -69,6 +69,14 @@ class ActionPack(BaseAction):
         :param orchestrator: The orchestrator configuration
         """
 
+        if context.dry_run:
+            context.terminal.info(f"- Output Mode: {self.output_mode.value}")
+            context.terminal.info(
+                f"- Source Directory: {self.source_dir if self.source_dir else 'Last used base path'}"
+            )
+            context.terminal.info(f"- Compression Level: {self.compress_level}")
+            return
+
         source_dir = (self.source_dir or context.current_dir).resolve()
         volume_text = format_volume_text(manga_volume=volume.number)
 

@@ -153,6 +153,18 @@ class ActionAutolevel(BaseAction):
 
         # Prepare
         output_dir = context.root_dir / self.base_path / volume.path
+
+        if context.dry_run:
+            context.terminal.info(f"- Output Base Path: {self.base_path}")
+            context.terminal.info(f"- Upper Limit for Peak Finding: {self.upper_limit}")
+            context.terminal.info(f"- Peak Offset: {self.peak_offset}")
+            context.terminal.info(f"- Minimum Pixels Peak Percentage: {self.min_peak_pct}")
+            context.terminal.info(f"- Skip White Levels During Peak Finding: {self.skip_white}")
+            context.terminal.info(f"- Skip Color Images: {self.skip_color}")
+            context.terminal.info(f"- Processing Threads: {self.threads}")
+            context.update_cwd(output_dir)
+            return
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         page_re = RegexCollection.page_re()

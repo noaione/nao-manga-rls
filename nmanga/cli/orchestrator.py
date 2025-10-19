@@ -294,6 +294,17 @@ def orchestrator_validate(
         console.info(f"     - Oneshot: {'Yes' if volume.oneshot else 'No'}")
         console.info(f"     - Colors: Page {', Page '.join(map(str, volume.colors)) if volume.colors else 'None'}")
         console.info(f"     - Spreads: {len(volume.spreads) if volume.spreads else 0} total")
+        console.info(f"     - Chapters: {len(volume.chapters)} total")
+        for chapter in volume.chapters:
+            console.info(f"       - Chapter {chapter.number}")
+            chapter_page = f"{chapter.start:03d}-"
+            if chapter.end is not None:
+                chapter_page += f"{chapter.end:03d}"
+            else:
+                chapter_page += "end"
+            console.info(f"        - Page number: p{chapter_page}")
+            if chapter.title:
+                console.info(f"        - Title: {chapter.title}")
         if volume.extra_text:
             console.info(f"     - Extra Text: {volume.extra_text}")
         if volume.skip_actions:
@@ -308,63 +319,19 @@ def orchestrator_validate(
     first_vol = config.volumes[0]
     chapter_path = input_dir / first_vol.path
 
+    context = WorkerContext(
+        root_dir=full_base,
+        current_dir=chapter_path,
+        terminal=console,
+        toolsets={},
+        dry_run=True,
+    )
     for action_name, action in config.actions_maps.items():
         console.info(f'   - Action "{action_name}" ({action.kind.name}):')
-        console.info(f"     >> Input Path: {chapter_path}")
-        match action.kind:
-            case ActionKind.SHIFT_RENAME:
-                console.info(f"     - Start Index: {action.start}")
-                console.info(f"     - Title: {action.title or config.title}")
-            case ActionKind.SPREADS:
-                console.info(f"     - Base Path: {action.base_path}")
-                console.info(f"     - Use Pillow: {'Yes' if action.pillow else 'No'}")
-                if not action.pillow:
-                    console.info(f"     - Method: {action.method.name}")
-                    console.info(f"     - Fuzz: {action.fuzz}%")
-            case ActionKind.RENAME:
-                console.info("     - No additional parameters")
-            case ActionKind.DENOISE:
-                console.info(f"     - Model: {action.model}")
-                console.info(f"     - Device ID: {action.device_id}")
-                console.info(f"     - Batch Size: {action.batch_size}")
-                console.info(f"     - Tile Size: {action.tile_size}")
-                console.info(f"     - Background: {action.background}")
-                console.info(f"     - Base Path: {action.base_path}")
-                chapter_path = full_base / action.base_path / first_vol.path
-            case ActionKind.AUTOLEVEL:
-                console.info(f"     - Upper Limit: {action.upper_limit}")
-                console.info(f"     - Peak Offset: {action.peak_offset}")
-                console.info(f"     - Skip White Peaks: {'Yes' if action.skip_white else 'No'}")
-                console.info(f"     - Skip Color: {'Yes' if action.skip_color else 'No'}")
-                console.info(f"     - Threads: {action.threads}")
-                console.info(f"     - Base Path: {action.base_path}")
-                chapter_path = full_base / action.base_path / first_vol.path
-            case ActionKind.POSTERIZE:
-                console.info(f"     - Bits Per Channel: {action.bpc}")
-                console.info(f"     - Use Pillow: {'Yes' if action.pillow else 'No'}")
-                console.info(f"     - Threads: {action.threads}")
-                console.info(f"     - Base Path: {action.base_path}")
-                chapter_path = full_base / action.base_path / first_vol.path
-            case ActionKind.OPTIMIZE:
-                console.info(f"     - Aggresive: {'Yes' if action.aggresive else 'No'}")
-                console.info(f"     - Limiter: {action.limiter or 'None'}")
-            case ActionKind.TAGGING:
-                console.info("     - No additional parameters")
-            case ActionKind.PACK:
-                console.info(f"     - Output Mode: {action.output_mode.name}")
-                console.info(f"     - Source Dir: {action.source_dir or 'Same as chapter'}")
-            case ActionKind.MOVE_COLOR:
-                console.info(f"     - Base Path: {action.base_path}")
-            case ActionKind.COLOR_JPEGIFY:
-                console.info(f"     - Quality: {action.quality}")
-                console.info(f"     - Threads: {action.threads}")
-                console.info(f"     - Source Path: {action.source_path}")
-                if action.base_path is not None:
-                    console.info(f"     - Base Path: {action.base_path}")
-                    chapter_path = full_base / action.base_path / first_vol.path
-            case ActionKind.INTERRUPT:
-                console.info("     - Interrupt action, no operation performed")
-                console.info(f"     - Quit whole chain: {'Yes' if action.whole_chain else 'No'}")
-            case _:
-                console.info("     - No additional parameters")
-                continue
+        console.info(f"     >> Input Path: {context.current_dir}")
+        console.set_space(5)
+
+        action.run(context, first_vol, config)
+        console.set_space(0)
+        context.terminal = console
+        console.enter()

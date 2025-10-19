@@ -126,6 +126,14 @@ class ActionSpreads(BaseAction):
         :param orchestrator: The orchestrator configuration
         """
 
+        if context.dry_run:
+            context.terminal.info(f"- Spread Direction: {self.direction.value}")
+            context.terminal.info(f"- Output Quality: {self.quality}")
+            context.terminal.info(f"- Output Format: {self.output_fmt}")
+            context.terminal.info(f"- Use Pillow: {'Yes' if self.pillow else 'No'}")
+            context.terminal.info(f"- Processing Threads: {self.threads}")
+            return
+
         if not volume.spreads:
             context.terminal.warning(f"No spreads found for volume {volume.number}, skipping spreads action.")
             return

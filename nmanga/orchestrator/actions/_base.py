@@ -107,6 +107,8 @@ class WorkerContext(Context):
     """The toolsets available for the action."""
     skip_action: SkipActionConfig | None = None
     """The skip action configuration, if any."""
+    dry_run: bool = False
+    """Run the action in dry run mode."""
 
     def __init__(
         self,
@@ -116,6 +118,7 @@ class WorkerContext(Context):
         terminal: "Console",
         toolsets: dict[str, str],
         skip_action: SkipActionConfig | None = None,
+        dry_run: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -124,6 +127,7 @@ class WorkerContext(Context):
         self.terminal = terminal
         self.toolsets = toolsets
         self.skip_action = skip_action
+        self.dry_run = dry_run
 
     def update_cwd(self, new_dir: Path) -> None:
         """Update the current working directory."""

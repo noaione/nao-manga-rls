@@ -114,6 +114,15 @@ class ActionPosterize(BaseAction):
 
         # Prepare
         output_dir = context.root_dir / self.base_path / volume.path
+
+        if context.dry_run:
+            context.terminal.info(f"- Output Base Path: {self.base_path}")
+            context.terminal.info(f"- Bits Per Channel: {self.bpc}")
+            context.terminal.info(f"- Use Pillow: {'Yes' if self.pillow else 'No'}")
+            context.terminal.info(f"- Processing Threads: {self.threads}")
+            context.update_cwd(output_dir)
+            return
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         imagick = context.toolsets.get("magick")

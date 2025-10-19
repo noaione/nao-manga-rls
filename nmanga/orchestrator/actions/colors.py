@@ -74,6 +74,11 @@ class ActionMoveColor(BaseAction):
         :param orchestrator: The orchestrator configuration
         """
 
+        if context.dry_run:
+            context.terminal.info(f"- Base path: {self.base_path}")
+            context.terminal.info(f"- Total {len(volume.colors)} would be moved.")
+            return
+
         cmx_re = RegexCollection.cmx_re()
         output_dir = context.root_dir / self.base_path / volume.path
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -145,6 +150,13 @@ class ActionColorJpegify(BaseAction):
         :param volume: The volume configuration
         :param orchestrator: The orchestrator configuration
         """
+
+        if context.dry_run:
+            context.terminal.info(f"- Source path: {self.source_path}")
+            if self.base_path is not None:
+                context.terminal.info(f"- Output base path: {self.base_path}")
+            context.terminal.info(f"- Total {len(volume.colors)} would be converted to JPEG.")
+            return
 
         output_dir = context.current_dir
         if self.base_path is not None:

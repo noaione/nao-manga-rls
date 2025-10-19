@@ -65,6 +65,10 @@ class ActionTagging(BaseAction):
         :param orchestrator: The orchestrator configuration
         """
 
+        if context.dry_run:
+            context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
+            return
+
         exiftool = context.toolsets.get("exiftool")
         if exiftool is None:
             context.terminal.error("exiftool is required for image tagging, but not found!")

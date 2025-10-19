@@ -82,6 +82,18 @@ class ActionDenoise(BaseAction):
 
         # Prepare
         output_dir = context.root_dir / self.base_path / volume.path
+
+        if context.dry_run:
+            context.terminal.info(f"- Model Path: {self.model}")
+            context.terminal.info(f"- Output Base Path: {self.base_path}")
+            context.terminal.info(f"- Device ID: {self.device_id}")
+            context.terminal.info(f"- Batch Size: {self.batch_size}")
+            context.terminal.info(f"- Tile Size: {self.tile_size}")
+            context.terminal.info(f"- Background Color: {self.background}")
+            context.terminal.info(f"- Contrast Stretch: {self.contrast_strectch}")
+            context.update_cwd(output_dir)
+            return
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         context.terminal.info(f"Loading denoising model from {self.model.name}...")
