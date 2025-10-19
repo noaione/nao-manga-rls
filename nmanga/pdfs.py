@@ -169,14 +169,17 @@ def prefer_colorspace(colorspaces: list[str]) -> str:
     raise ValueError(f"Unknown colorspaces: {colorspaces}")
 
 
-def has_alpha(images: list[Image.Image]) -> bool:
+def has_alpha(images: list[bytes]) -> bool:
     """
     Check if any image has alpha channel
     """
 
     for img in images:
-        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        temp_read = Image.open(BytesIO(img))
+        if temp_read.mode in ("RGBA", "LA") or (temp_read.mode == "P" and "transparency" in temp_read.info):
+            temp_read.close()
             return True
+        temp_read.close()
     return False
 
 
@@ -209,9 +212,11 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
             # No images on this page, create a blank white image with the same size as the page
             mat = pymupdf.Matrix(1, 1)
             pix = page.get_pixmap(matrix=mat, alpha=False)
-            img_data = pix.tobytes()
-            image = Image.frombytes("RGB", (pix.width, pix.height), img_data)
-            yield ExtractedImage(image=image, extension="png", page=page_num + 1)
+            image = Image.new("RGB", (pix.width, pix.height), (255, 255, 255))
+            with BytesIO() as output:
+                image.save(output, format="PNG")
+                image_bytes = output.getvalue()
+            yield ExtractedImage(image=image_bytes, extension="png", page=page_num + 1)
             continue
 
         # Single image? Return it directly
@@ -250,8 +255,9 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
         for idx, (img, _) in enumerate(images):
             # We paste the image at the proper position from the
             # Convert to the preferred colorspace
-            if img.mode != prefer_spaces:
-                img = img.convert(prefer_spaces)
+            read_img = Image.open(BytesIO(img))
+            if read_img.mode != prefer_spaces:
+                read_img = read_img.convert(prefer_spaces)
 
             infos = image_infos[idx]
             bounding = pymupdf.Rect(*infos["bbox"])
@@ -259,12 +265,17 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
             # TODO: Apply the matrix to the image first
 
             # Paste the image onto the composite
-            composite.paste(img, (int(bounding.x0), int(bounding.y0)), img if "A" in prefer_spaces else None)
+            composite.paste(read_img, (int(bounding.x0), int(bounding.y0)), img if "A" in prefer_spaces else None)
 
         # Save composite to bytes
         with BytesIO() as output:
-            composite.save(output, format="PNG")
-            composite_bytes = output.getvalue()
+            # If cmyk, save as tiff
+            if composite.mode == "CMYK":
+                composite.save(output, format="TIFF")
+                composite_bytes = output.getvalue()
+            else:
+                composite.save(output, format="PNG")
+                composite_bytes = output.getvalue()
         yield ExtractedImage(image=composite_bytes, extension="png", page=page_num + 1)
 
 
