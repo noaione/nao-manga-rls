@@ -34,7 +34,7 @@ from ...common import ChapterRange, RegexCollection, format_daiz_like_filename, 
 from ._base import ActionKind, BaseAction, WorkerContext
 
 if TYPE_CHECKING:
-    from .. import ChapterConfig, OrchestratorConfig, VolumeConfig
+    from .. import OrchestratorConfig, VolumeConfig
 
 
 __all__ = (
@@ -168,6 +168,7 @@ class ActionRename(BaseAction):
         # Make into chapter range
         meta_namings = volume.meta_name_maps
         renaming_maps: dict[str, Path] = {}  # This is new name -> old path (yeah)
+        all_chapters = volume.to_chapter_ranges()
         for image, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             # console.status(f"Renaming with daiz-like format: {image.name}/{total_img}...")
             title_match = cmx_re.match(image.name)
@@ -181,14 +182,14 @@ class ActionRename(BaseAction):
             if page_back is not None:
                 page_num = f"{page_num}-{page_back}"
 
-            selected_range: "ChapterConfig" | None = None
-            for chapter in volume.chapters:
-                if chapter.end is None:
-                    if page_num_int >= chapter.start:
+            selected_range: ChapterRange | None = None
+            for chapter in all_chapters:
+                if chapter.is_single:
+                    if page_num_int >= chapter.range[0]:
                         selected_range = chapter
                         break
                 else:
-                    if chapter.start <= page_num_int <= chapter.end:
+                    if page_num_int in chapter.range:
                         selected_range = chapter
                         break
 
@@ -204,7 +205,7 @@ class ActionRename(BaseAction):
                 manga_title=self.title or orchestrator.title,
                 manga_publisher=orchestrator.publisher,
                 manga_year=volume.year,
-                chapter_info=selected_range.to_chapter_range(),
+                chapter_info=selected_range,
                 page_number=page_num,
                 publication_type=volume.publication,
                 ripper_credit=orchestrator.credit,

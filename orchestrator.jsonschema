@@ -916,7 +916,7 @@
         },
         "ChapterConfig": {
             "additionalProperties": false,
-            "description": "The configuration for a chapter",
+            "description": "The configuration for a chapter\n\nThe ending page is implied to of the next chapter's starting page - 1 if not specified.",
             "properties": {
                 "number": {
                     "anyOf": [
@@ -946,19 +946,6 @@
                     "minimum": 0,
                     "title": "Starting Page Number",
                     "type": "integer"
-                },
-                "end": {
-                    "anyOf": [
-                        {
-                            "minimum": 1,
-                            "type": "integer"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
-                    "title": "Ending Page Number"
                 }
             },
             "required": [

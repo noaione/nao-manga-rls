@@ -50,6 +50,8 @@ def is_publication_type(pub_type: str) -> str:
 class ChapterConfig(BaseModel):
     """
     The configuration for a chapter
+
+    The ending page is implied to of the next chapter's starting page - 1 if not specified.
     """
 
     model_config = ConfigDict(
@@ -65,34 +67,6 @@ class ChapterConfig(BaseModel):
     """The title of the chapter, this is optional"""
     start: int = Field(..., ge=0, title="Starting Page Number")
     """The starting page number of the chapter"""
-    end: int | None = Field(None, ge=1, title="Ending Page Number")
-    """
-    The ending page number of the chapter, this is optional.
-    If not provided it would be the same as start till the end of the volume
-    """
-
-    @model_validator(mode="after")
-    def check_end(self) -> Self:
-        if self.end is not None and self.end < self.start:
-            raise PydanticCustomError(
-                "end_before_start",
-                "Chapter end page {end} cannot be before start page {start}",
-                {
-                    "end": self.end,
-                    "start": self.start,
-                },
-            )
-        return self
-
-    def to_chapter_range(self) -> ChapterRange:
-        """
-        Convert to ChapterRange
-        """
-
-        ranges = [int(self.start)]
-        if self.end is not None:
-            ranges = list(range(self.start, self.end + 1))
-        return ChapterRange(number=self.number, name=self.title, range=ranges, is_single=self.end is None)
 
 
 class MetadataNamingConfig(BaseModel):
@@ -216,38 +190,51 @@ class VolumeConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_chapters_pages(self) -> Self:
-        # Check if there is more than one chapter with no `end` page
-        no_end_count = sum(1 for ch in self.chapters if ch.end is None)
-        if no_end_count > 1:
+        # Renamer only require the start page and not end page
+        # The `end` page is implied to be the next chapter's start - 1
+        chapter_starts = [ch.start for ch in self.chapters]
+        if len(chapter_starts) != len(set(chapter_starts)):
             raise PydanticCustomError(
-                "multiple_no_end_chapters",
-                "There can only be one chapter with no end page, found {cnt}",
-                {"cnt": no_end_count},
+                "duplicate_chapter_start_page",
+                "Duplicate chapter start page found in chapters",
             )
-
-        # Check if chapters have overlapping pages
-        page_ranges = []
-        for ch in self.chapters:
-            end_page = ch.end if ch.end is not None else float("inf")
-            page_ranges.append((ch.start, end_page))
-        page_ranges.sort()
-        for i in range(1, len(page_ranges)):
-            if page_ranges[i][0] <= page_ranges[i - 1][1]:
-                raise PydanticCustomError(
-                    "overlapping_chapter_pages",
-                    "Chapters have overlapping pages: {r1} and {r2}",
-                    {"r1": page_ranges[i - 1], "r2": page_ranges[i]},
-                )
-
-        # Check for possibly missing pages between chapters
-        for i in range(1, len(page_ranges)):
-            if page_ranges[i][0] > page_ranges[i - 1][1] + 1:
-                raise PydanticCustomError(
-                    "missing_chapter_pages",
-                    "There are possibly missing pages between chapters: {r1} and {r2}",
-                    {"r1": page_ranges[i - 1], "r2": page_ranges[i]},
-                )
+        # Check chapter start pages are in ascending order
+        if chapter_starts != sorted(chapter_starts):
+            raise PydanticCustomError(
+                "unsorted_chapter_start_pages",
+                "Chapter start pages must be in ascending order",
+            )
         return self
+
+    def to_chapter_ranges(self) -> list[ChapterRange]:
+        """
+        Convert to a list of ChapterRange
+
+        This would be guaranted to have non-overlapping and sorted page ranges.
+        """
+
+        ranges: list[ChapterRange] = []
+        # We do this reversed to easily get the end page of each chapter
+        for idx in range(len(self.chapters) - 1, -1, -1):
+            ch = self.chapters[idx]
+            start_page = ch.start
+            end_page = None
+            if idx + 1 < len(self.chapters):
+                end_page = self.chapters[idx + 1].start - 1
+            if end_page is not None:
+                page_range = list(range(start_page, end_page + 1))
+            else:
+                page_range = [start_page]
+            ranges.insert(
+                0,
+                ChapterRange(
+                    number=ch.number,
+                    name=ch.title,
+                    range=page_range,
+                    is_single=end_page is None,
+                ),
+            )
+        return ranges
 
 
 class OrchestratorConfig(BaseModel):

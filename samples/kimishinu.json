@@ -43,26 +43,22 @@
                 {
                     "number": 1,
                     "title": "Nice to Meet You",
-                    "start": 0,
-                    "end": 42
+                    "start": 0
                 },
                 {
                     "number": 2,
                     "title": "Kiss",
-                    "start": 43,
-                    "end": 76
+                    "start": 43
                 },
                 {
                     "number": 3,
                     "title": "I Am Me",
-                    "start": 77,
-                    "end": 102
+                    "start": 77
                 },
                 {
                     "number": 4,
                     "title": "Yeah, It Hurts",
-                    "start": 103,
-                    "end": 132
+                    "start": 103
                 },
                 {
                     "number": 5,
@@ -109,32 +105,27 @@
                 {
                     "number": 6,
                     "title": "Friends",
-                    "start": 0,
-                    "end": 34
+                    "start": 0
                 },
                 {
                     "number": 7,
                     "title": "Accomplices",
-                    "start": 35,
-                    "end": 64
+                    "start": 35
                 },
                 {
                     "number": 8,
                     "title": "An Enduring Tale",
-                    "start": 65,
-                    "end": 92
+                    "start": 65
                 },
                 {
                     "number": 9,
                     "title": "You'll Understand One Day",
-                    "start": 93,
-                    "end": 126
+                    "start": 93
                 },
                 {
                     "number": 10,
                     "title": "A Never-ending Night",
-                    "start": 127,
-                    "end": 159
+                    "start": 127
                 },
                 {
                     "number": 10.5,
@@ -180,26 +171,22 @@
                 {
                     "number": 11,
                     "title": "Welcome Back",
-                    "start": 0,
-                    "end": 34
+                    "start": 0
                 },
                 {
                     "number": 12,
                     "title": "Motive",
-                    "start": 35,
-                    "end": 64
+                    "start": 35
                 },
                 {
                     "number": 13,
                     "title": "After the Tears",
-                    "start": 65,
-                    "end": 100
+                    "start": 65
                 },
                 {
                     "number": 14,
                     "title": "I'm Not Scared Anymore",
-                    "start": 101,
-                    "end": 132
+                    "start": 101
                 },
                 {
                     "number": 14.5,
@@ -247,32 +234,27 @@
                 {
                     "number": 15,
                     "title": "I'm Back",
-                    "start": 0,
-                    "end": 36
+                    "start": 0
                 },
                 {
                     "number": 16,
                     "title": "A Choice",
-                    "start": 37,
-                    "end": 66
+                    "start": 37
                 },
                 {
                     "number": 17,
                     "title": "My Magic",
-                    "start": 67,
-                    "end": 98
+                    "start": 67
                 },
                 {
                     "number": 17.5,
                     "title": "A Dream",
-                    "start": 99,
-                    "end": 106
+                    "start": 99
                 },
                 {
                     "number": 18,
                     "title": "A Patch of Sunlight",
-                    "start": 107,
-                    "end": 132
+                    "start": 107
                 },
                 {
                     "number": 19,
@@ -319,26 +301,22 @@
                 {
                     "number": 20,
                     "title": "I'm Okay",
-                    "start": 0,
-                    "end": 38
+                    "start": 0
                 },
                 {
                     "number": 21,
                     "title": "Innocence",
-                    "start": 39,
-                    "end": 68
+                    "start": 39
                 },
                 {
                     "number": 22,
                     "title": "A Lost Child",
-                    "start": 69,
-                    "end": 96
+                    "start": 69
                 },
                 {
                     "number": 23,
                     "title": "On My Own",
-                    "start": 97,
-                    "end": 130
+                    "start": 97
                 },
                 {
                     "number": 24,
