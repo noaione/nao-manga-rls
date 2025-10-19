@@ -507,6 +507,13 @@
                     ],
                     "default": null,
                     "title": "Source Directory"
+                },
+                "compress_level": {
+                    "default": 7,
+                    "maximum": 9,
+                    "minimum": 0,
+                    "title": "Compression Level",
+                    "type": "integer"
                 }
             },
             "title": "nmanga Orchestrator - Pack Action",
