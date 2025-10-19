@@ -120,12 +120,18 @@ def orchestrator_generate(
         ],
     )
 
+    # Pre-serialize to include schema info
+    data = config.model_dump(exclude_none=True)
+    initial_data = {
+        "$schema": "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema"
+    }
+    # Merge with data, so this will make $schema be first
+    data = {**initial_data, **data}
+
+    dumped_data = json.dumps(data, indent=4, cls=CustomJSONEncoder)
+
     with output_file.open("w", encoding="utf-8") as f:
-        data = config.model_dump(exclude_none=True)
-        data["$schema"] = (
-            "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema"
-        )
-        f.write(json.dumps(data, indent=4))
+        f.write(dumped_data)
 
     console.info(f"Generated default orchestrator configuration to {output_file}")
     return 0

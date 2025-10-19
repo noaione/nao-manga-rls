@@ -7,7 +7,9 @@ The orchestrator module for nmanga, handling complex workflows and actions.
 :license: MIT, see LICENSE for more details.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Literal
@@ -29,6 +31,7 @@ __all__ = (
     "SkipActionConfig",
     "SkipActionKind",
     "VolumeConfig",
+    "CustomJSONEncoder",
 )
 
 
@@ -352,3 +355,12 @@ class OrchestratorConfig(BaseModel):
                 "Actions and action names length mismatch",
             )
         return self
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Enum):
+            return o.value
+        elif isinstance(o, Path):
+            return str(o)
+        return super().default(o)
