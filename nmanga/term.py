@@ -87,15 +87,24 @@ class Console:
 
     def info(self, *args, **kwargs):
         space = " " * self.shift_space
-        self.console.print(self.__wrap_theme("INFO", "info"), space, *args, **kwargs)
+        if not space:
+            self.console.print(self.__wrap_theme("INFO", "info"), *args, **kwargs)
+        else:
+            self.console.print(self.__wrap_theme("INFO", "info"), space, *args, **kwargs)
 
     def warning(self, *args, **kwargs):
         space = " " * self.shift_space
-        self.console.print(self.__wrap_theme("WARN", "warning"), space, *args, **kwargs)
+        if not space:
+            self.console.print(self.__wrap_theme("WARN", "warning"), *args, **kwargs)
+        else:
+            self.console.print(self.__wrap_theme("WARN", "warning"), space, *args, **kwargs)
 
     def error(self, *args, **kwargs):
         space = " " * self.shift_space
-        self.console.print(self.__wrap_theme("ERROR", "error"), space, *args, **kwargs)
+        if not space:
+            self.console.print(self.__wrap_theme("ERROR", "error"), *args, **kwargs)
+        else:
+            self.console.print(self.__wrap_theme("ERROR", "error"), space, *args, **kwargs)
 
     def __beautiful_status(self, message: str, **kwargs_spinner_style):
         if not self._status:

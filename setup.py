@@ -71,7 +71,7 @@ setup_args = dict(
         "Topic :: Utilities",
     ],
     keywords="manga colorlevel spreads auto-splitting processing cbz comic",
-    packages=["nmanga", "nmanga.cli", "nmanga.templates"],
+    packages=["nmanga", "nmanga.cli", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"],
     install_requires=requirements,
     extras_require={"dev": dev_requirements},
     project_urls={
