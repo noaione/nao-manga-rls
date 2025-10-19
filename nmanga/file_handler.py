@@ -248,6 +248,9 @@ def collect_all_comics(folder: Path):
     for file in folder.glob("*.cb[z|r|7]"):
         if is_archive(file):
             yield file
+    for thing in folder.iterdir():
+        if thing.is_dir():
+            yield thing
 
 
 AccessorType: TypeAlias = zipfile.ZipFile | rarfile.RarFile | py7zr.SevenZipFile | tarfile.TarFile | Path

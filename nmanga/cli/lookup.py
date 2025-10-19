@@ -57,23 +57,54 @@ def lookup_group():
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive()
+@click.option(
+    "-r",
+    "--recursive",
+    "recursive",
+    is_flag=True,
+    default=False,
+    help="Recursively lookup in subdirectories (only when a folder is given)",
+)
 @time_program
-def lookup_imagesize(path_or_archive: Path):
+def lookup_imagesize(path_or_archive: Path, recursive: bool):
     """
     Lookup image sizes inside a manga archive or folder
     """
 
-    console.info(f"Looking up image sizes in {path_or_archive}...")
-    grouped_size = {}
-    with file_handler.MangaArchive(path_or_archive) as archive:
-        for image, _ in archive:
-            img_read = archive.read(image)
-            with Image.open(BytesIO(img_read)) as img:
-                img_size = f"{img.width}x{img.height}"
-                if img_size not in grouped_size:
-                    grouped_size[img_size] = 0
-                grouped_size[img_size] += 1
+    if recursive and not path_or_archive.is_dir():
+        console.warning("The --recursive option is only applicable when a folder is given.")
+        raise click.UsageError("The --recursive option is only applicable when a folder is given.")
 
-    console.info("Found the following image sizes:")
-    for img_size, count in grouped_size.items():
-        console.info(f" - {img_size}: {count} images")
+    candidates: list[Path] = []
+    if not recursive:
+        console.info(f"Looking up image sizes in {path_or_archive}...")
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively looking up image sizes in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to lookup.")
+
+    if not candidates:
+        console.warning("No valid archives or folders found to lookup.")
+        return
+
+    for candidate in candidates:
+        if recursive:
+            console.info(f"Processing: {candidate}")
+        grouped_size: dict[str, str] = {}
+        with file_handler.MangaArchive(candidate) as archive:
+            for image, _ in archive:
+                img_read = archive.read(image)
+                with Image.open(BytesIO(img_read)) as img:
+                    img_size = f"{img.width}x{img.height}"
+                    if img_size not in grouped_size:
+                        grouped_size[img_size] = []
+                    grouped_size[img_size].append(image.filename)
+
+        console.info("Found the following image sizes:")
+        for img_size, image_list in grouped_size.items():
+            console.info(f" - {img_size}: {len(image_list)} images")
+            if console.debugged:
+                for img_name in image_list:
+                    console.debug(f"    - {img_name}")
