@@ -39,6 +39,7 @@ from .cli.config import cli_config
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.image_optimizer import image_jpegify, image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
+from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.orchestrator import orchestractor
@@ -131,6 +132,7 @@ main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 main.add_command(pdf_manager)
 main.add_command(orchestractor)
+main.add_command(lookup_group)
 main.add_command(show_version)
 
 
