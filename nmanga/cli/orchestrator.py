@@ -301,16 +301,12 @@ def orchestrator_validate(
         console.info(f"     - Colors: Page {', Page '.join(map(str, volume.colors)) if volume.colors else 'None'}")
         console.info(f"     - Spreads: {len(volume.spreads) if volume.spreads else 0} total")
         console.info(f"     - Chapters: {len(volume.chapters)} total")
-        for chapter in volume.chapters:
+        chapter_ranges = volume.to_chapter_ranges()
+        for chapter in chapter_ranges:
             console.info(f"       - Chapter {chapter.number}")
-            chapter_page = f"{chapter.start:03d}-"
-            if chapter.end is not None:
-                chapter_page += f"{chapter.end:03d}"
-            else:
-                chapter_page += "end"
-            console.info(f"        - Page number: p{chapter_page}")
-            if chapter.title:
-                console.info(f"        - Title: {chapter.title}")
+            console.info(f"        - Page number: p{chapter.page_num_str}")
+            if chapter.name:
+                console.info(f"        - Title: {chapter.name}")
         if volume.extra_text:
             console.info(f"     - Extra Text: {volume.extra_text}")
         if volume.skip_actions:

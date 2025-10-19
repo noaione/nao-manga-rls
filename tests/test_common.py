@@ -861,10 +861,10 @@ class TestChapterRange:
     _CHAPTER_SPLIT = TestFormatDaizLikeFilename._CURRENT_SPLIT_A
 
     def test_repr(self):
-        assert repr(self._CHAPTER) == "<ChapterRange c001 - Introduction>"
+        assert repr(self._CHAPTER) == "<ChapterRange c001 - Introduction [p000-end]>"
 
     def test_repr_extra(self):
-        assert repr(self._CHAPTER_EXTRA) == "<ChapterRange c1.5 - Extra Story>"
+        assert repr(self._CHAPTER_EXTRA) == "<ChapterRange c1.5 - Extra Story [p000-051]>"
 
     def test_eq(self):
         _CHAPTER_ONE = ChapterRange(1, "Unknown", [0, 41], True)

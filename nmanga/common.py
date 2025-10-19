@@ -112,15 +112,20 @@ class ChapterRange:
         self.is_single = is_single
 
     def __repr__(self):
-        page_range = f"{self.range[0]:03d}-{self.range[-1]:03d}" if not self.is_single else f"{self.range[0]:03d}-end"
         if isinstance(self.number, float):
-            return f"<ChapterRange c{self.number} - {self.name} p{page_range}>"
-        return f"<ChapterRange c{self.number:03d} - {self.name} p{page_range}>"
+            return f"<ChapterRange c{self.number} - {self.name} [p{self.page_num_str}]>"
+        return f"<ChapterRange c{self.number:03d} - {self.name} [p{self.page_num_str}]>"
 
     def __eq__(self, other: int | float | "ChapterRange"):
         if isinstance(other, ChapterRange):
             other = other.number
         return self.number == other
+
+    @property
+    def page_num_str(self) -> str:
+        if self.is_single:
+            return f"{self.range[0]:03d}-end"
+        return f"{self.range[0]:03d}-{self.range[-1]:03d}"
 
     @property
     def bnum(self):
