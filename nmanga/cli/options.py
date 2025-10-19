@@ -152,6 +152,15 @@ output_mode = click.option(
     default=ExporterType.cbz,
     show_default=True,
 )
+compression_level = click.option(
+    "-cl",
+    "--compression-level",
+    "compression_level",
+    type=click.IntRange(min=0, max=9),
+    help="The compression level to use for packing the archive (0-9)",
+    default=7,
+    show_default=True,
+)
 magick_path = click.option(
     "-me",
     "--magick-exec",

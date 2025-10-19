@@ -106,8 +106,9 @@ class MangaExporter:
 
 class ArchiveMangaExporter(MangaExporter):
     _file_name: str
+    _compress_level: int
 
-    def __init__(self, file_name: str, output_directory: Path):
+    def __init__(self, file_name: str, output_directory: Path, *, compression_level: int = 5):
         # Check if class used is the child class and not this class
         if self.__class__ == ArchiveMangaExporter:
             raise TypeError("Cannot instantiate ArchiveMangaExporter directly.")
@@ -115,15 +116,20 @@ class ArchiveMangaExporter(MangaExporter):
         super().__init__(output_directory)
 
         self._file_name = file_name
+        self._compress_level = compression_level
 
 
 class CBZMangaExporter(ArchiveMangaExporter):
     TYPE = ExporterType.cbz
 
-    def __init__(self, file_name: str, output_directory: Path):
-        super().__init__(file_name, output_directory)
+    def __init__(self, file_name: str, output_directory: Path, *, compression_level: int = 5):
+        assert 0 <= compression_level <= 9, "Compression level must be between 0 and 9."
 
-        self._target_cbz: ZipFile = ZipFile(self._out_dir / f"{file_name}.cbz", "w", compression=ZIP_DEFLATED)
+        super().__init__(file_name, output_directory, compression_level=compression_level)
+
+        self._target_cbz: ZipFile = ZipFile(
+            self._out_dir / f"{file_name}.cbz", "w", compression=ZIP_DEFLATED, compresslevel=compression_level
+        )
 
     def is_existing(self):
         parent_dir = self._out_dir.parent
@@ -149,10 +155,16 @@ class CBZMangaExporter(ArchiveMangaExporter):
 class CB7MangaExporter(ArchiveMangaExporter):
     TYPE = ExporterType.cb7
 
-    def __init__(self, file_name: str, output_directory: Path):
-        super().__init__(file_name, output_directory)
+    def __init__(self, file_name: str, output_directory: Path, *, compression_level: int = 5):
+        super().__init__(file_name, output_directory, compression_level=compression_level)
 
-        self._target_cb7: py7zr.SevenZipFile = py7zr.SevenZipFile(self._out_dir / f"{file_name}.cb7", "w")
+        filters = [
+            # We use LZMA2 only since you really should pre-optimize the images before putting them in CB7
+            {"id": py7zr.FILTER_LZMA2, "preset": compression_level | py7zr.PRESET_EXTREME},
+        ]
+        self._target_cb7: py7zr.SevenZipFile = py7zr.SevenZipFile(
+            self._out_dir / f"{file_name}.cb7", "w", filters=filters
+        )
 
     def is_existing(self):
         parent_dir = self._out_dir.parent
@@ -175,10 +187,12 @@ class CB7MangaExporter(ArchiveMangaExporter):
 class EPUBMangaExporter(ArchiveMangaExporter):
     TYPE = ExporterType.epub
 
-    def __init__(self, file_name: str, output_directory: Path, *, manga_title: str):
-        super().__init__(file_name, output_directory)
+    def __init__(self, file_name: str, output_directory: Path, *, manga_title: str, compression_level: int = 5):
+        super().__init__(file_name, output_directory, compression_level=compression_level)
 
-        self._target_epub = ZipFile(self._out_dir / f"{file_name}.epub", "w", compression=ZIP_DEFLATED)
+        self._target_epub = ZipFile(
+            self._out_dir / f"{file_name}.epub", "w", compression=ZIP_DEFLATED, compresslevel=compression_level
+        )
         self._meta_injected: bool = False
         self._page_counter = 1
         self._manga_title = manga_title
@@ -348,15 +362,16 @@ def exporter_factory(
     file_name: str,
     output_directory: Path,
     mode: str | ExporterType = ExporterType.cbz,
+    compression_level: int = 5,
     **kwargs,
 ):
     if isinstance(mode, str):
         mode = ExporterType.from_choice(mode)
     if mode == ExporterType.cbz:
-        return CBZMangaExporter(file_name, output_directory)
+        return CBZMangaExporter(file_name, output_directory, compression_level=compression_level)
     elif mode == ExporterType.cb7:
-        return CB7MangaExporter(file_name, output_directory)
+        return CB7MangaExporter(file_name, output_directory, compression_level=compression_level)
     elif mode == ExporterType.epub:
-        return EPUBMangaExporter(file_name, output_directory, **kwargs)
+        return EPUBMangaExporter(file_name, output_directory, compression_level=compression_level, **kwargs)
     else:
         return MangaExporter(output_directory)

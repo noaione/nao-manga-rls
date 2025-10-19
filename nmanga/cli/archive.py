@@ -66,6 +66,7 @@ TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
 @options.rls_extra_metadata
 @options.use_bracket_type
 @options.output_mode
+@options.compression_level
 @check_config_first
 @time_program
 def pack_releases(
@@ -81,6 +82,7 @@ def pack_releases(
     rls_extra_metadata: str | None,
     bracket_type: Literal["square", "round", "curly"],
     output_mode: exporter.ExporterType,
+    compression_level: int,
 ):
     """
     Pack a release to an archive.
@@ -121,7 +123,9 @@ def pack_releases(
     )
 
     parent_dir = path_or_archive.parent
-    arc_target = exporter.exporter_factory(archive_filename, parent_dir, output_mode, manga_title=manga_title)
+    arc_target = exporter.exporter_factory(
+        archive_filename, parent_dir, output_mode, compression_level=compression_level, manga_title=manga_title
+    )
 
     if output_mode == exporter.ExporterType.epub:
         console.warning("Packing as EPUB, this will be a slower operation because of size checking!")
@@ -160,6 +164,7 @@ def pack_releases(
 )
 @options.manga_volume
 @options.rls_credit
+@options.compression_level
 @check_config_first
 @time_program
 def pack_releases_epub_mode(
@@ -168,6 +173,7 @@ def pack_releases_epub_mode(
     epub_source: str,
     manga_volume: int | float | None,
     rls_credit: str,
+    compression_level: int,
 ):
     """
     Pack a release to an epub archive.
@@ -195,7 +201,7 @@ def pack_releases_epub_mode(
 
     parent_dir = path_or_archive.parent
     save_target = parent_dir / f"{actual_filename}.epub"
-    epub_target = ZipFile(save_target, "w", ZIP_DEFLATED)
+    epub_target = ZipFile(save_target, "w", ZIP_DEFLATED, compresslevel=compression_level)
     epub_target.writestr("mimetype", "application/epub+zip", compress_type=ZIP_STORED)
 
     # Check valid

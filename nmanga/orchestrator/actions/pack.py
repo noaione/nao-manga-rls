@@ -57,6 +57,8 @@ class ActionPack(BaseAction):
     """The output mode to use for packing the archive"""
     source_dir: Path | None = Field(None, title="Source Directory")
     """The source directory to pack, this would use the last used base path if not provided"""
+    compress_level: int = Field(7, title="Compression Level", ge=0, le=9)
+    """The compression level to use for packing the archive, from 0 (no compression) to 9 (maximum compression)"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -86,6 +88,7 @@ class ActionPack(BaseAction):
             archive_filename,
             parent_dir,
             mode=self.output_mode,
+            compression_level=self.compress_level,
             manga_title=orchestrator.title,
         )
         if self.output_mode == exporter.ExporterType.epub:

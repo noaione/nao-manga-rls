@@ -65,6 +65,8 @@ class Console:
         self._status: "RichStatus" | None = None
         self.__last_known_status: str | None = None
 
+        self.shift_space = 0
+
     def enable_debug(self):
         self.__debug_mode = True
 
@@ -80,14 +82,20 @@ class Console:
             return f"[{text}]"
         return f"[[{theme}]{text}[/{theme}]]"
 
+    def set_space(self, space: int):
+        self.shift_space = space
+
     def info(self, *args, **kwargs):
-        self.console.print(self.__wrap_theme("INFO", "info"), *args, **kwargs)
+        space = " " * self.shift_space
+        self.console.print(self.__wrap_theme("INFO", "info"), space, *args, **kwargs)
 
     def warning(self, *args, **kwargs):
-        self.console.print(self.__wrap_theme("WARN", "warning"), *args, **kwargs)
+        space = " " * self.shift_space
+        self.console.print(self.__wrap_theme("WARN", "warning"), space, *args, **kwargs)
 
     def error(self, *args, **kwargs):
-        self.console.print(self.__wrap_theme("ERROR", "error"), *args, **kwargs)
+        space = " " * self.shift_space
+        self.console.print(self.__wrap_theme("ERROR", "error"), space, *args, **kwargs)
 
     def __beautiful_status(self, message: str, **kwargs_spinner_style):
         if not self._status:

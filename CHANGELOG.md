@@ -346,3 +346,6 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Move denoise and spreads joiner to the main nmanga module instead of in CLI part only
 - Adjust image gray level peak detection
 - Fix some issues with PDF images extraction and compositing
+- Allow modifying compression level when packing archives
+  - Use `-cl/--compression-level` option in `nmanga pack` and `nmanga packepub`
+  - Alternatively, use `compress_level` in the `pack` orchestrator action
