@@ -339,3 +339,10 @@ Rewritten every thing as a module with `nmanga` namespace.
 ## Unversioned
 **New Features**
 - `nmanga orchestra` - Create/run a JSON file that will run multiple functions in nmanga together
+- `nmanga lookup imagesize` - Lookup image sizes in an archive or folder
+
+**Changes**
+- Improve manual split filename matcher
+- Move denoise and spreads joiner to the main nmanga module instead of in CLI part only
+- Adjust image gray level peak detection
+- Fix some issues with PDF images extraction and compositing
