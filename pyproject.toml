@@ -91,6 +91,11 @@ extend-exclude = [
 target-version = "py310"
 src = ["nmanga", "tests", "ci"]
 
+[tool.ruff.format]
+preview = true
+indent-style = "space"
+quote-style = "double"
+
 [tool.ruff.lint]
 select = [
     "E",
