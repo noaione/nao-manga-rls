@@ -169,11 +169,10 @@ class ActionPosterize(BaseAction):
                 context.terminal.status(f"Posterizing images... [{idx + 1}/{total_images}]")
                 results.append(_runner_posterize_threaded(image, output_dir, self, imagick, is_color, is_skip_action))
 
-        context.terminal.stop_status(f"Posterized {total_images} images.")
+        context.terminal.stop_status(f"Posterized {total_images} images in {context.current_dir}")
         posterized_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
         copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
         ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
-        context.terminal.stop_status(f"Processed {total_images} images with autolevel2.")
         if copied_count > 0:
             context.terminal.info(f" Copied {copied_count} images without posterizing.")
         if posterized_count > 0:

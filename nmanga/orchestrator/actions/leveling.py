@@ -206,11 +206,11 @@ class ActionAutolevel(BaseAction):
                 context.terminal.status(f"Auto-leveling images... [{idx + 1}/{total_images}]")
                 results.append(_runner_autolevel2_threaded(image, output_dir, self, is_color, is_skip_action))
 
+        context.terminal.stop_status(f"Auto-leveled {total_images} images in {context.current_dir}")
         autolevel_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
         copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
         grayscaled_count = sum(1 for result in results if result == ThreadedResult.GRAYSCALED)
         ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
-        context.terminal.stop_status(f"Auto-leveled {total_images} images.")
         if copied_count > 0:
             context.terminal.info(f" Copied {copied_count} images without autolevel.")
         if autolevel_count > 0:

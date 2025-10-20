@@ -35,7 +35,8 @@ from pydantic import ConfigDict, Field
 from ... import file_handler
 from ...common import RegexCollection, threaded_worker
 from ...term import get_console
-from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
+from ..common import SkipActionKind, perform_skip_action
+from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
@@ -108,15 +109,20 @@ def _runner_jpegify_threaded(
     output_dir: Path,
     cjpegli: str,
     quality: int,
-) -> None:
+    skip_action: SkipActionKind | None = None,
+) -> ThreadedResult:
     console = get_console()
+    if skip_action is not None:
+        perform_skip_action(img_path, output_dir, skip_action, console)
+        return ThreadedResult.COPIED if skip_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     dest_path = output_dir / f"{img_path.stem}.jpg"
     if dest_path.exists():
         console.warning(f"Skipping existing file: {dest_path}")
-        return
+        return ThreadedResult.COPIED
 
     cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
     sp.run(cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+    return ThreadedResult.PROCESSED
 
 
 class ActionColorJpegify(BaseAction):
@@ -174,7 +180,7 @@ class ActionColorJpegify(BaseAction):
 
         page_re = RegexCollection.page_re()
 
-        image_candidates: list[Path] = []
+        image_candidates: list[tuple[Path, SkipActionKind | None]] = []
         for img_path, _, _, _ in file_handler.collect_image_from_folder(source_dir):
             title_match = page_re.match(img_path.stem)
             if title_match is None:
@@ -182,7 +188,10 @@ class ActionColorJpegify(BaseAction):
                 continue
             p01 = int(title_match.group("a"))
             if p01 in volume.colors:
-                image_candidates.append(img_path)
+                skip_action = None
+                if context.skip_action is not None and p01 in context.skip_action.pages:
+                    skip_action = context.skip_action.action
+                image_candidates.append((img_path, skip_action))
 
         if not image_candidates:
             context.terminal.warning(f"No color images found in {source_dir}, skipping...")
@@ -192,19 +201,29 @@ class ActionColorJpegify(BaseAction):
         quality = max(0, min(100, self.quality))
 
         context.terminal.status(f"Converting {total_images} images to JPEG with cjpegli...")
+        results: list[ThreadedResult] = []
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                pool.starmap(
+                results = pool.starmap(
                     _runner_jpegify_threaded,
-                    [(image, output_dir, cjpegli, quality) for image in image_candidates],
+                    [(image, output_dir, cjpegli, quality, skip_action) for image, skip_action in image_candidates],
                 )
         else:
-            for idx, image in enumerate(image_candidates):
+            for idx, (image, skip_action) in enumerate(image_candidates):
                 context.terminal.status(f"Converting images to JPEG... [{idx + 1}/{total_images}]")
-                _runner_jpegify_threaded(image, output_dir, cjpegli, quality)
+                results.append(_runner_jpegify_threaded(image, output_dir, cjpegli, quality, skip_action))
 
         context.terminal.stop_status(f"Converted {total_images} images to JPEG in {output_dir}")
+        jpegified_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
+        ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
+        if copied_count > 0:
+            context.terminal.info(f" Copied {copied_count} colored images without jpeg-ifying.")
+        if jpegified_count > 0:
+            context.terminal.info(f" JPEG-ified {jpegified_count} color images.")
+        if ignored_count > 0:
+            context.terminal.info(f" Ignored {ignored_count} colored images.")
 
     def get_tools(self):
         """
