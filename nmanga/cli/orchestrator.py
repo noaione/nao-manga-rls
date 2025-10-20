@@ -87,14 +87,14 @@ def orchestrator_generate(
     config = OrchestratorConfig(
         title=manga_title,
         publisher=manga_publisher,
-        base_path=Path("source"),
+        base_path="source",
         credit=rls_credit,
         email=rls_email,
         bracket_type=bracket_type,
         volumes=[
             VolumeConfig(
                 number=1,
-                path=Path("v01"),
+                path="v01",
                 chapters=[],
             )  # type: ignore
         ],
@@ -194,9 +194,9 @@ def orchestrator_runner(
     console.info(f"Detected tools: {', '.join(toolsets.keys()) if toolsets else 'None'}")
     console.info(f"Detected packages: {', '.join(tested_pkg) if tested_pkg else 'None'}")
 
-    input_dir = full_base / config.base_path
+    input_dir = full_base / Path(config.base_path)
     for volume in config.volumes:
-        chapter_path = input_dir / volume.path
+        chapter_path = input_dir / Path(volume.path)
         if not chapter_path.exists():
             console.warning(f"Volume path {chapter_path} does not exist, skipping...")
             continue
@@ -286,6 +286,9 @@ def orchestrator_validate(
         console.info(f"     - Oneshot: {'Yes' if volume.oneshot else 'No'}")
         console.info(f"     - Colors: Page {', Page '.join(map(str, volume.colors)) if volume.colors else 'None'}")
         console.info(f"     - Spreads: {len(volume.spreads) if volume.spreads else 0} total")
+        for first, second in volume.spreads:
+            total_spreads = len(range(first, second + 1))
+            console.info(f"       - Spread Pages: p{first:03d}-{second:03d} ({total_spreads} pages)")
         console.info(f"     - Chapters: {len(volume.chapters)} total")
         chapter_ranges = volume.to_chapter_ranges()
         for chapter in chapter_ranges:
@@ -302,10 +305,10 @@ def orchestrator_validate(
 
     console.enter()
     console.info(f" - Actions: {len(config.actions)} actions defined")
-    input_dir = full_base / config.base_path
+    input_dir = full_base / Path(config.base_path)
     # Use first volume
     first_vol = config.volumes[0]
-    chapter_path = input_dir / first_vol.path
+    chapter_path = input_dir / Path(first_vol.path)
 
     context = WorkerContext(
         root_dir=full_base,

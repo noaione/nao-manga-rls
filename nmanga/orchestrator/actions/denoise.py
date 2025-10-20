@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from PIL import Image
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, FilePath
 
 from ... import file_handler
 from ...common import RegexCollection
@@ -56,9 +56,9 @@ class ActionDenoise(BaseAction):
 
     kind: Literal[ActionKind.DENOISE] = Field(ActionKind.DENOISE, title="Denoise Images Action")
     """The kind of action"""
-    model: Path = Field(..., title="The ONNX Model Path")
+    model: FilePath = Field(..., title="The ONNX Model Path")
     """The path to the ONNX model"""
-    base_path: Path = Field(Path("denoised"), title="Output Base Path")
+    base_path: str = Field("denoised", title="Output Base Path")
     """The base path to save the denoised images to"""
     device_id: int = Field(0, ge=0, title="Device ID")
     """The device ID to use for denoising"""
@@ -81,7 +81,7 @@ class ActionDenoise(BaseAction):
         """
 
         # Prepare
-        output_dir = context.root_dir / self.base_path / volume.path
+        output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
 
         if context.dry_run:
             context.terminal.info(f"- Model Path: {self.model}")

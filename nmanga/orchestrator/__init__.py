@@ -117,7 +117,7 @@ class VolumeConfig(BaseModel):
         validate_default=True,
     )
 
-    path: Path = Field(..., title="Volume Directory")
+    path: str = Field(..., title="Volume Directory")
     """The directory of the volume, relative to the base_path"""
     number: int | float = Field(..., title="Volume Number")
     """The volume number, can be float for decimals"""
@@ -279,7 +279,7 @@ class OrchestratorConfig(BaseModel):
 
     This is used in the filename, e.g. [Ripper], (Ripper), {Ripper}
     """
-    base_path: Path = Field(Path("source"), title="Base Path for Volumes")
+    base_path: str = Field("source", title="Base Path for Volumes")
     """The first path to look for volumes, relative to the orchestrator config file"""
     volumes: list[VolumeConfig] = Field(default_factory=list, min_length=1)
     """The list of volumes to process"""

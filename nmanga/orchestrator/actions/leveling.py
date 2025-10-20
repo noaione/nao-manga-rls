@@ -127,7 +127,7 @@ class ActionAutolevel(BaseAction):
 
     kind: Literal[ActionKind.AUTOLEVEL] = Field(ActionKind.AUTOLEVEL, title="Auto Level Images Action")
     """The kind of action"""
-    base_path: Path = Field(Path("leveled"), title="Output Base Path")
+    base_path: str = Field("leveled", title="Output Base Path")
     """The base path to save the leveled images to"""
     upper_limit: int = Field(60, ge=1, le=255, title="Upper Limit for Peak Finding")
     """The upper limit for finding local peaks in the histogram"""
@@ -152,7 +152,7 @@ class ActionAutolevel(BaseAction):
         """
 
         # Prepare
-        output_dir = context.root_dir / self.base_path / volume.path
+        output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
 
         if context.dry_run:
             context.terminal.info(f"- Output Base Path: {self.base_path}")

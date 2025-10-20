@@ -94,7 +94,7 @@ class ActionPosterize(BaseAction):
 
     kind: Literal[ActionKind.POSTERIZE] = Field(ActionKind.POSTERIZE, title="Posterize Images Action")
     """The kind of action"""
-    base_path: Path = Field(Path("posterized"), title="Output Base Path")
+    base_path: str = Field("posterized", title="Output Base Path")
     """The base path to save the posterized images to"""
     bpc: int = Field(4, ge=1, le=8, title="Bits Per Channel", examples=[1, 2, 4, 8])
     """The number of bitdepth to reduce the image to"""
@@ -113,7 +113,7 @@ class ActionPosterize(BaseAction):
         """
 
         # Prepare
-        output_dir = context.root_dir / self.base_path / volume.path
+        output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
 
         if context.dry_run:
             context.terminal.info(f"- Output Base Path: {self.base_path}")

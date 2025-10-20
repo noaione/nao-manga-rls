@@ -46,7 +46,7 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "format": "path",
+                    "default": "leveled",
                     "title": "Output Base Path",
                     "type": "string"
                 },
@@ -138,7 +138,6 @@
                 "base_path": {
                     "anyOf": [
                         {
-                            "format": "path",
                             "type": "string"
                         },
                         {
@@ -156,7 +155,7 @@
                     "type": "integer"
                 },
                 "source_path": {
-                    "format": "path",
+                    "default": "colors",
                     "title": "Source Path",
                     "type": "string"
                 },
@@ -215,12 +214,12 @@
                     "type": "string"
                 },
                 "model": {
-                    "format": "path",
+                    "format": "file-path",
                     "title": "The ONNX Model Path",
                     "type": "string"
                 },
                 "base_path": {
-                    "format": "path",
+                    "default": "denoised",
                     "title": "Output Base Path",
                     "type": "string"
                 },
@@ -363,7 +362,7 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "format": "path",
+                    "default": "colors",
                     "title": "Output Base Path",
                     "type": "string"
                 }
@@ -561,7 +560,7 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "format": "path",
+                    "default": "posterized",
                     "title": "Output Base Path",
                     "type": "string"
                 },
@@ -1177,7 +1176,6 @@
             "description": "The configuration for a volume",
             "properties": {
                 "path": {
-                    "format": "path",
                     "title": "Volume Directory",
                     "type": "string"
                 },
@@ -1373,7 +1371,7 @@
             "type": "string"
         },
         "base_path": {
-            "format": "path",
+            "default": "source",
             "title": "Base Path for Volumes",
             "type": "string"
         },

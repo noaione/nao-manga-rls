@@ -62,7 +62,7 @@ class ActionMoveColor(BaseAction):
 
     kind: Literal[ActionKind.MOVE_COLOR] = Field(ActionKind.MOVE_COLOR, title="Move Color Images Action")
     """The kind of action"""
-    base_path: Path = Field(Path("colors"), title="Output Base Path")
+    base_path: str = Field("colors", title="Output Base Path")
     """The base path to save the color images to"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
@@ -80,7 +80,7 @@ class ActionMoveColor(BaseAction):
             return
 
         cmx_re = RegexCollection.cmx_re()
-        output_dir = context.root_dir / self.base_path / volume.path
+        output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         moved_count = 0
@@ -133,11 +133,11 @@ class ActionColorJpegify(BaseAction):
 
     kind: Literal[ActionKind.COLOR_JPEGIFY] = Field(ActionKind.COLOR_JPEGIFY, title="Jpegify Color Images Action")
     """The kind of action"""
-    base_path: Path | None = Field(None, title="Output Base Path")
+    base_path: str | None = Field(None, title="Output Base Path")
     """The base path to save the JPEG images to, this would use the last used base path if not provided"""
     quality: int = Field(95, ge=1, le=100, title="JPEG Quality")
     """The quality of the output JPEG images"""
-    source_path: Path = Field(Path("colors"), title="Source Path")
+    source_path: str = Field("colors", title="Source Path")
     """The source path to look for images to convert"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
@@ -160,9 +160,9 @@ class ActionColorJpegify(BaseAction):
 
         output_dir = context.current_dir
         if self.base_path is not None:
-            output_dir = context.root_dir / self.base_path / volume.path
+            output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
             output_dir.mkdir(parents=True, exist_ok=True)
-        source_dir = context.root_dir / self.source_path / volume.path
+        source_dir = context.root_dir / Path(self.source_path) / Path(volume.path)
         if not source_dir.exists() or not source_dir.is_dir():
             context.terminal.warning(f"Source path {source_dir} does not exist or is not a directory, skipping...")
             raise RuntimeError("Source path does not exist or is not a directory.")
