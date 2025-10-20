@@ -181,7 +181,7 @@ class ActionSpreads(BaseAction):
 
         current = 1
         total_match_spreads = len(list(exported_images.keys()))
-        context.terminal.status(f"Joining {total_match_spreads} spreads...")
+        context.terminal.status(f"Joining {total_match_spreads} spreads from {context.current_dir}...")
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
@@ -197,7 +197,7 @@ class ActionSpreads(BaseAction):
                 context.terminal.status(f"Joining spreads: {current}/{total_match_spreads} ({spread})...")
                 _runner_image_spreads_threaded(context.current_dir, spread, images, cast(str, imagick), self)
                 current += 1
-        context.terminal.stop_status("Finished joining spreads.")
+        context.terminal.stop_status(f"Joined {total_match_spreads} spreads from {context.current_dir}")
 
         # Make backup folder here
         backup_dir = context.root_dir / "backup" / context.current_dir.name

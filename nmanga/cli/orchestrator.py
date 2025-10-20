@@ -216,6 +216,7 @@ def orchestrator_runner(
             toolsets=toolsets,
         )
 
+        volume_start = time()
         for action_name, action in config.actions_maps.items():
             console.info(f" - Running action {action.kind.name}...")
             start_action = time()
@@ -223,11 +224,15 @@ def orchestrator_runner(
             skip_action = skips_mappings.get(action_name)
             context.set_skip_action(skip_action)
 
+            context.terminal.set_space(3)
             action.run(context, volume, config)
+            context.terminal.set_space(0)
 
             end_action = time()
             console.info(f" - Finished action {action.kind.name} in {end_action - start_action:.2f}s")
             console.enter()
+        volume_end = time()
+        console.info(f"Finished processing volume {volume.number} in {volume_end - volume_start:.2f}s")
     console.info("Orchestrator finished all tasks.")
 
 

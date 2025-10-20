@@ -100,7 +100,7 @@ class ActionMoveColor(BaseAction):
                 shutil.move(img_file, dest_path)
                 moved_count += 1
 
-        context.terminal.stop_status(f"Moved {moved_count} color images to {output_dir}.")
+        context.terminal.stop_status(f"Moved {moved_count} color images to {output_dir}")
 
 
 def _runner_jpegify_threaded(
@@ -204,7 +204,7 @@ class ActionColorJpegify(BaseAction):
                 context.terminal.status(f"Converting images to JPEG... [{idx + 1}/{total_images}]")
                 _runner_jpegify_threaded(image, output_dir, cjpegli, quality)
 
-        context.terminal.stop_status(f"Converted {total_images} images to JPEG in {output_dir}.")
+        context.terminal.stop_status(f"Converted {total_images} images to JPEG in {output_dir}")
 
     def get_tools(self):
         """

@@ -88,6 +88,7 @@ class ActionTagging(BaseAction):
         )
         context.terminal.status(f"Tagging images in {context.current_dir} with exif metadata...")
         inject_metadata(exiftool, context.current_dir, archive_filename, orchestrator.email)
+        context.terminal.stop_status(f"Finished tagging images in {context.current_dir}")
 
     def get_tools(self):
         """

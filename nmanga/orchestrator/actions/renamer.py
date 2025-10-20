@@ -111,7 +111,7 @@ class ActionShiftName(BaseAction):
             total_rename += 1
 
         if should_revert:
-            context.terminal.stop_status(f"Renamed {total_rename} images, reverting...")
+            context.terminal.stop_status(f"Renamed {total_rename} images in {context.current_dir}, reverting...")
             context.terminal.enter()
             context.terminal.status("Reverting all changes...")
             for old_path, new_path in remapped_names:
@@ -119,6 +119,8 @@ class ActionShiftName(BaseAction):
                     new_path.rename(old_path)
             context.terminal.stop_status("Reverted all changes.")
             raise RuntimeError("Shift rename action failed due to filename conflicts.")
+        else:
+            context.terminal.stop_status(f"Renamed {total_rename} images in {context.current_dir}.")
 
 
 class ActionRename(BaseAction):
@@ -255,4 +257,4 @@ class ActionRename(BaseAction):
             if new_path.name == old_path.name:
                 continue
             old_path.rename(new_path)
-        context.terminal.stop_status(f"Renamed {total_img} images.")
+        context.terminal.stop_status(f"Renamed {total_img} images in {context.current_dir}.")

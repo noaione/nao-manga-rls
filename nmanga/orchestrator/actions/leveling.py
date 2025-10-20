@@ -168,8 +168,8 @@ class ActionAutolevel(BaseAction):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         page_re = RegexCollection.page_re()
-        context.terminal.status("Processing images with autolevel...")
 
+        context.terminal.status(f"Processing {context.current_dir} with autolevel...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
         all_images.sort(key=lambda x: x.stem)
@@ -212,13 +212,13 @@ class ActionAutolevel(BaseAction):
         ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
         context.terminal.stop_status(f"Auto-leveled {total_images} images.")
         if copied_count > 0:
-            context.terminal.info(f"Copied {copied_count} images without autolevel.")
+            context.terminal.info(f" Copied {copied_count} images without autolevel.")
         if autolevel_count > 0:
-            context.terminal.info(f"Autoleveled {autolevel_count} images.")
+            context.terminal.info(f" Autoleveled {autolevel_count} images.")
         if grayscaled_count > 0:
-            context.terminal.info(f"Grayscaled {grayscaled_count} images.")
+            context.terminal.info(f" Grayscaled {grayscaled_count} images.")
         if ignored_count > 0:
-            context.terminal.info(f"Ignored {ignored_count} images.")
+            context.terminal.info(f" Ignored {ignored_count} images.")
 
         # Update CWD
         context.update_cwd(output_dir)

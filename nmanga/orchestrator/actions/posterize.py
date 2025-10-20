@@ -131,8 +131,8 @@ class ActionPosterize(BaseAction):
             raise RuntimeError("Spreads action failed due to missing ImageMagick.")
 
         page_re = RegexCollection.page_re()
-        context.terminal.status("Processing images with autolevel...")
 
+        context.terminal.status(f"Processing {context.current_dir} with posterizer...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
         all_images.sort(key=lambda x: x.stem)
@@ -175,11 +175,11 @@ class ActionPosterize(BaseAction):
         ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
         context.terminal.stop_status(f"Processed {total_images} images with autolevel2.")
         if copied_count > 0:
-            context.terminal.info(f"Copied {copied_count} images without posterizing.")
+            context.terminal.info(f" Copied {copied_count} images without posterizing.")
         if posterized_count > 0:
-            context.terminal.info(f"Posterized {posterized_count} images.")
+            context.terminal.info(f" Posterized {posterized_count} images.")
         if ignored_count > 0:
-            context.terminal.info(f"Ignored {ignored_count} images.")
+            context.terminal.info(f" Ignored {ignored_count} images.")
 
         # Update CWD
         context.update_cwd(output_dir)

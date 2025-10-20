@@ -92,7 +92,7 @@ class ActionOptimize(BaseAction):
         cmd = [*base_cmd, folder_text]
         context.terminal.status(f"Optimizing images in: {folder_text}...")
         proc = run_pingo_and_verify(cmd)
-        end_msg = "Optimized images files!"
+        end_msg = f"Optimized images files in {folder_text}!"
         if proc is not None:
             end_msg += f" [{proc}]"
         context.terminal.stop_status(end_msg)
