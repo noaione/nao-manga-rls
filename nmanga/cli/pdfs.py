@@ -33,7 +33,6 @@ from pathlib import Path
 import click
 import pymupdf
 from PIL import Image
-from pymupdf.utils import get_image_info
 
 from .. import term
 from ..autolevel import apply_levels, find_local_peak, gamma_correction
@@ -76,7 +75,7 @@ def identify_dpi(pdf_file: Path):
     for page_num in range(page_count):
         console.status(f"Calculating DPI... (Page {page_num + 1}/{page_count})")
         page = doc.load_page(page_num)
-        images = get_image_info(page, hashes=False, xrefs=True)
+        images = page.get_image_info(hashes=False, xrefs=True)
         if not images:
             console.info(f"- Page {(page_num + 1):03d}: No images found")
             continue

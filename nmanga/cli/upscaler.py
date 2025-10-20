@@ -118,9 +118,9 @@ def upscale_tiled(
 
     console.info("Importing required packages...")
     try:
-        import numpy as np
-        import onnxruntime as ort
-        from einops import rearrange
+        import numpy as np  # type: ignore
+        import onnxruntime as ort  # type: ignore
+        from einops import rearrange  # type: ignore
     except ImportError as e:
         console.error(f"Missing required package: {e.name}. Please install it first.")
         traceback.print_exc()
