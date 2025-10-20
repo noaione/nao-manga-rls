@@ -1,0 +1,373 @@
+{
+    "$schema": "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema",
+    "title": "Blood Blockade Battlefront",
+    "publisher": "Dark Horse",
+    "credit": "nao",
+    "email": "noaione@protonmail.ch",
+    "bracket_type": "round",
+    "base_path": "source",
+    "volumes": [
+        {
+            "path": "v01",
+            "number": 1,
+            "year": 2025,
+            "oneshot": false,
+            "spreads": [
+                [4, 5],
+                [10, 11],
+                [24, 25],
+                [36, 37],
+                [46, 47],
+                [54, 55],
+                [56, 57],
+                [88, 89],
+                [124, 125],
+                [126, 127],
+                [138, 139],
+                [140, 141],
+                [154, 155],
+                [180, 181],
+                [182, 183],
+                [186, 187],
+                [188, 189],
+                [204, 205],
+                [208, 209],
+                [236, 237],
+                [252, 253],
+                [256, 257],
+                [264, 265],
+                [266, 267],
+                [270, 271],
+                [284, 285],
+                [296, 297],
+                [304, 305],
+                [310, 311],
+                [316, 317],
+                [322, 323],
+                [340, 341],
+                [344, 345],
+                [350, 351],
+                [356, 357],
+                [360, 361],
+                [376, 377],
+                [392, 393],
+                [394, 395],
+                [442, 443],
+                [448, 449],
+                [472, 473],
+                [478, 479],
+                [480, 481],
+                [494, 495],
+                [496, 497],
+                [510, 511],
+                [518, 519],
+                [524, 525],
+                [548, 549],
+                [550, 551],
+                [554, 555],
+                [560, 561],
+                [562, 563],
+                [580, 581],
+                [590, 591],
+                [600, 601],
+                [614, 615],
+                [618, 619],
+                [628, 629],
+                [642, 643],
+                [644, 645],
+                [648, 649],
+                [650, 651],
+                [658, 659],
+                [660, 661],
+                [662, 663]
+            ],
+            "colors": [0, 658, 659, 660, 661, 662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 673],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": [0, 673]
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 672
+                },
+                {
+                    "tag": "ToC",
+                    "page": [4, 5]
+                },
+                {
+                    "tag": "Omake",
+                    "page": [
+                        197, 198, 199, 200, 201,
+                        383, 384, 385, 386, 387, 388, 389,
+                        571, 572, 573, 574, 575, 576, 577
+                    ]
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 1,
+                    "title": "Those Shrouded in Fog",
+                    "start": 0
+                },
+                {
+                    "number": 2,
+                    "title": "Watchman Leo",
+                    "start": 59
+                },
+                {
+                    "number": 3,
+                    "title": "Catastrophe",
+                    "start": 91
+                },
+                {
+                    "number": 4,
+                    "title": "Follow That Phantom Ghost Wagon!",
+                    "start": 137
+                },
+                {
+                    "number": 5,
+                    "title": "A Game Between Worlds",
+                    "start": 203
+                },
+                {
+                    "number": 6,
+                    "title": "Tonio Andretti's Final Nineteen Hours",
+                    "start": 283
+                },
+                {
+                    "number": 7,
+                    "title": "Bloodline Fever",
+                    "start": 303
+                },
+                {
+                    "number": 8,
+                    "title": "Day In, Day Out",
+                    "start": 391
+                },
+                {
+                    "number": 9,
+                    "title": "Pandorum Asylum Rhapsody",
+                    "start": 471
+                },
+                {
+                    "number": 10,
+                    "title": "The Tremorous Blood Hammer",
+                    "start": 491
+                },
+                {
+                    "number": 11,
+                    "title": "E-Den of Master Fighters",
+                    "start": 579
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital",
+            "extra_text": "Omnibus Edition"
+        },
+        {
+            "path": "v02",
+            "number": 2,
+            "year": 2025,
+            "oneshot": false,
+            "spreads": [
+                [4, 5],
+                [6, 7],
+                [10, 11],
+                [64, 65],
+                [72, 73],
+                [82, 83],
+                [88, 89],
+                [96, 97],
+                [104, 105],
+                [108, 109],
+                [118, 119],
+                [122, 123],
+                [176, 177],
+                [186, 187],
+                [188, 189],
+                [198, 199],
+                [212, 213],
+                [238, 239],
+                [244, 245],
+                [248, 249],
+                [260, 261],
+                [262, 263],
+                [264, 265],
+                [268, 269],
+                [278, 279],
+                [292, 293],
+                [300, 301],
+                [314, 315],
+                [354, 355],
+                [360, 361],
+                [364, 365],
+                [368, 369],
+                [370, 371],
+                [376, 377],
+                [400, 401],
+                [438, 439],
+                [492, 493],
+                [504, 505],
+                [544, 545],
+                [550, 551],
+                [554, 555],
+                [558, 559],
+                [560, 561],
+                [562, 563],
+                [568, 569],
+                [572, 573],
+                [576, 577],
+                [580, 581],
+                [586, 587],
+                [598, 599],
+                [600, 601],
+                [620, 621],
+                [658, 659],
+                [664, 665],
+                [680, 681],
+                [682, 683],
+                [686, 687],
+                [688, 689]
+            ],
+            "colors": [0, 680, 681, 682, 683, 684, 685, 686, 687, 688, 689, 691],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": [0, 691]
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 690
+                },
+                {
+                    "tag": "Characters",
+                    "page": [4, 5]
+                },
+                {
+                    "tag": "ToC",
+                    "page": [6, 7]
+                },
+                {
+                    "tag": "Omake",
+                    "page": [
+                        114, 115,
+                        309, 310, 311,
+                        498, 499
+                    ]
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 12,
+                    "title": "One Butler's Blitzkrieg",
+                    "start": 0
+                },
+                {
+                    "number": 13,
+                    "title": "Cherchez L'Idole",
+                    "start": 95
+                },
+                {
+                    "number": 14,
+                    "title": "Don't Forget to Don't Forget Me",
+                    "start": 117
+                },
+                {
+                    "number": 15,
+                    "title": "Zap's Longest Day, Part 1",
+                    "start": 185
+                },
+                {
+                    "number": 16,
+                    "title": "Zap's Longest Day, Part 2",
+                    "start": 247
+                },
+                {
+                    "number": 17,
+                    "title": "Lunge!! Launch!! Lunch!!",
+                    "start": 313
+                },
+                {
+                    "number": 18,
+                    "title": "Werewolf Mission (Chain Possible)",
+                    "start": 375
+                },
+                {
+                    "number": 19,
+                    "title": "The Outlaw of Green",
+                    "start": 437
+                },
+                {
+                    "number": 20,
+                    "title": "Desperate Fight in the Macro Zone, Part 1",
+                    "start": 501
+                },
+                {
+                    "number": 21,
+                    "title": "Desperate Fight in the Macro Zone, Part 2",
+                    "start": 553
+                },
+                {
+                    "number": 22,
+                    "title": "Escape from Pain - Chain Reaction",
+                    "start": 619
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital",
+            "extra_text": "Omnibus Edition"
+        }
+    ],
+    "actions": [
+        {
+            "kind": "spreads",
+            "direction": "rtl",
+            "output_fmt": "png",
+            "pillow": true,
+            "threads": 4,
+            "quality": 100
+        },
+        {
+            "kind": "autolevel",
+            "base_path": "final",
+            "threads": 4,
+            "skip_color": true,
+            "skip_white": true
+        },
+        {
+            "kind": "move_color",
+            "base_path": "colors"
+        },
+        {
+            "kind": "color_jpegify",
+            "quality": 98,
+            "threads": 4,
+            "source_path": "colors"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": true,
+            "limiter": ".png"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": false,
+            "limiter": ".jpg"
+        },
+        {
+            "kind": "rename",
+            "volume_filename": true
+        },
+        {
+            "kind": "tagging"
+        },
+        {
+            "kind": "pack",
+            "compress_level": 7,
+            "output_mode": "cbz"
+        }
+    ]
+}
