@@ -27,15 +27,15 @@ from __future__ import annotations
 import shutil
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 from PIL import Image
 from pydantic import ConfigDict, Field
 
 from ... import file_handler
-from ...common import RegexCollection
+from ...common import RegexCollection, threaded_worker
 from ...spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
-from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext, threaded_worker
+from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
@@ -63,7 +63,7 @@ def _runner_image_spreads_threaded(
 
     if action.pillow:
         # Load all images
-        all_img_paths = [x.path for x in images["images"]]
+        all_img_paths = [pp for pp in images["images"]]
         loaded_images = [Image.open(p) for p in all_img_paths]
 
         joined_image = join_spreads(loaded_images, action.direction)
@@ -193,7 +193,7 @@ class ActionSpreads(BaseAction):
         else:
             for spread, images in exported_images.items():
                 context.terminal.status(f"Joining spreads: {current}/{total_match_spreads} ({spread})...")
-                _runner_image_spreads_threaded(context, spread, images, imagick, self)
+                _runner_image_spreads_threaded(context, spread, images, cast(str, imagick), self)
                 current += 1
         context.terminal.stop_status("Finished joining spreads.")
 

@@ -38,7 +38,7 @@ from .base import NMangaCommandHandler
 console = term.get_console()
 
 
-def _clean_filename(output_name: Path | None) -> Path | None:
+def _clean_filename(output_name: Path | None) -> str | None:
     if output_name is None:
         return None
 
@@ -77,7 +77,7 @@ def merge_chapters(archives: list[Path], dest_output: Path | None = None):  # pr
         console.info(f"[+] Merging: {archive.stem}")
         with file_handler.MangaArchive(archive) as archive_file:
             for image, _ in archive_file:
-                image_name = Path(getattr(image, "filename", getattr(image, "name"))).name
+                image_name = Path(getattr(image, "filename", image.name)).name
                 target_cbz.add_image(image_name, archive_file.read(image))
         console.info(f"[+] Merged: {archive.stem}")
         archive.unlink(missing_ok=True)

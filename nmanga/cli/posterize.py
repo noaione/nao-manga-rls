@@ -26,14 +26,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import multiprocessing as mp
 import shutil
-import signal
 from enum import Enum
 from pathlib import Path
 
 import click
 from PIL import Image
+
+from nmanga.common import threaded_worker
 
 from .. import file_handler, term
 from ..autolevel import (
@@ -55,11 +55,6 @@ class PosterizedResult(int, Enum):
     COPIED = 2
 
 
-def _init_worker():
-    """Initialize worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-
 def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
     img = Image.open(img_path)
 
@@ -77,7 +72,7 @@ def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@options.dest_output(optional=True)
+@options.dest_output(optional=False)
 @click.option(
     "-b",
     "--bits",
@@ -91,7 +86,7 @@ def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
 @time_program
 def posterize_simple(
     path_or_archive: Path,
-    dest_output: Path | None,
+    dest_output: Path,
     num_bits: int,
     threads: int,
 ):
@@ -118,24 +113,13 @@ def posterize_simple(
             _posterize_simple_wrapper(img_path, dest_output, num_bits)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                pool.starmap(
-                    _posterize_simple_wrapper,
-                    [(img_path, dest_output, num_bits) for img_path in all_files],
-                )
-        except KeyboardInterrupt:
-            console.warning("Posterize interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            pool.starmap(
+                _posterize_simple_wrapper,
+                [(img_path, dest_output, num_bits) for img_path in all_files],
+            )
 
     console.stop_status(f"Processed {total_files} images with posterize.")
-
-
-class AutoPosterizeResult:
-    PROCESSED = 1
-    COPIED = 2
 
 
 def _autoposterize_wrapper(
@@ -175,7 +159,7 @@ def _autoposterize_wrapper(
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
-@options.dest_output(optional=True)
+@options.dest_output(optional=False)
 @click.option(
     "-th",
     "--threshold",
@@ -197,7 +181,7 @@ def _autoposterize_wrapper(
 @time_program
 def auto_posterize(
     path_or_archive: Path,
-    dest_output: Path | None,
+    dest_output: Path,
     threshold_pct: float,
     use_palette_mode: bool,
     threads: int,
@@ -225,24 +209,18 @@ def auto_posterize(
 
     console.status("Processing images with autoposterize...")
     dest_output.mkdir(parents=True, exist_ok=True)
-    results: list[AutoPosterizeResult] = []
+    results: list[PosterizedResult] = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image with autoposterize... [{idx + 1}/{total_files}]")
             results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct, use_palette_mode))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                results = pool.starmap(
-                    _autoposterize_wrapper,
-                    [(img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
-                )
-        except KeyboardInterrupt:
-            console.warning("Auto-posterizing interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            results = pool.starmap(
+                _autoposterize_wrapper,
+                [(img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
+            )
 
     posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
     copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)

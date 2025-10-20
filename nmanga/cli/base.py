@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import os
 import subprocess as sp
 import sys
@@ -61,6 +63,10 @@ def _test_exec(
     try:
         proc = sp.Popen(arguments, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait(5.0)
+
+        assert proc.stdout is not None  # for mypy
+        assert proc.stderr is not None  # for mypy
+
         if proc.returncode != 0:
             if callable(extra_check):
                 return bool(extra_check(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8")))
@@ -75,12 +81,17 @@ def _test_exec(
 
 def _find_exec_path(
     exec_name: str | list[str],
-    test_cmd: str | None = None,
+    test_cmd: str | list[str] | None = None,
     *,
     extra_check: Callable[[str, str], bool] | None = None,
-) -> str:
+) -> str | None:
     if isinstance(exec_name, str):
         exec_name = [exec_name]
+    test_cmd_list: list[str] = []
+    if isinstance(test_cmd, str):
+        test_cmd_list = [test_cmd]
+    elif isinstance(test_cmd, list):
+        test_cmd_list = test_cmd
     path_env = os.environ.get("PATH", "")
     console.status("Falling back to finding in PATH")
     # find magick in PATH
@@ -89,7 +100,7 @@ def _find_exec_path(
         for exec in exec_name:
             exec_path = os.path.join(path, exec)  # noqa: PTH118
             exec_cmd = [exec_path]
-            if test_cmd is not None:
+            for test_cmd in test_cmd_list:
                 exec_cmd.append(test_cmd)
             if _test_exec(exec_cmd, extra_check=extra_check):
                 console.stop_status()
@@ -206,7 +217,7 @@ class UnrecoverableNMangaError(click.ClickException):
         super().__init__(message)
         self.exc_info = exc_info
 
-    def show(self):
+    def show(self, file=None):
         emoji = ""
         if console.is_advanced():
             emoji = "\u274c "
@@ -243,7 +254,7 @@ class NMangaCommandHandler(click.Command):
                     value: str,
                     state: "ParsingState",
                     upper_opt: ParserOption,
-                    original_func: callable,
+                    original_func: Callable[[str, "ParsingState"], None],
                 ):
                     is_deprecated = cast(bool, getattr(upper_opt.obj, "is_deprecated", False))
                     preferred = cast(list[str], getattr(upper_opt.obj, "preferred", []))

@@ -105,6 +105,7 @@ class ActionPack(BaseAction):
         arc_target.set_comment(orchestrator.email)
         context.terminal.status("Packing... (0/???)")
         idx = 1
+        total_img = 0
         for img_file, _, total_img, _ in file_handler.collect_image_from_folder(source_dir):
             arc_target.add_image(img_file.name, img_file)
             context.terminal.status(f"Packing... ({idx}/{total_img})")

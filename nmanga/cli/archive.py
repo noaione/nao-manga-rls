@@ -24,9 +24,11 @@ SOFTWARE.
 
 # Prepare manga for releasing to the public
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import click
@@ -133,9 +135,10 @@ def pack_releases(
     arc_target.set_comment(rls_email)
     console.status("Packing... (0/???)")
     idx = 1
+    total_count = 0
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, total_count in archive:
-            arc_target.add_image(image.name, image.access())
+            arc_target.add_image(image.name, cast(Path, image.access()))
             console.status(f"Packing... ({idx}/{total_count})")
             idx += 1
     console.stop_status(f"Packed ({idx - 1}/{total_count})")
@@ -184,13 +187,13 @@ def pack_releases_epub_mode(
             f"{path_or_archive} is not a directory. Please provide a directory.",
             param_hint="path_or_archive",
         )
-    volume_text = format_volume_text(manga_volume)
-    if volume_text is None:
+    if manga_volume is None:
         raise click.BadParameter(
             "Please provide a volume number.",
             param_hint="manga_volume",
         )
 
+    volume_text = format_volume_text(manga_volume)
     console.info("Trying to pack release...")
     actual_filename = TARGET_TITLE_NOVEL.format(
         mt=epub_title,

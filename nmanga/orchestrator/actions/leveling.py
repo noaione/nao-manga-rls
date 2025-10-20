@@ -34,9 +34,9 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler
 from ...autolevel import apply_levels, find_local_peak, gamma_correction
-from ...common import RegexCollection
+from ...common import RegexCollection, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext, threaded_worker
+from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from ...term import Console
@@ -54,10 +54,10 @@ def _runner_autolevel2_threaded(
     is_skipped_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
     if is_skipped_action is not None:
-        perform_skip_action(img_path, output_dir, is_skipped_action)
+        perform_skip_action(img_path, output_dir, is_skipped_action, console)
         return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     if is_color and action.skip_color:
-        perform_skip_action(img_path, output_dir, SkipActionKind.COPY)
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, console)
         return ThreadedResult.COPIED
 
     img = Image.open(img_path)
@@ -127,7 +127,7 @@ class ActionAutolevel(BaseAction):
 
     kind: Literal[ActionKind.AUTOLEVEL] = Field(ActionKind.AUTOLEVEL, title="Auto Level Images Action")
     """The kind of action"""
-    base_path: Path = Field("leveled", title="Output Base Path")
+    base_path: Path = Field(Path("leveled"), title="Output Base Path")
     """The base path to save the leveled images to"""
     upper_limit: int = Field(60, ge=1, le=255, title="Upper Limit for Peak Finding")
     """The upper limit for finding local peaks in the histogram"""

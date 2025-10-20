@@ -36,9 +36,9 @@ from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
-from ...common import RegexCollection
+from ...common import RegexCollection, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext, threaded_worker
+from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
 
 if TYPE_CHECKING:
     from ...term import Console
@@ -57,10 +57,10 @@ def _runner_posterize_threaded(
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
     if skip_action is not None:
-        perform_skip_action(img_path, output_dir, skip_action)
+        perform_skip_action(img_path, output_dir, skip_action, console)
         return ThreadedResult.COPIED if skip_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     if is_color:
-        perform_skip_action(img_path, output_dir, SkipActionKind.COPY)
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, console)
         return ThreadedResult.COPIED
 
     dest_path = output_dir / f"{img_path.stem}.png"
@@ -94,7 +94,7 @@ class ActionPosterize(BaseAction):
 
     kind: Literal[ActionKind.POSTERIZE] = Field(ActionKind.POSTERIZE, title="Posterize Images Action")
     """The kind of action"""
-    base_path: Path = Field("posterized", title="Output Base Path")
+    base_path: Path = Field(Path("posterized"), title="Output Base Path")
     """The base path to save the posterized images to"""
     bpc: int = Field(4, ge=1, le=8, title="Bits Per Channel", examples=[1, 2, 4, 8])
     """The number of bitdepth to reduce the image to"""

@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 from multiprocessing import cpu_count
 from pathlib import Path
 
@@ -107,7 +109,7 @@ class MangaPublicationParamType(click.ParamType):
             self.fail(f"{value!r} is not a valid publication type (must be either: {pub_keys})")
         return pub_type
 
-    def get_metavar(self, param: "click.core.Parameter") -> str | None:
+    def get_metavar(self, param: "click.core.Parameter", ctx: "click.Context") -> str | None:
         choices_str = "|".join(list(MANGA_PUBLICATION_TYPES.keys()))
 
         if param.required and param.param_type_name == "argument":

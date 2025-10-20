@@ -79,7 +79,7 @@ WORKING_DIR = Path.cwd().absolute()
 @click.pass_context
 def main(ctx: click.Context, verbose: bool):
     """
-    nmanga is a CLI tool for Processing pirated manga.
+    Nmanga is a CLI tool for Processing pirated manga.
     """
     ctx.ensure_object(dict)
     ctx.obj["VERBOSE_MODE"] = verbose

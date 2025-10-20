@@ -24,6 +24,7 @@ SOFTWARE.
 
 # Image optimizer command
 # This file is part of nmanga.
+from __future__ import annotations
 
 import multiprocessing as mp
 import signal

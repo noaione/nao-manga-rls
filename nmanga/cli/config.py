@@ -22,8 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import functools
-from typing import Callable
+from typing import Callable, Literal, cast
 
 import click
 
@@ -66,7 +68,7 @@ def _loop_defaults_bracket_type(config: config.Config) -> config.Config:  # prag
     choice_square = term.ConsoleChoice("square", "Square bracket type -> [nao]")
     choice_curly = term.ConsoleChoice("curly", "Curly bracket type -> {nao}")
 
-    default_idx = _default_bracket_index.index(config.defaults.bracket_type)
+    default_idx = _default_bracket_index.index(cast(str, config.defaults.bracket_type))
     choices = [choice_round, choice_square, choice_curly]
 
     select_option = console.choice(
@@ -75,7 +77,7 @@ def _loop_defaults_bracket_type(config: config.Config) -> config.Config:  # prag
         default=choices[default_idx],
     )
 
-    config.defaults.bracket_type = select_option.name
+    config.defaults.bracket_type = cast(Literal["curly", "square", "round"], select_option.name)
     return config
 
 
@@ -287,7 +289,7 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
 # --- Experimentals --- #
 
 
-def _loop_experimental_disable_enable(experiment: str, current: bool) -> config.Config:  # pragma: no cover
+def _loop_experimental_disable_enable(experiment: str, current: bool) -> bool:  # pragma: no cover
     CHOICE_ENABLE = term.ConsoleChoice("yes_add", "Enable")
     CHOICE_DISABLE = term.ConsoleChoice("no_yeet", "Disable")
 

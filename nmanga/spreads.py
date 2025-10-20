@@ -22,9 +22,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import subprocess as sp
 from enum import Enum
 from pathlib import Path
+from typing import Sequence
 
 from PIL import Image
 
@@ -66,7 +69,7 @@ def select_exts(files: list[Path]) -> str:
     return select_ext
 
 
-def join_spreads(images: list[Image.Image], direction: SpreadDirection = SpreadDirection.LTR) -> Image.Image:
+def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = SpreadDirection.LTR) -> Image.Image:
     """Join images into spreads.
 
     Parameters
@@ -142,10 +145,10 @@ def join_spreads_imagemagick(
 
     commands = [magick_path]
     commands.extend(x.name for x in images)
-    commands.extend("-quality", f"{quality:.2f}%", "+append", f"{output_directory / output_name}")
+    commands.extend(["-quality", f"{quality:.2f}%", "+append", f"{output_directory / output_name}"])
 
     try:
-        sp.run(commands, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+        sp.run(commands, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)  # noqa: S603
     except sp.CalledProcessError as e:
         raise RuntimeError("Failed to join spreads using ImageMagick.") from e
     return output_name

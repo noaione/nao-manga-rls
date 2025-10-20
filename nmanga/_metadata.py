@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 __name__ = "nmanga"
 __author__ = "noaione"
 __author_email__ = "noaione@n4o.xyz"

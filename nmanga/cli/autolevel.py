@@ -28,13 +28,13 @@ SOFTWARE.
 from __future__ import annotations
 
 import json
-import multiprocessing as mp
 import shutil
 import signal
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import click
 from PIL import Image
@@ -46,6 +46,7 @@ from ..autolevel import (
     find_local_peak,
     gamma_correction,
 )
+from ..common import threaded_worker
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -203,19 +204,13 @@ def autolevel(
     if threads <= 1:
         results = [_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white) for file in all_files]
     else:
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                results = pool.starmap(
-                    _find_local_peak_magick_wrapper, [(file, upper_limit, peak_min_pct, no_white) for file in all_files]
-                )
-        except KeyboardInterrupt:
-            console.warning("Autoleveling interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            results = pool.starmap(
+                _find_local_peak_magick_wrapper, [(file, upper_limit, peak_min_pct, no_white) for file in all_files]
+            )
     console.stop_status("Calculated black levels for images.")
 
-    commands: list[str] = []
+    commands: list[list[str]] = []
     to_be_copied: list[Path] = []
     magick_cmd: list[str] = make_prefix_convert(magick_exe)
 
@@ -224,14 +219,12 @@ def autolevel(
 
     dumped_data_temp = []
     for black_level, white_level, img_path, force_gray in results:
-        dumped_data_temp.append(
-            {
-                "image": str(img_path),
-                "black_level": black_level,
-                "white_level": white_level,
-                "force_gray": force_gray,
-            }
-        )
+        dumped_data_temp.append({
+            "image": str(img_path),
+            "black_level": black_level,
+            "white_level": white_level,
+            "force_gray": force_gray,
+        })
 
     # Dump the results for debugging
     dumped_data = json.dumps(dumped_data_temp, indent=4)
@@ -294,14 +287,8 @@ def autolevel(
         for command in commands:
             _autolevel_exec(command)
     else:
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                pool.map(_autolevel_exec, commands)
-        except KeyboardInterrupt:
-            console.warning("Autoleveling interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            pool.map(_autolevel_exec, commands)
 
     console.stop_status(f"Processed {len(commands)} images with autolevel.")
 
@@ -342,14 +329,14 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
 
         if dest_path.exists():
             console.warning(f"Skipping existing file: {dest_path}")
-            return
+            return AutoLevelResult.COPIED
         shutil.copy2(img_path, dest_path)
         return AutoLevelResult.COPIED
 
     dest_path = dest_output / img_path.with_suffix(f".{config.image_fmt}").name
     if dest_path.exists():
         console.warning(f"Skipping existing file: {dest_path}")
-        return
+        return AutoLevelResult.COPIED
 
     # Apply the black level with Pillow
     if not config.keep_colorspace:
@@ -483,17 +470,11 @@ def autolevel2(
             results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                results = pool.starmap(
-                    _autolevel2_wrapper,
-                    [(img_path, dest_output, full_config) for img_path in all_files],
-                )
-        except KeyboardInterrupt:
-            console.warning("Autoleveling interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            results = pool.starmap(
+                _autolevel2_wrapper,
+                [(img_path, dest_output, full_config) for img_path in all_files],
+            )
 
     autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
     copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
@@ -589,14 +570,8 @@ def force_gray(
         for command in commands:
             _forcegray_exec(command)
     else:
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                pool.map(_forcegray_exec, commands)
-        except KeyboardInterrupt:
-            console.warning("Force grayscale interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            pool.map(_forcegray_exec, commands)
 
     console.stop_status(f"Processed {len(commands)} images to grayscale.")
 
@@ -609,7 +584,7 @@ def force_gray(
         console.stop_status(f"Backed up original files to {backup_dir}.")
 
 
-def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config) -> AutoLevelResult:
+def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config):
     img = Image.open(img_path)
     black_level, white_level, force_gray = find_local_peak(
         img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
@@ -701,24 +676,18 @@ def analyze_level(
     )
 
     console.status("Analyzing images peak levels...")
-    results: list[AutoLevelResult] = []
+    results: list[dict[str, Any]] = []
     if threads <= 1:
         for idx, img_path in enumerate(all_files):
             console.status(f"Processing image... [{idx + 1}/{total_files}]")
             results.append(_analyze_levels_wrapper(img_path, full_config))
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        try:
-            with mp.Pool(threads, initializer=_init_worker) as pool:
-                results = pool.starmap(
-                    _analyze_levels_wrapper,
-                    [(img_path, full_config) for img_path in all_files],
-                )
-        except KeyboardInterrupt:
-            console.warning("Analyze interrupted by user.")
-            pool.terminate()
-            pool.join()
-            return 1
+        with threaded_worker(console, threads) as pool:
+            results = pool.starmap(
+                _analyze_levels_wrapper,
+                [(img_path, full_config) for img_path in all_files],
+            )
 
     console.stop_status(f"Analyzed {total_files} images peak levels.")
     complete_name = f"{path_or_archive.name}_autolevel.json"

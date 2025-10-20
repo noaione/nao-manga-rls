@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import subprocess as sp
@@ -38,7 +40,7 @@ print(f"[*] Running at {current_path}")
 # Check venv paths
 valid_venv_paths = [current_path / "venv", current_path / "env", current_path / ".venv"]
 
-valid_venv: Path = None
+valid_venv: Path | None = None
 for path in valid_venv_paths:
     if path.exists():
         valid_venv = path

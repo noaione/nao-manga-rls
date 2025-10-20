@@ -92,7 +92,7 @@ def lookup_imagesize(path_or_archive: Path, recursive: bool):
     for candidate in candidates:
         if recursive:
             console.info(f"Processing: {candidate}")
-        grouped_size: dict[str, str] = {}
+        grouped_size: dict[str, list[str]] = {}
         with file_handler.MangaArchive(candidate) as archive:
             for image, _ in archive:
                 img_read = archive.read(image)

@@ -25,10 +25,6 @@ SOFTWARE.
 from __future__ import annotations
 
 import abc
-import multiprocessing as mp
-import signal
-import traceback
-from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -49,34 +45,7 @@ __all__ = (
     "ThreadedResult",
     "ToolsKind",
     "WorkerContext",
-    "threaded_worker",
 )
-
-
-def _worker_initializer():
-    """Initializer for worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-
-@contextmanager
-def threaded_worker(console: "Console", threads: int):
-    """Initialize worker processes to handle keyboard interrupts properly."""
-    with mp.Pool(processes=threads, initargs=_worker_initializer) as pool:
-        try:
-            yield pool
-        except KeyboardInterrupt:
-            console.warning("Process interrupted by user, terminating workers...")
-            pool.terminate()
-            pool.join()
-            raise RuntimeError("Process interrupted by user.")
-        except Exception as e:
-            console.error(f"An error occurred: {e}, terminating workers...")
-            traceback.print_exc()
-            pool.terminate()
-            pool.join()
-            raise e
-        finally:
-            pool.close()
 
 
 class ThreadedResult(int, Enum):

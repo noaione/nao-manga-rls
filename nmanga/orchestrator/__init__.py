@@ -182,8 +182,8 @@ class VolumeConfig(BaseModel):
             if ch.number in existing_chapters:
                 raise PydanticCustomError(
                     "duplicate_chapter",
-                    "Duplicate chapter number found: {ch}",  # noqa: RUF027
-                    {"ch": ch.number},
+                    "Duplicate chapter number found: {chapter}",
+                    {"chapter": ch.number},
                 )
             existing_chapters.add(ch.number)
         return self
@@ -262,7 +262,7 @@ class OrchestratorConfig(BaseModel):
 
     This is used in the filename, e.g. [Ripper], (Ripper), {Ripper}
     """
-    base_path: Path = Field("source")
+    base_path: Path = Field(Path("source"), title="Base Path for Volumes")
     """The first path to look for volumes, relative to the orchestrator config file"""
     volumes: list[VolumeConfig] = Field(default_factory=list, min_length=1)
     """The list of volumes to process"""

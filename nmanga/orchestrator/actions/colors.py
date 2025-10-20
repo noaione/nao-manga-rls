@@ -33,8 +33,8 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import ConfigDict, Field
 
 from ... import file_handler
-from ...common import RegexCollection
-from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext, threaded_worker
+from ...common import RegexCollection, threaded_worker
+from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from ...term import Console
@@ -62,7 +62,7 @@ class ActionMoveColor(BaseAction):
 
     kind: Literal[ActionKind.MOVE_COLOR] = Field(ActionKind.MOVE_COLOR, title="Move Color Images Action")
     """The kind of action"""
-    base_path: Path = Field("colors", title="Output Base Path")
+    base_path: Path = Field(Path("colors"), title="Output Base Path")
     """The base path to save the color images to"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
@@ -137,7 +137,7 @@ class ActionColorJpegify(BaseAction):
     """The base path to save the JPEG images to, this would use the last used base path if not provided"""
     quality: int = Field(95, ge=1, le=100, title="JPEG Quality")
     """The quality of the output JPEG images"""
-    source_path: Path = Field("colors", title="Source Path")
+    source_path: Path = Field(Path("colors"), title="Source Path")
     """The source path to look for images to convert"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""

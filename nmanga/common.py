@@ -24,10 +24,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import multiprocessing as mp
 import re
+import signal
 import subprocess as sp
+import traceback
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Match, Pattern, overload
+from typing import Match, Pattern, cast, overload
 
 from . import config, term, utils
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
@@ -49,6 +53,7 @@ __all__ = (
     "optimize_images",
     "run_pingo_and_verify",
     "safe_int",
+    "threaded_worker",
 )
 
 
@@ -61,6 +66,32 @@ BRACKET_MAPPINGS = {
     "round": ["(", ")"],
     "curly": ["{", "}"],
 }
+
+
+def _worker_initializer():
+    """Initializer for worker processes to handle keyboard interrupts properly."""
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+@contextmanager
+def threaded_worker(console: term.Console, threads: int):
+    """Initialize worker processes to handle keyboard interrupts properly."""
+    with mp.Pool(processes=threads, initializer=_worker_initializer) as pool:
+        try:
+            yield pool
+        except KeyboardInterrupt:
+            console.warning("Process interrupted by user, terminating workers...")
+            pool.terminate()
+            pool.join()
+            raise RuntimeError("Process interrupted by user.")
+        except Exception as e:
+            console.error(f"An error occurred: {e}, terminating workers...")
+            traceback.print_exc()
+            pool.terminate()
+            pool.join()
+            raise e
+        finally:
+            pool.close()
 
 
 class PseudoChapterMatch:
@@ -116,10 +147,12 @@ class ChapterRange:
             return f"<ChapterRange c{self.number} - {self.name} [p{self.page_num_str}]>"
         return f"<ChapterRange c{self.number:03d} - {self.name} [p{self.page_num_str}]>"
 
-    def __eq__(self, other: int | float | "ChapterRange"):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, ChapterRange):
-            other = other.number
-        return self.number == other
+            return self.number == other.number
+        if isinstance(other, (int, float)):
+            return self.number == other
+        return False
 
     @property
     def page_num_str(self) -> str:
@@ -171,7 +204,7 @@ def actual_or_fallback(actual_ch: str | None, chapter_num: int) -> str:
 
 
 def create_chapter(match: Match[str] | PseudoChapterMatch, has_publisher: bool = False):
-    chapter_num = int(match.group("ch"))
+    chapter_num = int(cast(str, match.group("ch")))
     chapter_extra = match.group("ex")
     chapter_vol = match.group("vol")
     chapter_actual = match.group("actual")
@@ -265,6 +298,7 @@ def inquire_chapter_ranges(
 
         ch_number = console.inquire("Chapter number", lambda y: int_or_float(y) is not None)
         ch_number = int_or_float(ch_number)
+        assert ch_number is not None  # for mypy
 
         ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
         actual_ranges, is_single = parse_ch_ranges(ch_ranges)
@@ -329,6 +363,9 @@ def run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
     proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
 
+    assert proc.stdout is not None  # for mypy, we pipeped it
+    assert proc.stderr is not None  # for mypy, we pipeped it
+
     stdout = proc.stdout.read().decode("utf-8")
     stderr = proc.stderr.read().decode("utf-8")
     # Merge both stdout and stderr
@@ -353,6 +390,9 @@ def is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
     console.info("Checking if pingo is alpha version...")
     proc = sp.Popen([pingo_path, "-help"], stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
+
+    assert proc.stdout is not None  # for mypy, we pipeped it
+    assert proc.stderr is not None  # for mypy, we pipeped it
 
     stdout = proc.stdout.read().decode("utf-8")
     stderr = proc.stderr.read().decode("utf-8")
@@ -428,7 +468,7 @@ def optimize_images(pingo_path: str, target_directory: Path, aggresive: bool = F
 
 def format_archive_filename(
     *,
-    manga_title: int,
+    manga_title: str,
     manga_year: int,
     publication_type: MangaPublication,
     ripper_credit: str,
@@ -478,6 +518,20 @@ def format_volume_text(
 @overload
 def format_volume_text(
     manga_volume: None,
+    manga_chapter: int | float,
+) -> str: ...
+
+
+@overload
+def format_volume_text(
+    manga_volume: None,
+    manga_chapter: None,
+) -> None: ...
+
+
+@overload
+def format_volume_text(
+    manga_volume: int | float | None,
     manga_chapter: int | float,
 ) -> str: ...
 
@@ -538,7 +592,7 @@ def format_daiz_like_filename(
         if len(pack_data) > 1:
             smallest = pack_data[1].floating
             for pack in pack_data:
-                if pack.floating is not None and pack.floating < smallest:
+                if pack.floating is not None and smallest is not None and pack.floating < smallest:
                     smallest = pack.floating
             if smallest is not None and chapter_info.floating is not None:
                 # Check if we should append the custom float data
@@ -671,6 +725,11 @@ class RegexCollection:
     @overload
     @classmethod
     def chapter_re(cls, title: str, publisher: str) -> Pattern[str]:  # pragma: no cover
+        ...
+
+    @overload
+    @classmethod
+    def chapter_re(cls, title: str, publisher: None) -> Pattern[str]:  # pragma: no cover
         ...
 
     @classmethod

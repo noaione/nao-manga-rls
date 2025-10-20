@@ -28,8 +28,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import signal
-from enum import Enum
 from pathlib import Path
 from time import time
 from typing import Literal
@@ -49,18 +47,6 @@ from .base import (
 )
 
 console = term.get_console()
-
-
-def _init_worker():
-    """Initialize worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-
-class ThreadedResult(int, Enum):
-    IGNORED = 0
-    COPIED = 1
-    GRAYSCALED = 2
-    PROCESSED = 3
 
 
 @click.group(name="orchestra", help="Orchestrator for manga processing")
@@ -110,15 +96,15 @@ def orchestrator_generate(
                 number=1,
                 path=Path("v01"),
                 chapters=[],
-            )
+            )  # type: ignore
         ],
         actions=[
             # Simple shift name
-            ActionShiftName(start=0),
+            ActionShiftName(start=0),  # type: ignore
             # Then use daiz-renamer
-            ActionRename(),
+            ActionRename(),  # type: ignore
         ],
-    )
+    )  # type: ignore
 
     # Pre-serialize to include schema info
     data = config.model_dump(exclude_none=True)

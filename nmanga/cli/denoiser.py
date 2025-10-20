@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import click
@@ -47,7 +48,7 @@ Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 console = term.get_console()
 
 
-def get_precision_enum(precision: str) -> str:
+def get_precision_enum(precision: str) -> int:
     if precision == "fp16":
         return 1
     elif precision == "tf32":
@@ -392,7 +393,7 @@ def denoiser_trt(
     batch_size: int,
     tile_size: int,
     contrast_stretch: bool,
-    background: str,
+    background: Literal["black", "white"],
 ):
     """
     Denoise all images using TensorRT/ONNX Runtime (Experimental)

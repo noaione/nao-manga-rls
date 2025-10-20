@@ -251,6 +251,8 @@ def upscale_tiled(
 
             # Post-process batch
             output_batch = rearrange(model_output, "b c h w -> b h w c")
+            # Ensure output_batch is a concrete numpy array with a numeric dtype before clipping
+            output_batch = np.asarray(output_batch, dtype=np.float32)
             output_batch = np.clip(output_batch, 0.0, 1.0) * 255.0
             output_batch = output_batch.astype(np.uint8)
 

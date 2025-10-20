@@ -579,7 +579,7 @@ class TestFormatDaizLikeFilename:
                 packing_extra[chapter.base] = []
             packing_extra[chapter.base].append(chapter)
 
-        for chapter, expect in zip(chapters, expects):
+        for chapter, expect in zip(chapters, expects, strict=True):
             pg_num = chapter.range[0]
             pg_extra = extra.get(pg_num, None)
             filename, _ = format_daiz_like_filename(

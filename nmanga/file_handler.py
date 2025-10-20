@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import random
 import sys
 import tarfile
@@ -120,15 +122,16 @@ class UnicodeZipFile(zipfile.ZipFile):
         else:
             super().__init__(
                 file,
-                mode,
+                mode,  # type: ignore
                 compression,
                 allowZip64,
-                compresslevel,
+                compresslevel=compresslevel,
                 strict_timestamps=strict_timestamps,
                 metadata_encoding=metadata_encoding,
-            )
+            )  # type: ignore
 
         # Post init we modify filelist
+        self.metadata_encoding = self.metadata_encoding or metadata_encoding
         if self.metadata_encoding:
             for info in self.filelist:
                 if info.flag_bits & 0x800:
@@ -264,8 +267,8 @@ class Py7zBytesIO(py7zr.Py7zIO):
         self.filename: str = filename
         self._buffer = BytesIO()
 
-    def write(self, data: bytes | bytearray) -> None:
-        self._buffer.write(data)
+    def write(self, s: bytes | bytearray) -> int:
+        return self._buffer.write(s)
 
     def read(self, size: int | None = None) -> bytes:
         return self._buffer.read(size)
@@ -377,7 +380,7 @@ class MangaImage:
         extension = Path(self.filename).suffix
         return extension.lower()
 
-    def access(self):
+    def access(self) -> AccessorImage:
         """Return the accessor or internal file object."""
         return self.__accessor
 
@@ -394,7 +397,7 @@ class MangaArchive:
     """
 
     def __init__(self, file_or_folder: Path | str):
-        self.__accessor: AccessorType = None
+        self.__accessor: AccessorType | None = None
         if isinstance(file_or_folder, str):
             file_or_folder = Path(file_or_folder)
         elif not isinstance(file_or_folder, Path):
@@ -412,7 +415,7 @@ class MangaArchive:
             if is_cbz(self.__path):
                 self.__accessor = UnicodeZipFile(str(self.__path), metadata_encoding="utf-8")  # Use utf-8 metadata
             elif is_rar(self.__path):
-                self.__accessor = rarfile.RarFile(str(self.__path))
+                self.__accessor = rarfile.RarFile(str(self.__path))  # type: ignore
             elif is_7zarchive(self.__path):
                 self.__accessor = py7zr.SevenZipFile(str(self.__path))
             elif is_tararchive(self.__path):
@@ -436,7 +439,7 @@ class MangaArchive:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def read(self, file: AccessorFile | MangaImage) -> bytes:
+    def read(self, file: AccessorImage | MangaImage) -> bytes:
         """Read a specific file from the archive or folder.
 
         Return the bytes data.
@@ -445,7 +448,7 @@ class MangaArchive:
             return self.__actual_read(file.access())
         return self.__actual_read(file)
 
-    def __actual_read(self, file: AccessorFile) -> bytes:
+    def __actual_read(self, file: AccessorImage | str | bytes) -> bytes:
         self.__check_open()
         if isinstance(file, py7zr.FileInfo) and isinstance(self.__accessor, py7zr.SevenZipFile):
             factory = BytesIOFactory()
@@ -457,8 +460,13 @@ class MangaArchive:
             return files_bytes
         elif isinstance(file, tarfile.TarInfo) and isinstance(self.__accessor, tarfile.TarFile):
             file_data = self.__accessor.extractfile(file)
+            assert file_data is not None, "Extracted file data is None"
             file_data.seek(0)
             return file_data.read()
+        elif isinstance(self.__accessor, zipfile.ZipFile) and isinstance(file, zipfile.ZipInfo):
+            return self.__accessor.read(file)
+        elif isinstance(self.__accessor, rarfile.RarFile) and isinstance(file, rarfile.RarInfo):
+            return self.__accessor.read(file)
         elif isinstance(file, Path):
             return file.read_bytes()
         elif isinstance(self.__accessor, Path) and isinstance(file, (str, bytes)):
@@ -466,7 +474,7 @@ class MangaArchive:
                 file = file.decode()
             actual_path = self.__accessor / file
             return actual_path.read_bytes()
-        return self.__accessor.read(file)
+        raise TypeError("Unknown file type to read")
 
     def contents(self):
         """

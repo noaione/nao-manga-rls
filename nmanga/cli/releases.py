@@ -24,6 +24,8 @@ SOFTWARE.
 
 # Prepare manga for releasing to the public
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -247,7 +249,7 @@ def prepare_releases(
                 vol_ex = vol_ex[1:]
             vol_act = float(f"{vol_act}.{int(vol_ex)}")
 
-        selected_range: ChapterRange = None
+        selected_range: ChapterRange | None = None
         for rls_info in rls_information:
             if rls_info.is_single:
                 if p01_copy >= rls_info.range[0]:
@@ -295,7 +297,9 @@ def prepare_releases(
         image.rename(new_name)
         console.status(f"Processing: {current}/{total_img}")
         current += 1
+
     console.stop_status(f"Processed {current - 1} images!")
+    assert image_titling is not None
 
     if pingo_exe is not None and do_img_optimize:
         console.info("Optimizing images...")
@@ -486,7 +490,9 @@ def prepare_releases_chapter(
                 rls_revision=rls_revision,
                 extra_metadata=rls_extra_metadata,
             )
+
     console.stop_status(f"Processed {current - 1} images!")
+    assert image_titling is not None
 
     if pingo_exe is not None and do_img_optimize:
         console.info("Optimizing images...")

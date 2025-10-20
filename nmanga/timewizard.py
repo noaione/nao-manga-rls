@@ -22,11 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 
 try:
-    from ctypes import byref, windll, wintypes
+    from ctypes import byref, windll, wintypes  # type: ignore
 
     kernel32 = windll.kernel32
     FILETIME = wintypes.FILETIME
@@ -69,5 +71,5 @@ def modify_filetimestamp(file_path: Path, epoch: int) -> None:
     handle = kernel32.CreateFileW(str(file_path), 256, 0, None, 3, 128, None)
     if handle.value == HANDLE(-1).value:
         return
-    kernel32.SetFileTime(handle, byref(ctime), None, None)
+    kernel32.SetFileTime(handle, byref(ctime), None, None)  # pyright: ignore[reportPossiblyUnboundVariable]
     kernel32.CloseHandle(handle)

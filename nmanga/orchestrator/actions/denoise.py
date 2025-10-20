@@ -58,7 +58,7 @@ class ActionDenoise(BaseAction):
     """The kind of action"""
     model: Path = Field(..., title="The ONNX Model Path")
     """The path to the ONNX model"""
-    base_path: Path = Field("denoised", title="Output Base Path")
+    base_path: Path = Field(Path("denoised"), title="Output Base Path")
     """The base path to save the denoised images to"""
     device_id: int = Field(0, ge=0, title="Device ID")
     """The device ID to use for denoising"""
@@ -106,6 +106,7 @@ class ActionDenoise(BaseAction):
         )
 
         current_index = 1
+        total_image = 0
         for file_path, _, total_image, _ in file_handler.collect_image_from_folder(context.current_dir):
             context.terminal.status(f"Denoising images... [{current_index}/{total_image}]")
 

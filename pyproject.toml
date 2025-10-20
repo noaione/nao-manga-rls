@@ -1,10 +1,137 @@
-[tool.black]
-line-length = 120
-target-version = ["py310", "py311", "py312", "py313"]
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-extend_skip = ["env/**", "venv/**", ".pytest_cache/**", ".venv/**", "__pycache__/**"]
-line_length = 110
-skip_gitignore = true
+[project]
+name = "nmanga"
+version = "0.21.0"
+description = "A collection of CLI function to process a manga releases."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "noaione", email = "noaione@n4o.xyz"}]
+keywords = ["manga", "colorlevel", "spreads", "auto-splitting", "processing", "cbz", "comic"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Other Audience",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "rich==14.0.0",
+    "inquirer==3.4.0",
+    "click==8.2.1",
+    "ftfy==6.3.1",
+    "pydantic==2.12.1",
+    "typing-extensions==4.15.0",
+    "Pillow==12.0.0",
+    "lxml==6.0.1",
+    "unrar2-cffi==0.4.1",
+    "py7zr==1.0.0",
+    "pymupdf==1.26.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.5",
+    "pytest-cov==7.0.0",
+    "ruff==0.14.1",
+]
+
+[project.urls]
+"Bug Reports" = "https://github.com/noaione/nao-manga-rls/issues"
+"Source" = "https://github.com/noaione/nao-manga-rls"
+
+[project.scripts]
+nmanga = "nmanga.cmd:main"
+
+[tool.setuptools]
+packages = ["nmanga", "nmanga.cli", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"]
+
+[tool.ruff]
+ignore = [
+    "E203",
+    "F405",
+    "F403",
+    "F722",
+    "N806",
+    "COM812",
+    "D400",  # first line should be period, most of my docstring will be LICENSE header so no thanks
+    "D202",
+    "D401",
+]
+line-length = 120
+extend-exclude = [
+    "env",
+    "venv",
+    ".pytest_cache",
+    ".venv",
+    "__pycache__",
+    ".git",
+    ".mypy_cache",
+    ".vscode",
+    ".ruff_cache",
+    "**/Lib/**",
+    "dist",
+    "build",
+    "_templates",
+    "tools",
+]
+ignore-init-module-imports = true
+target-version = "py310"
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "N",
+    "S",
+    "B",
+    "T",
+    "Q",
+    "D",
+    "RUF",
+    "COM",
+    "CPY",
+    "PTH",
+    "ASYNC"
+]
+extend-ignore = ["D"] # D -> Docstring missing for public function or method
+src = ["nmanga", "tests", "ci"]
+
+[tool.ruff.pydocstyle]
+convention = "numpy"
+ignore-decorators = ["typing.overload"]
+
+[tool.ruff.isort]
+combine-as-imports = false
+split-on-trailing-comma = true
+required-imports = ["from __future__ import annotations"]
+known-first-party = ["tests", "tosho_mango"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401", "F403", "I002", "D205"]
+"tests/*.py" = ["S101", "I002", "D"]  # assert statement used in pytest
+"pipelines/*" = ["T", "I", "S603", "D"]
+"tools/*.py" = ["D100", "T201", "I002"]
+
+[tool.pyright]
+exclude = [
+    ".vscode/*",
+    "tests/*",
+    "_templates/**/*",
+    "build/**/*",
+    "dist",
+    ".venv",
+    "venv",
+    "env"
+]

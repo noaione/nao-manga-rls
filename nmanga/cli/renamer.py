@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 # Quickly do zero-index renaming of all images in a folder
+from __future__ import annotations
 
 from pathlib import Path
 

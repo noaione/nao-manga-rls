@@ -24,12 +24,14 @@ SOFTWARE.
 
 # Join spreads from a directory of images.
 
+from __future__ import annotations
+
 import re
 import subprocess as sp
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import move as mv
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import click
 from PIL import Image
@@ -223,7 +225,7 @@ def spreads_join(
             a_part = int(a_part)
             for spd, spreads in valid_spreads_data.items():
                 if a_part in spreads:
-                    im_data = _ExportedImage(image.access(), prefix_text, postfix_text)
+                    im_data = _ExportedImage(cast(Path, image.access()), prefix_text, postfix_text)
                     exported_imgs[spd]["imgs"].append(im_data)
 
     total_match_spread = len(list(exported_imgs.keys()))
@@ -264,7 +266,7 @@ def spreads_join(
                 quality=quality,
                 direction=direction,
                 output_format=image_fmt,
-                magick_path=magick_exe,
+                magick_path=cast(str, magick_exe),
             )
             extension = Path(temp_output).suffix
 
@@ -336,7 +338,7 @@ def spreads_split(
                 continue
             a_part = int(a_part)
             b_part = int(b_part)
-            im_data = _ExportedImage(image.access(), prefix_text, postfix_text)
+            im_data = _ExportedImage(cast(Path, image.access()), prefix_text, postfix_text)
             split_spread = _SplitSpreads(img=im_data, a_part=a_part, b_part=b_part)
             image_list.append(split_spread)
     console.info(f"Found {len(image_list)} spreads to split")

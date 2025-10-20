@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 # Contains pure constants string data for .epub document
+from __future__ import annotations
 
 EPUB_CONTAINER = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">

@@ -159,16 +159,15 @@ class ActionRename(BaseAction):
         cmx_re = RegexCollection.cmx_re()
 
         packing_extra: dict[int, list[ChapterRange]] = {}
-        for chapter in volume.chapters:
-            as_range = chapter.to_chapter_range()
-            if as_range.base not in packing_extra:
-                packing_extra[as_range.base] = []
-            packing_extra[as_range.base].append(as_range)
+        all_chapters = volume.to_chapter_ranges()
+        for chapter in all_chapters:
+            if chapter.base not in packing_extra:
+                packing_extra[chapter.base] = []
+            packing_extra[chapter.base].append(chapter)
 
         # Make into chapter range
         meta_namings = volume.meta_name_maps
         renaming_maps: dict[str, Path] = {}  # This is new name -> old path (yeah)
-        all_chapters = volume.to_chapter_ranges()
         for image, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             # console.status(f"Renaming with daiz-like format: {image.name}/{total_img}...")
             title_match = cmx_re.match(image.name)

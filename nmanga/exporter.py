@@ -335,7 +335,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         im.close()
         # If base target are smaller than base, just set it to + 150
         if base_target < self._base_img_size[0]:
-            base_target = self._base_img_size + 150
+            base_target = self._base_img_size[0] + 150
         if width > base_target:
             # Double spread mode
             self._mark_center_spread = True
@@ -354,7 +354,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         self._target_epub.writestr("OEBPS/content.opf", self._format_xml())
         self._target_epub.close()
 
-    def set_comment(self, comment: bytes | Path):
+    def set_comment(self, comment: str | bytes):
         self._target_epub.comment = encode_or(comment) or b""
 
 

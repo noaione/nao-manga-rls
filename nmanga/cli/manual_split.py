@@ -115,7 +115,7 @@ def _collect_archive_to_chapters(
             page_numbers = extract_page_num(filename.stem, custom_data, regex_data)
 
             first_page = page_numbers[0]
-            selected_chapter: ChapterRange = None
+            selected_chapter: ChapterRange | None = None
             for chapter in chapters_mapping:
                 if chapter.is_single:
                     if first_page >= chapter.range[0]:

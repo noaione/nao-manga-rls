@@ -107,8 +107,8 @@ def find_local_peak(
     min_px_count = math.ceil((img_width * img_height) * (peak_percentage / 100.0))
     min_prominence = int(min_px_count / 2)
 
-    img_array = NumpyLib.array(image)
-    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 256))
+    img_array = NumpyLib.array(image)  # type: ignore
+    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 256))  # type: ignore
 
     # Region of interest: only consider peaks in the lower range for black level
     roi_min, roi_max = 0, upper_limit
@@ -117,10 +117,10 @@ def find_local_peak(
     binedges_roi = binedges[:-1][roi_mask]
 
     # Pad left and right to avoid edge peaks
-    hist_padded = NumpyLib.pad(hist_roi, (1, 1), mode="constant", constant_values=0)
+    hist_padded = NumpyLib.pad(hist_roi, (1, 1), mode="constant", constant_values=0)  # type: ignore
 
     # Find peaks on padded array
-    peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=min_px_count, prominence=min_prominence)
+    peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=min_px_count, prominence=min_prominence)  # type: ignore
 
     peaks = peaks_padded - 1  # Adjust indices back to original hist_roi
     valid = (peaks >= 0) & (peaks < len(hist_roi))
@@ -132,7 +132,7 @@ def find_local_peak(
         black_level = peak_val
     else:
         # Find without max height constraint
-        peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=0)
+        peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=0)  # type: ignore
 
         peaks = peaks_padded - 1  # Adjust indices back to original hist_roi
         valid = (peaks >= 0) & (peaks < len(hist_roi))
@@ -157,8 +157,8 @@ def find_local_peak(
     if hist_roi_w.size == 0:
         return black_level, white_level, force_gray
 
-    hist_padded_w = NumpyLib.pad(hist_roi_w, (1, 1), mode="constant", constant_values=0)
-    peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=min_px_count, prominence=min_prominence)
+    hist_padded_w = NumpyLib.pad(hist_roi_w, (1, 1), mode="constant", constant_values=0)  # type: ignore
+    peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=min_px_count, prominence=min_prominence)  # type: ignore
 
     peaks_w = peaks_padded_w - 1
     valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
@@ -169,7 +169,7 @@ def find_local_peak(
         white_level = peak_val_w
     else:
         # Find without max height constraint
-        peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=0)
+        peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=0)  # type: ignore
 
         peaks_w = peaks_padded_w - 1
         valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
@@ -181,7 +181,7 @@ def find_local_peak(
     return black_level, white_level, force_gray
 
 
-def gamma_correction(black_level: int) -> int:
+def gamma_correction(black_level: int) -> int | float:
     black_point = black_level / 255
     white_point = 1
     midpoint = 0.5
@@ -233,15 +233,15 @@ def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> list[Sha
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    img_array = NumpyLib.array(image)
+    img_array = NumpyLib.array(image)  # type: ignore
 
     total_pixels = img_array.size
-    hist, _ = NumpyLib.histogram(img_array, bins=256)
+    hist, _ = NumpyLib.histogram(img_array, bins=256)  # type: ignore
 
     pixel_thresh = math.ceil(total_pixels * (threshold / 100.0))
 
     # Find the shades (indices) that have more pixels than the threshold
-    significant_indices = NumpyLib.where(hist > pixel_thresh)[0]
+    significant_indices = NumpyLib.where(hist > pixel_thresh)[0]  # type: ignore
 
     # If no colors are significant, return an empty list
     if significant_indices.size == 0:
@@ -254,12 +254,10 @@ def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> list[Sha
     for i in range(len(significant_indices)):
         count = significant_counts[i]
         pct = (count / total_pixels) * 100
-        filtered_shades.append(
-            {
-                "shade": significant_indices[i],
-                "percentage": pct,
-            }
-        )
+        filtered_shades.append({
+            "shade": significant_indices[i],
+            "percentage": pct,
+        })
 
     # Sort by highest percentage first
     filtered_shades.sort(key=lambda x: x["percentage"], reverse=True)
@@ -376,7 +374,7 @@ def posterize_image_by_shades(image: Image.Image, shades: list[int]) -> Image.Im
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    palette: list[tuple[int, int, int]] = []
+    palette: list[int] = []
     for shade in shades:
         palette.extend([shade] * 3)  # R, G, B
 

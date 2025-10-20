@@ -22,9 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, TypeAlias, overload
+from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar, overload
 
 import inquirer
 from rich.console import Console as RichConsole
@@ -35,16 +37,14 @@ if TYPE_CHECKING:
 
 __all__ = ("ConsoleChoice", "get_console")
 
-rich_theme = RichTheme(
-    {
-        "success": "green bold",
-        "warning": "yellow bold",
-        "error": "red bold",
-        "highlight": "magenta bold",
-        "info": "cyan bold",
-    }
-)
-AnyType: TypeAlias = str | bytes | int | float
+rich_theme = RichTheme({
+    "success": "green bold",
+    "warning": "yellow bold",
+    "error": "red bold",
+    "highlight": "magenta bold",
+    "info": "cyan bold",
+})
+AnyType = TypeVar("AnyType", str, bytes, int, float)
 ValidateFunc: TypeAlias = Callable[[str], bool]
 ValidationType: TypeAlias = ValidateFunc | str
 
@@ -62,7 +62,7 @@ class Console:
     def __init__(self, debug_mode: bool = False):
         self.__debug_mode = debug_mode
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True)
-        self._status: "RichStatus" | None = None
+        self._status: "RichStatus | None" = None
         self.__last_known_status: str | None = None
 
         self.shift_space = 0
@@ -165,25 +165,25 @@ class Console:
     @overload
     def choice(
         self,
-        message: str | None = ...,
-        choices: list[AnyType] = ...,
-        default: AnyType | ConsoleChoice | None = ...,
-    ) -> str: ...
+        message: str,
+        choices: list[ConsoleChoice],
+        default: ConsoleChoice | None = ...,
+    ) -> ConsoleChoice: ...
 
     @overload
     def choice(
         self,
         message: str | None = ...,
-        choices: list[ConsoleChoice] = ...,
-        default: AnyType | ConsoleChoice | None = ...,
-    ) -> ConsoleChoice: ...
+        choices: list[str] = ...,
+        default: str | None = ...,
+    ) -> str: ...
 
     def choice(
         self,
         message: str | None = None,
-        choices: list[AnyType] | list[ConsoleChoice] = [],
-        default: AnyType | ConsoleChoice | None = None,
-    ) -> AnyType | ConsoleChoice:
+        choices: list[str] | list[ConsoleChoice] | None = None,
+        default: str | ConsoleChoice | None = None,
+    ) -> str | ConsoleChoice:
         if not choices:
             raise ValueError("No choices provided")
         message = message or "Please choose an option"
@@ -205,22 +205,6 @@ class Console:
             return choices[console_choice.index(answers)]
         return answers
 
-    @overload
-    def inquire(
-        self,
-        prompt: str,
-        validation: ValidateFunc = ...,
-        default: AnyType | None = ...,
-    ) -> AnyType: ...
-
-    @overload
-    def inquire(
-        self,
-        prompt: str,
-        validation: str = ...,
-        default: AnyType | None = ...,
-    ) -> AnyType: ...
-
     def _internal_validation(self, text_input: str, validation: ValidateFunc):
         try:
             is_valid = validation(text_input)
@@ -228,7 +212,30 @@ class Console:
         except Exception:
             return False
 
-    def inquire(self, prompt: str, validation: ValidateFunc | None = None, default: AnyType | None = None) -> AnyType:
+    @overload
+    def inquire(
+        self,
+        prompt: str,
+        validation: ValidateFunc | None = ...,
+    ) -> str: ...
+
+    @overload
+    def inquire(
+        self,
+        prompt: str,
+        validation: ValidateFunc | None = ...,
+        default: None = ...,
+    ) -> str: ...
+
+    @overload
+    def inquire(
+        self,
+        prompt: str,
+        validation: ValidateFunc | None = ...,
+        default: str = ...,
+    ) -> str: ...
+
+    def inquire(self, prompt: str, validation: ValidateFunc | None = None, default: str | None = None) -> str | None:
         # Custom inquirer
         inquired_text = default
         while True:

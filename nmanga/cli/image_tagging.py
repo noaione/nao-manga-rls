@@ -24,6 +24,7 @@ SOFTWARE.
 
 # Image tagging command
 # This file is part of nmanga.
+from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

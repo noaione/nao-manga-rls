@@ -80,7 +80,8 @@ class Rule(abc.ABC):
         Args:
             context: A Context object containing the data to check against.
 
-        Returns:
+        Returns
+        -------
             True if the rule passes, False otherwise.
         """
         pass

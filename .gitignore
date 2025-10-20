@@ -5,6 +5,7 @@ env/
 *.egg-info/
 build/
 dist/
+/build/lib
 
 .coverage
 coverage.*

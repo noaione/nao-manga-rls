@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
@@ -211,7 +213,7 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
         if len(image_infos) == 0:
             # No images on this page, create a blank white image with the same size as the page
             mat = pymupdf.Matrix(1, 1)
-            pix = page.get_pixmap(matrix=mat, alpha=False)
+            pix = get_pixmap(page, matrix=mat, alpha=False)
             image = Image.new("RGB", (pix.width, pix.height), (255, 255, 255))
             with BytesIO() as output:
                 image.save(output, format="PNG")
@@ -237,7 +239,7 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
         # Multiple images? We need to composite them together
         # Create a blank white image with the same size as the page
         mat = pymupdf.Matrix(1, 1)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
+        pix = get_pixmap(page, matrix=mat, alpha=False)
 
         # load all images first
         prefer_spaces = prefer_colorspace([info["cs-name"] for info in image_infos if "cs-name" in info])
@@ -265,7 +267,7 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
             # TODO: Apply the matrix to the image first
 
             # Paste the image onto the composite
-            composite.paste(read_img, (int(bounding.x0), int(bounding.y0)), img if "A" in prefer_spaces else None)
+            composite.paste(read_img, (int(bounding.x0), int(bounding.y0)), read_img if "A" in prefer_spaces else None)
 
         # Save composite to bytes
         with BytesIO() as output:

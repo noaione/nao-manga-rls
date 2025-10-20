@@ -25,13 +25,15 @@ SOFTWARE.
 # The config handler, which contains some defaults paramters that can be changed for
 # other people using this script.
 
+from __future__ import annotations
+
 import json
 import os.path
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ._ntypes import BracketTypeT, ConfigT, _ConfigDefaultsT, _ConfigExecutableT
+from ._ntypes import BracketTypeT, ConfigT, _ConfigDefaultsT, _ConfigExecutableT, _ConfigExperimentsT
 from .constants import MANGA_PUBLICATION_TYPES
 
 __all__ = (
@@ -51,7 +53,7 @@ else:
 class _ConfigExperiments:
     png_tag: bool = field(default=False)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> _ConfigExperimentsT:
         return {
             "png_tag": self.png_tag,
         }

@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 # Prepare manga for releasing to the public
+from __future__ import annotations
 
 from pathlib import Path
 
