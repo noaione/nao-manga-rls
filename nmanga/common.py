@@ -504,26 +504,35 @@ def format_archive_filename(
 
 @overload
 def format_volume_text(
-    manga_volume: int | float,
+    *,
+    manga_volume: int,
 ) -> str: ...
 
 
 @overload
 def format_volume_text(
-    manga_volume: int | float,
-    manga_chapter: None = None,
+    *,
+    manga_volume: float,
 ) -> str: ...
 
 
 @overload
 def format_volume_text(
-    manga_volume: None,
-    manga_chapter: int | float,
+    *,
+    manga_chapter: int,
 ) -> str: ...
 
 
 @overload
 def format_volume_text(
+    *,
+    manga_chapter: float,
+) -> str: ...
+
+
+@overload
+def format_volume_text(
+    *,
     manga_volume: None,
     manga_chapter: None,
 ) -> None: ...
@@ -531,12 +540,14 @@ def format_volume_text(
 
 @overload
 def format_volume_text(
+    *,
     manga_volume: int | float | None,
-    manga_chapter: int | float,
-) -> str: ...
+    manga_chapter: int | float | None,
+) -> str | None: ...
 
 
 def format_volume_text(
+    *,
     manga_volume: int | float | None = None,
     manga_chapter: int | float | None = None,
 ) -> str | None:
@@ -673,7 +684,7 @@ def format_daiz_like_filename(
         publication_type=publication_type,
         ripper_credit=ripper_credit,
         bracket_type=bracket_type,
-        manga_volume_text=format_volume_text(manga_volume, chapter_info.number),
+        manga_volume_text=format_volume_text(manga_volume=manga_volume, manga_chapter=chapter_info.number),
         rls_revision=rls_revision,
         extra_metadata=extra_archive_metadata,
     )

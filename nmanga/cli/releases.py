@@ -486,7 +486,7 @@ def prepare_releases_chapter(
                 publication_type=manga_publication_type,
                 ripper_credit=rls_credit,
                 bracket_type=bracket_type,
-                manga_volume_text=format_volume_text(manga_volume, manga_chapter),
+                manga_volume_text=format_volume_text(manga_volume=manga_volume, manga_chapter=manga_chapter),
                 rls_revision=rls_revision,
                 extra_metadata=rls_extra_metadata,
             )

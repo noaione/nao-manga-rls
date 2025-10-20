@@ -100,7 +100,7 @@ def image_tagging(
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
 
-    volume_text = format_volume_text(manga_volume, manga_chapter)
+    volume_text = format_volume_text(manga_volume=manga_volume, manga_chapter=manga_chapter)
     if volume_text is None:
         raise click.BadParameter(
             "Please provide either a chapter or a volume number.",

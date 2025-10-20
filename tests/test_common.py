@@ -23,7 +23,7 @@ SOFTWARE.
 """
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, cast
 
 from nmanga.common import (
     ChapterRange,
@@ -729,24 +729,24 @@ class TestCreateChapter:
     def _mock_match(
         self,
         ch_num: str,
-        ch_title: Optional[str] = MISSING,
-        ch_actual: Optional[str] = MISSING,
-        ch_extra: Optional[str] = MISSING,
-        vol_num: Optional[str] = MISSING,
-        vol_extra: Optional[str] = MISSING,
+        ch_title: str | _MissingT = MISSING,
+        ch_actual: str | _MissingT = MISSING,
+        ch_extra: str | _MissingT = MISSING,
+        vol_num: str | _MissingT = MISSING,
+        vol_extra: str | _MissingT = MISSING,
     ):
         match = PseudoChapterMatch()
         match.set("ch", str(ch_num))
         if ch_title is not MISSING:
-            match.set("title", ch_title)
+            match.set("title", cast(str, ch_title))
         if ch_actual is not MISSING:
-            match.set("actual", ch_actual)
+            match.set("actual", cast(str, ch_actual))
         if ch_extra is not MISSING:
-            match.set("ex", ch_extra)
+            match.set("ex", cast(str, ch_extra))
         if vol_num is not MISSING:
-            match.set("vol", vol_num)
+            match.set("vol", cast(str, vol_num))
         if vol_extra is not MISSING:
-            match.set("volex", vol_extra)
+            match.set("volex", cast(str, vol_extra))
         return match
 
     def test_basic_match(self):
@@ -867,9 +867,10 @@ class TestChapterRange:
         assert repr(self._CHAPTER_EXTRA) == "<ChapterRange c1.5 - Extra Story [p000-051]>"
 
     def test_eq(self):
-        _CHAPTER_ONE = ChapterRange(1, "Unknown", [0, 41], True)
+        CHAPTER_ONE = ChapterRange(1, "Unknown", [0, 41], True)
+
         assert self._CHAPTER != self._CHAPTER_EXTRA
-        assert self._CHAPTER == _CHAPTER_ONE
+        assert self._CHAPTER == CHAPTER_ONE
 
         assert self._CHAPTER == 1
 
