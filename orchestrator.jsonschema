@@ -1375,7 +1375,7 @@
         "base_path": {
             "default": "source",
             "format": "path",
-            "title": "Base Path",
+            "title": "Base Path for Volumes",
             "type": "string"
         },
         "volumes": {
