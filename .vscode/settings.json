@@ -21,5 +21,8 @@
     },
     "files.associations": {
         "*.jsonschema": "json"
-    }
+    },
+    "ruff.format.backend": "uv",
+    "ruff.format.preview": true,
+    "ruff.configurationPreference": "filesystemFirst"
 }

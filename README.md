@@ -1,5 +1,9 @@
 # [nao] Manga Release Scripts
 
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![License](https://img.shields.io/github/license/noaione/nao-manga-rls)](https://github.com/noaione/nao-manga-rls/blob/master/LICENSE)
+![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fnoaione%2Fnao-manga-rls%2Frefs%2Fheads%2Fmaster%2Fpyproject.toml)
+
 This repo contains stuff that I use to release and collect manga from a certain cat website.
 
 All my release use one of the following tag:

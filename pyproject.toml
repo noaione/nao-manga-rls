@@ -8,7 +8,7 @@ description = "A collection of CLI function to process a manga releases."
 readme = "README.md"
 dynamic = ["version"]
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 authors = [{name = "noaione", email = "noaione@n4o.xyz"}]
 keywords = ["manga", "colorlevel", "spreads", "auto-splitting", "processing", "cbz", "comic"]
 classifiers = [
