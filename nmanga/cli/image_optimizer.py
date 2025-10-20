@@ -154,13 +154,10 @@ def image_jpegify(
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
-            for image in image_candidates:
-                pool.apply_async(
-                    _wrapper_jpegify_threaded,
-                    args=(image, dest_output, cjpegli_exe, quality),
-                )
-            pool.close()
-            pool.join()
+            pool.starmap(
+                _wrapper_jpegify_threaded,
+                [(image, dest_output, cjpegli_exe, quality) for image in image_candidates],
+            )
     else:
         for idx, image in enumerate(image_candidates):
             console.status(f"Converting image to JPEG... [{idx + 1}/{total_images}]")

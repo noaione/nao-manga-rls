@@ -37,11 +37,11 @@ from ...autolevel import (
     posterize_image_with_imagemagick,
 )
 from ...common import RegexCollection, threaded_worker
+from ...term import get_console
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
 
 if TYPE_CHECKING:
-    from ...term import Console
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionPosterize",)
@@ -51,11 +51,11 @@ def _runner_posterize_threaded(
     img_path: Path,
     output_dir: Path,
     action: "ActionPosterize",
-    console: "Console",
     imagick: str | None = None,
     is_color: bool = False,
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
+    console = get_console()
     if skip_action is not None:
         perform_skip_action(img_path, output_dir, skip_action, console)
         return ThreadedResult.COPIED if skip_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
@@ -157,23 +157,17 @@ class ActionPosterize(BaseAction):
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                for image, is_color, is_skip_action in images_complete:
-                    # We need to also get the return value here
-                    pool.apply_async(
-                        _runner_posterize_threaded,
-                        args=(image, output_dir, self, context.terminal, imagick, is_color, is_skip_action),
-                        callback=results.append,
-                    )
-                pool.close()
-                pool.join()
+                results = pool.starmap(
+                    _runner_posterize_threaded,
+                    [
+                        (image, output_dir, self, imagick, is_color, is_skip_action)
+                        for image, is_color, is_skip_action in images_complete
+                    ],
+                )
         else:
             for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
                 context.terminal.status(f"Posterizing images... [{idx + 1}/{total_images}]")
-                results.append(
-                    _runner_posterize_threaded(
-                        image, output_dir, self, context.terminal, imagick, is_color, is_skip_action
-                    )
-                )
+                results.append(_runner_posterize_threaded(image, output_dir, self, imagick, is_color, is_skip_action))
 
         context.terminal.stop_status(f"Posterized {total_images} images.")
         posterized_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)

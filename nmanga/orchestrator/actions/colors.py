@@ -34,10 +34,10 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler
 from ...common import RegexCollection, threaded_worker
+from ...term import get_console
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
-    from ...term import Console
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = (
@@ -108,8 +108,8 @@ def _runner_jpegify_threaded(
     output_dir: Path,
     cjpegli: str,
     quality: int,
-    console: "Console",
 ) -> None:
+    console = get_console()
     dest_path = output_dir / f"{img_path.stem}.jpg"
     if dest_path.exists():
         console.warning(f"Skipping existing file: {dest_path}")
@@ -195,17 +195,14 @@ class ActionColorJpegify(BaseAction):
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                for image in image_candidates:
-                    pool.apply_async(
-                        _runner_jpegify_threaded,
-                        args=(image, output_dir, cjpegli, quality, context.terminal),
-                    )
-                pool.close()
-                pool.join()
+                pool.starmap(
+                    _runner_jpegify_threaded,
+                    [(image, output_dir, cjpegli, quality) for image in image_candidates],
+                )
         else:
             for idx, image in enumerate(image_candidates):
                 context.terminal.status(f"Converting images to JPEG... [{idx + 1}/{total_images}]")
-                _runner_jpegify_threaded(image, output_dir, cjpegli, quality, context.terminal)
+                _runner_jpegify_threaded(image, output_dir, cjpegli, quality)
 
         context.terminal.stop_status(f"Converted {total_images} images to JPEG in {output_dir}.")
 

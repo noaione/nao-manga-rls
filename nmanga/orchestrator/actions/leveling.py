@@ -35,11 +35,11 @@ from pydantic import ConfigDict, Field
 from ... import file_handler
 from ...autolevel import apply_levels, find_local_peak, gamma_correction
 from ...common import RegexCollection, threaded_worker
+from ...term import get_console
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
-    from ...term import Console
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionAutolevel",)
@@ -49,10 +49,10 @@ def _runner_autolevel2_threaded(
     img_path: Path,
     output_dir: Path,
     action: "ActionAutolevel",
-    console: "Console",
     is_color: bool,
     is_skipped_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
+    console = get_console()
     if is_skipped_action is not None:
         perform_skip_action(img_path, output_dir, is_skipped_action, console)
         return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
@@ -194,21 +194,17 @@ class ActionAutolevel(BaseAction):
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                for image, is_color, is_skip_action in images_complete:
-                    # We need to also get the return value here
-                    pool.apply_async(
-                        _runner_autolevel2_threaded,
-                        args=(image, output_dir, self, context.terminal, is_color, is_skip_action),
-                        callback=results.append,
-                    )
-                pool.close()
-                pool.join()
+                results = pool.starmap(
+                    _runner_autolevel2_threaded,
+                    [
+                        (image, output_dir, self, is_color, is_skip_action)
+                        for image, is_color, is_skip_action in images_complete
+                    ],
+                )
         else:
             for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
                 context.terminal.status(f"Auto-leveling images... [{idx + 1}/{total_images}]")
-                results.append(
-                    _runner_autolevel2_threaded(image, output_dir, self, context.terminal, is_color, is_skip_action)
-                )
+                results.append(_runner_autolevel2_threaded(image, output_dir, self, is_color, is_skip_action))
 
         autolevel_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
         copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)

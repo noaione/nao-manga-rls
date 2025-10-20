@@ -35,6 +35,7 @@ from pydantic import ConfigDict, Field
 from ... import file_handler
 from ...common import RegexCollection, threaded_worker
 from ...spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
+from ...term import get_console
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
@@ -50,15 +51,16 @@ class _SpreadStuff(TypedDict):
 
 
 def _runner_image_spreads_threaded(
-    context: WorkerContext,
+    current_dir: Path,
     spread_key: str,
     images: _SpreadStuff,
     imagick: str,
     action: "ActionSpreads",
 ) -> None:
+    console = get_console()
     final_filename = f"{images['prefix']}p{spread_key}{images['postfix']}"
     if len(images["images"]) < 2:
-        context.terminal.warning(f"Spread {spread_key} has less than 2 images, skipping...")
+        console.warning(f"Spread {spread_key} has less than 2 images, skipping...")
         return
 
     if action.pillow:
@@ -72,7 +74,7 @@ def _runner_image_spreads_threaded(
             extension = f".{action.output_fmt.lower()}"
         final_filename += extension
 
-        joined_image.save(context.current_dir / final_filename, quality=int(action.quality))
+        joined_image.save(current_dir / final_filename, quality=int(action.quality))
 
         # Close all images
         for im in loaded_images:
@@ -81,15 +83,15 @@ def _runner_image_spreads_threaded(
     else:
         temp_filename = join_spreads_imagemagick(
             images=images["images"],
-            output_directory=context.current_dir,
+            output_directory=current_dir,
             quality=action.quality,
             direction=action.direction,
             output_format=action.output_fmt,
             magick_path=imagick,
         )
 
-        input_name = context.current_dir / temp_filename
-        input_name.rename(context.current_dir / final_filename)
+        input_name = current_dir / temp_filename
+        input_name.rename(current_dir / final_filename)
 
 
 class ActionSpreads(BaseAction):
@@ -183,17 +185,17 @@ class ActionSpreads(BaseAction):
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                for spread, images in exported_images.items():
-                    pool.apply_async(
-                        _runner_image_spreads_threaded,
-                        args=(context, spread, images, imagick, self),
-                    )
-                pool.close()
-                pool.join()
+                pool.starmap(
+                    _runner_image_spreads_threaded,
+                    [
+                        (context.current_dir, spread, images, imagick, self)
+                        for spread, images in exported_images.items()
+                    ],
+                )
         else:
             for spread, images in exported_images.items():
                 context.terminal.status(f"Joining spreads: {current}/{total_match_spreads} ({spread})...")
-                _runner_image_spreads_threaded(context, spread, images, cast(str, imagick), self)
+                _runner_image_spreads_threaded(context.current_dir, spread, images, cast(str, imagick), self)
                 current += 1
         context.terminal.stop_status("Finished joining spreads.")
 
