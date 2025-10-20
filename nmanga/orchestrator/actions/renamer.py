@@ -141,6 +141,8 @@ class ActionRename(BaseAction):
     """The kind of action"""
     title: str | None = Field(None, title="Title of the Series")
     """Override title for the rename action"""
+    volume_filename: bool = Field(False, title="Use Volume in Filename")
+    """Use volume in filename, ignoring the volume number from the volume config"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -181,6 +183,20 @@ class ActionRename(BaseAction):
             if page_back is not None:
                 page_num = f"{page_num}-{page_back}"
 
+            vol_str = title_match.group("vol")
+            vol_str_ex = title_match.group("volex")
+            vol_actual = volume.number if not volume.oneshot else None
+            if not volume.oneshot:
+                if vol_str is not None:
+                    if vol_str.startswith("v"):
+                        vol_str = vol_str[1:]
+                    vol_actual = int(vol_str)
+
+            if vol_actual is not None and vol_str_ex is not None:
+                if vol_str_ex.startswith("."):
+                    vol_str_ex = vol_str_ex[1:]
+                vol_actual = float(f"{vol_actual}.{int(vol_str_ex)}")
+
             selected_range: ChapterRange | None = None
             for chapter in all_chapters:
                 if chapter.is_single:
@@ -209,7 +225,7 @@ class ActionRename(BaseAction):
                 publication_type=volume.publication,
                 ripper_credit=orchestrator.credit,
                 bracket_type=orchestrator.bracket_type,
-                manga_volume=volume.number if not volume.oneshot else None,
+                manga_volume=vol_actual,
                 extra_metadata=extra_name,
                 image_quality=volume.quality,
                 rls_revision=volume.revision,

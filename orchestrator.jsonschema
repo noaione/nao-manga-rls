@@ -46,7 +46,6 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "default": "leveled",
                     "format": "path",
                     "title": "Output Base Path",
                     "type": "string"
@@ -157,7 +156,6 @@
                     "type": "integer"
                 },
                 "source_path": {
-                    "default": "colors",
                     "format": "path",
                     "title": "Source Path",
                     "type": "string"
@@ -222,7 +220,6 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "default": "denoised",
                     "format": "path",
                     "title": "Output Base Path",
                     "type": "string"
@@ -366,7 +363,6 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "default": "colors",
                     "format": "path",
                     "title": "Output Base Path",
                     "type": "string"
@@ -565,7 +561,6 @@
                     "type": "string"
                 },
                 "base_path": {
-                    "default": "posterized",
                     "format": "path",
                     "title": "Output Base Path",
                     "type": "string"
@@ -653,6 +648,11 @@
                     ],
                     "default": null,
                     "title": "Title of the Series"
+                },
+                "volume_filename": {
+                    "default": false,
+                    "title": "Use Volume in Filename",
+                    "type": "boolean"
                 }
             },
             "title": "nmanga Orchestrator - Daiz-like Rename Images Action",
@@ -1373,7 +1373,6 @@
             "type": "string"
         },
         "base_path": {
-            "default": "source",
             "format": "path",
             "title": "Base Path for Volumes",
             "type": "string"
