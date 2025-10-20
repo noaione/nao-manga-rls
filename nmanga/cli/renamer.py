@@ -53,12 +53,20 @@ console = term.get_console()
     show_default=True,
     help="The starting index to rename the files to",
 )
+@click.option(
+    "-r",
+    "--reverse",
+    "reverse",
+    is_flag=True,
+    help="Reverse the direction of renaming",
+)
 @options.manga_title_optional
 @options.manga_volume
 @time_program
 def shift_renamer(
     path_or_archive: Path,
     start_index: int,
+    reverse: bool,
     manga_title: str | None,
     manga_volume: int | float | None,
 ):
@@ -79,7 +87,7 @@ def shift_renamer(
     for image_file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
         all_images.append(image_file.resolve())
 
-    all_images.sort(key=lambda x: x.stem)
+    all_images.sort(key=lambda x: x.stem, reverse=reverse)
 
     # we do the padding at minimum 3 digits, if page number has more than 3 digits we add additional padding
     total_files = len(all_images) + start_index

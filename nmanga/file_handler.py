@@ -118,7 +118,7 @@ class UnicodeZipFile(zipfile.ZipFile):
             self.metadata_encoding = metadata_encoding
             if self.metadata_encoding and mode != "r":
                 raise NotImplementedError("metadata_encoding is only supported in read mode")
-            super().__init__(file, mode, compression, allowZip64, compresslevel, strict_timestamps=strict_timestamps)
+            super().__init__(file, mode, compression, allowZip64, compresslevel, strict_timestamps=strict_timestamps)  # type: ignore
         else:
             super().__init__(
                 file,
