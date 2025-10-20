@@ -28,4 +28,4 @@ import warnings
 # reexport
 from nmanga.constants import *
 
-warnings.warn("nmanga.cli.constants is deprecated, use nmanga.constants instead", DeprecationWarning)
+warnings.warn("nmanga.cli.constants is deprecated, use nmanga.constants instead", DeprecationWarning, stacklevel=2)

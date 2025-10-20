@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=70", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nmanga"
-version = "0.21.0"
 description = "A collection of CLI function to process a manga releases."
 readme = "README.md"
+dynamic = ["version"]
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [{name = "noaione", email = "noaione@n4o.xyz"}]
@@ -26,25 +26,29 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "rich==14.0.0",
-    "inquirer==3.4.0",
-    "click==8.2.1",
+    "rich==14.2.0",
+    "inquirer==3.4.1",
+    "click==8.3.0",
     "ftfy==6.3.1",
-    "pydantic==2.12.1",
+    "pydantic==2.12.3",
     "typing-extensions==4.15.0",
     "Pillow==12.0.0",
-    "lxml==6.0.1",
+    "lxml==6.0.2",
     "unrar2-cffi==0.4.1",
     "py7zr==1.0.0",
-    "pymupdf==1.26.4",
+    "pymupdf==1.26.5",
+    "defusedxml==0.7.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==8.3.5",
+    "pytest==8.4.2",
     "pytest-cov==7.0.0",
     "ruff==0.14.1",
 ]
+
+[tool.setuptools.dynamic]
+version = {attr = "nmanga._metadata.__version__"}
 
 [project.urls]
 "Bug Reports" = "https://github.com/noaione/nao-manga-rls/issues"
@@ -57,17 +61,6 @@ nmanga = "nmanga.cmd:main"
 packages = ["nmanga", "nmanga.cli", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"]
 
 [tool.ruff]
-ignore = [
-    "E203",
-    "F405",
-    "F403",
-    "F722",
-    "N806",
-    "COM812",
-    "D400",  # first line should be period, most of my docstring will be LICENSE header so no thanks
-    "D202",
-    "D401",
-]
 line-length = 120
 extend-exclude = [
     "env",
@@ -85,8 +78,10 @@ extend-exclude = [
     "_templates",
     "tools",
 ]
-ignore-init-module-imports = true
 target-version = "py310"
+src = ["nmanga", "tests", "ci"]
+
+[tool.ruff.lint]
 select = [
     "E",
     "F",
@@ -100,25 +95,36 @@ select = [
     "D",
     "RUF",
     "COM",
-    "CPY",
     "PTH",
     "ASYNC"
 ]
-extend-ignore = ["D"] # D -> Docstring missing for public function or method
-src = ["nmanga", "tests", "ci"]
+ignore = [
+    "E203",
+    "F405",
+    "F403",
+    "F722",
+    "N806",
+    "COM812",
+    "D400",  # first line should be period, most of my docstring will be LICENSE header so no thanks
+    "D202",
+    "D401",
+    "CPY",
+]
+preview = true
+extend-ignore = ["D", "S603", "S404", "T201"] # D -> Docstring missing for public function or method
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "numpy"
 ignore-decorators = ["typing.overload"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = false
 split-on-trailing-comma = true
 required-imports = ["from __future__ import annotations"]
 known-first-party = ["tests", "tosho_mango"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403", "I002", "D205"]
 "tests/*.py" = ["S101", "I002", "D"]  # assert statement used in pytest
 "pipelines/*" = ["T", "I", "S603", "D"]

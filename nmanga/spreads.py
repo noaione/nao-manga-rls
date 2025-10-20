@@ -85,7 +85,7 @@ def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = Spr
         The joined image.
     """
 
-    widths, heights = zip(*(i.size for i in images))
+    widths, heights = zip(*(i.size for i in images), strict=True)
 
     total_width = sum(widths)
     max_height = max(heights)
@@ -148,7 +148,7 @@ def join_spreads_imagemagick(
     commands.extend(["-quality", f"{quality:.2f}%", "+append", f"{output_directory / output_name}"])
 
     try:
-        sp.run(commands, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)  # noqa: S603
+        sp.run(commands, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     except sp.CalledProcessError as e:
         raise RuntimeError("Failed to join spreads using ImageMagick.") from e
     return output_name

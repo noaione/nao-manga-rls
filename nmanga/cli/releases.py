@@ -26,6 +26,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -64,10 +65,10 @@ __all__ = (
 )
 
 
+@dataclass
 class SpecialNaming:
-    def __init__(self, page: int, data: str):
-        self.page = page
-        self.data = data
+    page: int
+    data: str
 
 
 @click.command(
@@ -167,7 +168,7 @@ def prepare_releases(
     cmx_re = RegexCollection.cmx_re()
     console.status("Checking folder contents...")
     temp_image_count = 0
-    for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
+    for image, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = cmx_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
@@ -299,7 +300,8 @@ def prepare_releases(
         current += 1
 
     console.stop_status(f"Processed {current - 1} images!")
-    assert image_titling is not None
+    if image_titling is None:
+        raise RuntimeError("No image titling generated, this is unexpected!")
 
     if pingo_exe is not None and do_img_optimize:
         console.info("Optimizing images...")
@@ -428,7 +430,7 @@ def prepare_releases_chapter(
     page_re = RegexCollection.page_re()
     console.status("Checking folder contents...")
     temp_image_count = 0
-    for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
+    for image, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = page_re.match(image.name)
         if title_match is None:
             console.error("Unmatching file name: {}".format(image.name))
@@ -492,7 +494,8 @@ def prepare_releases_chapter(
             )
 
     console.stop_status(f"Processed {current - 1} images!")
-    assert image_titling is not None
+    if image_titling is None:
+        raise RuntimeError("No image titling generated, this is unexpected!")
 
     if pingo_exe is not None and do_img_optimize:
         console.info("Optimizing images...")

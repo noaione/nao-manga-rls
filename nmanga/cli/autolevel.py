@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import signal
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
@@ -95,11 +94,6 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
     if not ext.startswith("."):
         return f".{ext}"
     return ext
-
-
-def _init_worker():
-    """Initialize worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def _find_local_peak_magick_wrapper(

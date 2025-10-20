@@ -28,11 +28,11 @@ from datetime import datetime
 from enum import Enum
 from mimetypes import guess_type
 from pathlib import Path
-from xml.dom.minidom import parseString as xml_dom_parse
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-import lxml.etree as ET
+import lxml.etree as ET  # noqa: N812
 import py7zr
+from defusedxml.minidom import parseString as xml_dom_parse  # noqa: N813
 from PIL import Image
 
 from .templates.epub import EPUB_CONTAINER, EPUB_CONTENT, EPUB_PAGE, EPUB_STYLES
@@ -122,8 +122,9 @@ class ArchiveMangaExporter(MangaExporter):
 class CBZMangaExporter(ArchiveMangaExporter):
     TYPE = ExporterType.cbz
 
-    def __init__(self, file_name: str, output_directory: Path, *, compression_level: int = 5):
-        assert 0 <= compression_level <= 9, "Compression level must be between 0 and 9."
+    def __init__(self, file_name: str, output_directory: Path, *, compression_level: int = 5) -> None:
+        if compression_level < 0 or compression_level > 9:
+            raise ValueError("Compression level must be between 0 and 9.")
 
         super().__init__(file_name, output_directory, compression_level=compression_level)
 

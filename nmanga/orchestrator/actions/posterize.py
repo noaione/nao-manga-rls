@@ -157,7 +157,7 @@ class ActionPosterize(BaseAction):
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
+                for image, is_color, is_skip_action in images_complete:
                     # We need to also get the return value here
                     pool.apply_async(
                         _runner_posterize_threaded,

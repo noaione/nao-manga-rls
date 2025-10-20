@@ -83,7 +83,7 @@ class YieldType(Enum):
     TAR = 5  # Gzip, LZMA, XZ, BZ2
 
 
-class UnknownArchiveType(Exception):
+class UnknownArchiveTypeError(Exception):
     def __init__(self, file: Path) -> None:
         self.file = file
         super().__init__(f"An unknown archive format found: {file}")
@@ -107,7 +107,7 @@ class UnicodeZipFile(zipfile.ZipFile):
         file: str | PathLike | IO[bytes],
         mode: str = "r",
         compression: int = zipfile.ZIP_STORED,
-        allowZip64: bool = True,
+        allowZip64: bool = True,  # noqa: N803
         compresslevel: int | None = None,
         *,
         strict_timestamps: bool = True,
@@ -237,7 +237,7 @@ def collect_image_archive(file: Path):
         with tarfile.open(str(file), encoding="utf-8") as tararchive_file:  # Force utf-8 encoding
             yield from collect_image_from_tar(tararchive_file)
     else:
-        raise UnknownArchiveType(file)
+        raise UnknownArchiveTypeError(file)
 
 
 def collect_image(path_or_archive: Path):
@@ -421,7 +421,7 @@ class MangaArchive:
             elif is_tararchive(self.__path):
                 self.__accessor = tarfile.open(str(self.__path), encoding="utf-8")  # Force utf-8 encoding
             else:
-                raise UnknownArchiveType(self.__path)
+                raise UnknownArchiveTypeError(self.__path)
         else:
             self.__accessor = self.__path
         return self.__accessor
@@ -460,7 +460,8 @@ class MangaArchive:
             return files_bytes
         elif isinstance(file, tarfile.TarInfo) and isinstance(self.__accessor, tarfile.TarFile):
             file_data = self.__accessor.extractfile(file)
-            assert file_data is not None, "Extracted file data is None"
+            if file_data is None:
+                raise FileNotFoundError(f"File {file.name} not found in archive")
             file_data.seek(0)
             return file_data.read()
         elif isinstance(self.__accessor, zipfile.ZipFile) and isinstance(file, zipfile.ZipInfo):
@@ -531,16 +532,16 @@ def create_temp_dir() -> Path:
     return Path(tempfile.mkdtemp())
 
 
-def remove_folder_and_contents(folder: Path):
-    if not folder.exists() or not folder.is_dir():
+def remove_folder_and_contents(base_folder: Path):
+    if not base_folder.exists() or not base_folder.is_dir():
         return
-    for folder in folder.iterdir():
+    for folder in base_folder.iterdir():
         if folder.is_dir():
             remove_folder_and_contents(folder)
         else:
             folder.unlink(missing_ok=True)
-    folder.rmdir()
+    base_folder.rmdir()
 
 
 def random_name(length: int = 8):
-    return "".join(random.choices(ascii_letters + digits, k=length))
+    return "".join(random.choices(ascii_letters + digits, k=length))  # noqa: S311

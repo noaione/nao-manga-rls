@@ -64,8 +64,8 @@ def _test_exec(
         proc = sp.Popen(arguments, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait(5.0)
 
-        assert proc.stdout is not None  # for mypy
-        assert proc.stderr is not None  # for mypy
+        if proc.stdout is None or proc.stderr is None:
+            raise RuntimeError("Failed to capture stdout/stderr")
 
         if proc.returncode != 0:
             if callable(extra_check):
@@ -247,9 +247,9 @@ class NMangaCommandHandler(click.Command):
             if not isinstance(option.obj, WithDeprecatedOption):
                 continue
 
-            def make_process(opt: ParserOption):
-                orig_process = option.process
+            orig_process = option.process
 
+            def make_process(opt: ParserOption, orig_process: Callable[..., None]):
                 def _process_intercept(
                     value: str,
                     state: "ParsingState",
@@ -285,7 +285,7 @@ class NMangaCommandHandler(click.Command):
 
                 return partial(_process_intercept, upper_opt=opt, original_func=orig_process)
 
-            option.process = make_process(option)
+            option.process = make_process(option, orig_process)
 
         return parser
 
@@ -294,7 +294,7 @@ class NMangaCommandHandler(click.Command):
             return super().invoke(ctx)
         except Exception as ex:
             # Invoke error handler
-            raise UnrecoverableNMangaError(str(ex), sys.exc_info())
+            raise UnrecoverableNMangaError(str(ex), sys.exc_info()) from ex
 
 
 class RegexCollection:
@@ -304,6 +304,7 @@ class RegexCollection:
             "nmanga.cli.base.RegexCollection.volume_re is deprecated, "
             "use nmanga.common.RegexCollection.volume_re instead",
             DeprecationWarning,
+            stacklevel=2,
         )
         return _RegexCollection.volume_re(title, limit_credit)
 
@@ -321,6 +322,7 @@ class RegexCollection:
             "nmanga.cli.base.RegexCollection.chapter_re is deprecated, "
             "use nmanga.common.RegexCollection.chapter_re instead",
             DeprecationWarning,
+            stacklevel=2,
         )
         return _RegexCollection.chapter_re(title, publisher)
 
@@ -329,6 +331,7 @@ class RegexCollection:
         warnings.warn(
             "nmanga.cli.base.RegexCollection.cmx_re is deprecated, use nmanga.common.RegexCollection.cmx_re instead",
             DeprecationWarning,
+            stacklevel=2,
         )
         return _RegexCollection.cmx_re()
 
@@ -337,5 +340,6 @@ class RegexCollection:
         warnings.warn(
             "nmanga.cli.base.RegexCollection.page_re is deprecated, use nmanga.common.RegexCollection.cmx_re instead",
             DeprecationWarning,
+            stacklevel=2,
         )
         return _RegexCollection.page_re()

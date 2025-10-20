@@ -305,7 +305,7 @@ class OrchestratorConfig(BaseModel):
         action_names = self.action_names
         if len(action_names) != len(self.actions):
             raise ValueError("Action names and actions length mismatch")
-        return dict(zip(action_names, self.actions))
+        return dict(zip(action_names, self.actions, strict=True))
 
     @model_validator(mode="after")
     def check_no_actions(self) -> Self:

@@ -51,9 +51,11 @@ console = term.get_console()
 
 
 def extract_page_num(
-    filename: str, custom_data: dict[str, int] = {}, regex_data: Pattern[str] | None = None
+    filename: str, custom_data: dict[str, int] | None = None, regex_data: Pattern[str] | None = None
 ) -> list[int]:
     # Remove until pXXX
+    if custom_data is None:
+        custom_data = {}
     if regex_data is not None:
         filename = re.sub(regex_data, r"\1-\2", filename)
     for pg_match, pg_num in custom_data.items():
@@ -102,9 +104,11 @@ def _collect_archive_to_chapters(
     archive_file: Path,
     chapters_mapping: list[ChapterRange],
     volume_num: int | float | None = None,
-    custom_data: dict[str, int] = {},
+    custom_data: dict[str, int] | None = None,
     regex_data: Pattern[str] | None = None,
 ):  # pragma: no cover
+    if custom_data is None:
+        custom_data = {}
     console.info(f"Collecting chapters from {archive_file.name}")
 
     collected_chapters: dict[str, exporter.CBZMangaExporter] = {}

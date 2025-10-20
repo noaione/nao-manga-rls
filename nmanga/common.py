@@ -31,7 +31,7 @@ import subprocess as sp
 import traceback
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Match, Pattern, cast, overload
+from typing import IO, Match, Pattern, cast, overload
 
 from . import config, term, utils
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
@@ -79,11 +79,11 @@ def threaded_worker(console: term.Console, threads: int):
     with mp.Pool(processes=threads, initializer=_worker_initializer) as pool:
         try:
             yield pool
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as ke:
             console.warning("Process interrupted by user, terminating workers...")
             pool.terminate()
             pool.join()
-            raise RuntimeError("Process interrupted by user.")
+            raise RuntimeError("Process interrupted by user.") from ke
         except Exception as e:
             console.error(f"An error occurred: {e}, terminating workers...")
             traceback.print_exc()
@@ -92,6 +92,11 @@ def threaded_worker(console: term.Console, threads: int):
             raise e
         finally:
             pool.close()
+
+
+def assert_proc(stuff: IO[bytes] | None) -> None:
+    if stuff is None:
+        raise ValueError("Subprocess stream is None, cannot proceed.")
 
 
 class PseudoChapterMatch:
@@ -135,11 +140,11 @@ def format_daiz_like_numbering(
 
 class ChapterRange:
     def __init__(
-        self, number: int | float, name: str | None = None, range: list[int] = list(), is_single: bool = False
+        self, number: int | float, name: str | None = None, range: list[int] | None = None, is_single: bool = False
     ):
         self.number = number
         self.name = name
-        self.range = range
+        self.range: list[int] = range or []
         self.is_single = is_single
 
     def __repr__(self):
@@ -297,8 +302,7 @@ def inquire_chapter_ranges(
         console.info(initial_prompt)
 
         ch_number = console.inquire("Chapter number", lambda y: int_or_float(y) is not None)
-        ch_number = int_or_float(ch_number)
-        assert ch_number is not None  # for mypy
+        ch_number = cast(int | float, int_or_float(ch_number))
 
         ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
         actual_ranges, is_single = parse_ch_ranges(ch_ranges)
@@ -363,8 +367,8 @@ def run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
     proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
 
-    assert proc.stdout is not None  # for mypy, we pipeped it
-    assert proc.stderr is not None  # for mypy, we pipeped it
+    if proc.stdout is None or proc.stderr is None:
+        raise ValueError("Subprocess stream is None, cannot proceed.")
 
     stdout = proc.stdout.read().decode("utf-8")
     stderr = proc.stderr.read().decode("utf-8")
@@ -391,8 +395,8 @@ def is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
     proc = sp.Popen([pingo_path, "-help"], stdout=sp.PIPE, stderr=sp.PIPE)
     proc.wait()
 
-    assert proc.stdout is not None  # for mypy, we pipeped it
-    assert proc.stderr is not None  # for mypy, we pipeped it
+    if proc.stdout is None or proc.stderr is None:
+        raise ValueError("Subprocess stream is None, cannot proceed.")
 
     stdout = proc.stdout.read().decode("utf-8")
     stderr = proc.stderr.read().decode("utf-8")
@@ -586,11 +590,12 @@ def format_daiz_like_filename(
     extra_metadata: str | None = None,
     image_quality: str | None = None,  # {HQ}/{LQ} thing
     rls_revision: int | None = None,
-    chapter_extra_maps: dict[int, list[ChapterRange]] = dict(),
+    chapter_extra_maps: dict[int, list[ChapterRange]] | None = None,
     extra_archive_metadata: str | None = None,
     fallback_volume_name: str = "OShot",
 ):
     pub_type = ""
+    chapter_extra_maps = chapter_extra_maps or {}
     if publication_type.image:
         pub_type = f"[{publication_type.image}]"
 

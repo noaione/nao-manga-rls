@@ -31,7 +31,6 @@ from typing import Generator
 
 import pymupdf
 from PIL import Image
-from pymupdf.utils import get_image_info, get_pixmap
 
 __all__ = (
     "ExtractedImage",
@@ -207,13 +206,13 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
         # Image list since this contains the smask info
         image_lists = page.get_images(full=False)
         # The detailed image info
-        image_infos = get_image_info(page, hashes=False, xrefs=True)
+        image_infos = page.get_image_info(hashes=False, xrefs=True)
 
         # No images? Create padding
         if len(image_infos) == 0:
             # No images on this page, create a blank white image with the same size as the page
             mat = pymupdf.Matrix(1, 1)
-            pix = get_pixmap(page, matrix=mat, alpha=False)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
             image = Image.new("RGB", (pix.width, pix.height), (255, 255, 255))
             with BytesIO() as output:
                 image.save(output, format="PNG")
@@ -239,7 +238,7 @@ def extract_images_from_pdf(doc: pymupdf.Document, no_composite: bool = False) -
         # Multiple images? We need to composite them together
         # Create a blank white image with the same size as the page
         mat = pymupdf.Matrix(1, 1)
-        pix = get_pixmap(page, matrix=mat, alpha=False)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
 
         # load all images first
         prefer_spaces = prefer_colorspace([info["cs-name"] for info in image_infos if "cs-name" in info])
@@ -293,7 +292,7 @@ def generate_image_from_page(
 
     Return a PIL Image or bytes (for PAM).
     """
-    images = get_image_info(page, hashes=False, xrefs=True)
+    images = page.get_image_info(hashes=False, xrefs=True)
 
     if force_colorspace is not None:
         real_colorspace: pymupdf.Colorspace = force_colorspace.as_pymupdf(force_cmyk=force_cmyk)
@@ -317,7 +316,7 @@ def generate_image_from_page(
         else:
             real_colorspace = pymupdf.csCMYK if force_cmyk else pymupdf.csRGB
 
-    pix = get_pixmap(page, dpi=dpi, colorspace=real_colorspace, alpha=with_alpha, annots=False)
+    pix = page.get_pixmap(dpi=dpi, colorspace=real_colorspace, alpha=with_alpha, annots=False)
 
     format_determine = "jpg" if pix.n > 3 else "png"
     as_bytes_data: bytes = pix.tobytes(output=format_determine, jpg_quality=100)

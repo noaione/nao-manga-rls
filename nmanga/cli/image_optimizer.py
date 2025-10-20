@@ -26,25 +26,18 @@ SOFTWARE.
 # This file is part of nmanga.
 from __future__ import annotations
 
-import multiprocessing as mp
-import signal
 import subprocess as sp
 from pathlib import Path
 
 import click
 
 from .. import file_handler, term
-from ..common import optimize_images
+from ..common import optimize_images, threaded_worker
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_cjpegli, test_or_find_pingo
 
 console = term.get_console()
-
-
-def _init_worker():
-    """Initialize worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 @click.command(
@@ -160,27 +153,14 @@ def image_jpegify(
     quality = max(0, min(100, jpeg_quality))
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with mp.Pool(processes=threads, initializer=_init_worker) as pool:
-            try:
-                for image in image_candidates:
-                    pool.apply_async(
-                        _wrapper_jpegify_threaded,
-                        args=(image, dest_output, cjpegli_exe, quality),
-                    )
-                pool.close()
-                pool.join()
-            except KeyboardInterrupt:
-                console.warning("Keyboard interrupt detected, terminating...")
-                pool.terminate()
-                pool.join()
-                raise click.Abort()
-            except Exception as e:
-                console.error(f"Error occurred: {e}, terminating...")
-                pool.terminate()
-                pool.join()
-                raise click.Abort()
-            finally:
-                pool.close()
+        with threaded_worker(console, threads) as pool:
+            for image in image_candidates:
+                pool.apply_async(
+                    _wrapper_jpegify_threaded,
+                    args=(image, dest_output, cjpegli_exe, quality),
+                )
+            pool.close()
+            pool.join()
     else:
         for idx, image in enumerate(image_candidates):
             console.status(f"Converting image to JPEG... [{idx + 1}/{total_images}]")

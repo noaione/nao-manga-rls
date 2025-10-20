@@ -233,7 +233,7 @@ def spreads_join(
 
     direction = SpreadDirection.RTL if reverse else SpreadDirection.LTR
 
-    for spread, imgs in exported_imgs.items():
+    for imgs in exported_imgs.values():
         console.status(f"Joining spreads: {current}/{total_match_spread}")
 
         # Rename back
