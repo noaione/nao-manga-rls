@@ -29,7 +29,7 @@ from __future__ import annotations
 import subprocess as sp
 from pathlib import Path
 
-import click
+import rich_click as click
 
 from .. import file_handler, term
 from ..common import optimize_images, threaded_worker

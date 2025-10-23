@@ -30,7 +30,7 @@ import pprint
 from io import BytesIO
 from pathlib import Path
 
-import click
+import rich_click as click
 import pymupdf
 from PIL import Image
 

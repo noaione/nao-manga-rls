@@ -33,7 +33,7 @@ from pathlib import Path
 from shutil import move as mv
 from typing import TypedDict, cast
 
-import click
+import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term

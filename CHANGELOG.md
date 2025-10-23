@@ -349,3 +349,4 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Allow modifying compression level when packing archives
   - Use `-cl/--compression-level` option in `nmanga pack` and `nmanga packepub`
   - Alternatively, use `compress_level` in the `pack` orchestrator action
+- Move from standard `click` to `rich-click` for better CLI experience

@@ -30,7 +30,7 @@ import shutil
 from enum import Enum
 from pathlib import Path
 
-import click
+import rich_click as click
 from PIL import Image
 
 from nmanga.common import threaded_worker

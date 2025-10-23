@@ -32,7 +32,7 @@ from pathlib import Path
 from time import time
 from typing import Literal
 
-import click
+import rich_click as click
 
 from .. import term
 from ..orchestrator import *

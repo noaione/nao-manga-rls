@@ -28,7 +28,7 @@ import os
 import sys
 from pathlib import Path
 
-import click
+import rich_click as click
 
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
@@ -54,9 +54,48 @@ from .term import get_console
 
 console = get_console()
 
-
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 WORKING_DIR = Path.cwd().absolute()
+
+help_config = click.RichHelpConfiguration(
+    theme="quartz2-nu",
+    style_option="bold cyan",
+    style_argument="bold magenta",
+    style_command="bold cyan",
+    style_switch="bold italic green",
+    style_metavar="bold yellow",
+    style_metavar_separator="dim",
+    style_usage="bold yellow",
+    style_usage_command="bold",
+    style_helptext_first_line="",
+    style_helptext="dim",
+    style_option_default="dim",
+    style_required_short="red",
+    style_required_long="dim red",
+    style_options_panel_border="dim",
+    style_commands_panel_border="dim",
+    use_markdown=False,
+    use_rich_markup=True,
+    show_arguments=True,
+    show_metavars_column=True,
+    options_table_column_types=[
+        "required",
+        "opt_all",
+        "metavar",
+        "help",
+    ],
+    commands_table_column_types=[
+        "name_with_aliases",
+        "help",
+    ],
+    options_table_help_sections=[
+        "help",
+        "required",
+        "default",
+        "envvar",
+    ],
+    commands_table_help_sections=["help"],
+)
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
@@ -77,6 +116,63 @@ WORKING_DIR = Path.cwd().absolute()
     default=False,
 )
 @click.pass_context
+@click.rich_config(help_config)
+@click.command_panel(
+    name="Analyze",
+    help="Commands for analyzing and processing images",
+    commands=["analyze-peaks", "analyze-shades", "lookup", "identify-quality"],
+)
+@click.command_panel(
+    name="Auto Processing",
+    help="Commands for automatically analyzing and processing images",
+    commands=["orchestra", "autolevel", "autolevel2", "autoposterize"],
+)
+@click.command_panel(
+    name="ML Processing",
+    help="Commands for processing images using Machine Learning models",
+    commands=["denoise", "denoise-trt", "upscale-tiled"],
+)
+@click.command_panel(
+    name="Other Tooling",
+    help="Miscellaneous tools and utilities",
+    commands=["pdf"],
+)
+@click.command_panel(
+    name="Release Management",
+    help="Commands for managing manga releases and archives",
+    commands=[
+        "releases",
+        "releasesch",
+        "tag",
+        "rawtag",
+        "shiftname",
+        "timewizard",
+    ],
+)
+@click.command_panel(
+    name="Packing Utilities",
+    help="Commands for packing and managing manga archives",
+    commands=[
+        "pack",
+        "packepub",
+        "packcomment",
+    ],
+)
+@click.command_panel(
+    name="Splitting Utilities",
+    help="Commands for splitting manga releases",
+    commands=["autosplit", "manualsplit", "merge"],
+)
+@click.command_panel(
+    name="Image Utilities",
+    help="Commands for optimizing and converting images",
+    commands=["forcegray", "posterize", "jpegify", "spreads", "optimize"],
+)
+@click.command_panel(
+    name="Configuration",
+    help="Commands for configuring nmanga",
+    commands=["config", "version"],
+)
 def main(ctx: click.Context, verbose: bool):
     """
     Nmanga is a CLI tool for Processing pirated manga.
@@ -94,13 +190,18 @@ def main(ctx: click.Context, verbose: bool):
     help="Show nmanga version information",
     cls=NMangaCommandHandler,
 )
-def show_version():
+@click.option(
+    "--deprecated",
+    is_flag=True,
+    help="(Deprecated) Show deprecated version information",
+)
+def show_version(deprecated: bool):
     """Show nmanga version information."""
-    print(f"{__name__} version: {__version__}")
-    print(f"Created by: {__author__}")
-    print(f"Working directory: {WORKING_DIR}")
-    print(f"Python version: {sys.version.replace(os.linesep, ' ')}")
-    print(f"Platform: {sys.platform}")
+    console.console.print(f"[bold]{__name__} version:[/bold] {__version__}")
+    console.console.print(f"[bold]Created by:[/bold] {__author__}")
+    console.console.print(f"[bold]Working directory:[/bold] {WORKING_DIR}")
+    console.console.print(f"[bold]Python version:[/bold] {sys.version.replace(os.linesep, ' ')}")
+    console.console.print(f"[bold]Platform:[/bold] {sys.platform}")
 
 
 main.add_command(auto_split)

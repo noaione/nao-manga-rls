@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 from typing import Pattern
 
-import click
+import rich_click as click
 
 from .. import exporter, file_handler, term, utils
 from ..common import (

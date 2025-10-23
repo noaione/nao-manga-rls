@@ -30,7 +30,7 @@ import sys
 import traceback
 from pathlib import Path
 
-import click
+import rich_click as click
 from PIL import Image, ImageDraw
 
 from .. import file_handler, term

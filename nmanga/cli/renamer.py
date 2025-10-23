@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import click
+import rich_click as click
 
 from .. import file_handler, term
 from ..common import format_volume_text

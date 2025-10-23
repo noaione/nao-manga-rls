@@ -27,7 +27,8 @@ from __future__ import annotations
 from multiprocessing import cpu_count
 from pathlib import Path
 
-import click
+import rich_click as click
+from click.shell_completion import CompletionItem
 
 from ..config import get_config
 from ..constants import MANGA_PUBLICATION_TYPES
@@ -82,6 +83,10 @@ class PositiveIntParamType(click.ParamType):
         super().__init__()
         self.start_from_zero = start_from_zero
 
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str | None:
+        marker = "[x>=0]" if self.start_from_zero else "[x>0]"
+        return f"INTEGER RANGE {marker}"
+
     def convert(self, value, param, ctx):
         try:
             value = int(value)
@@ -109,12 +114,15 @@ class MangaPublicationParamType(click.ParamType):
             self.fail(f"{value!r} is not a valid publication type (must be either: {pub_keys})")
         return pub_type
 
-    def get_metavar(self, param: "click.core.Parameter", ctx: "click.Context") -> str | None:
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str | None:
         choices_str = "|".join(list(MANGA_PUBLICATION_TYPES.keys()))
 
         if param.required and param.param_type_name == "argument":
             return f"{{{choices_str}}}"
         return f"[{choices_str}]"
+
+    def shell_complete(self, ctx: click.Context, param: click.Parameter, incomplete: str) -> list[CompletionItem]:
+        return [CompletionItem(key) for key in MANGA_PUBLICATION_TYPES.keys()]
 
 
 FLOAT_INT = FloatIntParamType()
@@ -202,14 +210,6 @@ cjpegli_path = click.option(
     default=config.executables.cjpegli_path,
     help="Path to the cjpegli executable",
     show_default=True,
-)
-debug_mode = click.option(
-    "-v",
-    "--verbose",
-    "debug_mode",
-    is_flag=True,
-    default=False,
-    help="Enable debug mode",
 )
 use_bracket_type = click.option(
     "-br",

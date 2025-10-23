@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-import click
+import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term

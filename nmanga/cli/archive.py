@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Literal, cast
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-import click
+import rich_click as click
 
 from .. import exporter, file_handler, term
 from ..common import format_archive_filename, format_volume_text

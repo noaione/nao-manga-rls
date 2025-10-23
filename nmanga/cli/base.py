@@ -32,16 +32,17 @@ import warnings
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Pattern, cast, overload
 
-import click
+import rich_click as click
 from click.core import Context
-from click.parser import Option as ParserOption
-from click.parser import OptionParser
+from rich.columns import Columns
+from rich.text import Text
+from rich_click.rich_click_theme import RichClickTheme
 
 from .. import term
 from ..common import RegexCollection as _RegexCollection  # noqa: F401, RUF100
 
 if TYPE_CHECKING:
-    from click.parser import ParsingState
+    from click.parser import _Option, _OptionParser, _ParsingState
 
 console = term.get_console()
 __all__ = (
@@ -183,7 +184,7 @@ def is_executeable_global_path(path: str, executable: str) -> bool:
     return False
 
 
-class WithDeprecatedOption(click.Option):
+class WithDeprecatedOption(click.RichOption):
     def __init__(self, *args, **kwargs):
         self.is_deprecated = bool(kwargs.pop("deprecated", False))
 
@@ -201,15 +202,40 @@ class WithDeprecatedOption(click.Option):
         self.preferred: list[str] = preferred_list
         super(WithDeprecatedOption, self).__init__(*args, **kwargs)
 
-    def get_help_record(self, ctx: Context) -> tuple[str, str] | None:
-        parent = super().get_help_record(ctx)
-        if parent is None:
-            return parent
+    def _get_bracket_text(self, formatter: click.RichHelpFormatter) -> tuple[tuple[str, str], str]:
+        the_theme = formatter.config.theme
+        if isinstance(the_theme, str):
+            if "-nu" in the_theme:
+                return ("(", ")"), "Deprecated"
+            elif "-robo" in the_theme:
+                return ("❮", "❯"), "deprecated"  # noqa: RUF001
+        elif isinstance(the_theme, RichClickTheme):
+            if "nu" in the_theme.name:
+                return ("(", ")"), "dim blue"
+            elif "robo" in the_theme.name:
+                return ("❮", "❯"), "dim blue"  # noqa: RUF001
+        return ("[", "]"), "dim blue"
 
+    def get_rich_help(self, ctx: click.RichContext, formatter: click.RichHelpFormatter) -> Columns:
+        cols = super().get_rich_help(ctx, formatter)
+        brackets, depre_text = self._get_bracket_text(formatter)
         if self.is_deprecated:
-            opts_thing, help = parent
-            return (opts_thing, f"(DEPRECATED) {help}")
-        return parent
+            render = Text.assemble((brackets[0], "dim blue"), (depre_text, "dim blue bold"), (brackets[1], "dim blue"))
+            # Iterate through all existing text render
+            for rr in cols.renderables:
+                if isinstance(rr, Text):
+                    rr.style = "strike"
+            cols.add_renderable(render)
+            if len(self.preferred) > 0:
+                pref_text = _fmt_pref_text(self.preferred)
+                render_pref = Text.assemble(
+                    (brackets[0], "dim"),
+                    ("Preferred option(s): ", "dim"),
+                    (pref_text, "dim bold"),
+                    (brackets[1], "dim"),
+                )
+                cols.add_renderable(render_pref)
+        return cols
 
 
 class UnrecoverableNMangaError(click.ClickException):
@@ -231,8 +257,8 @@ def _fmt_pref_text(preferred: list[str]):
     return "`" + "` or `".join(preferred) + "`"
 
 
-class NMangaCommandHandler(click.Command):
-    def make_parser(self, ctx: Context) -> OptionParser:
+class NMangaCommandHandler(click.RichCommand):
+    def make_parser(self, ctx: Context) -> "_OptionParser":
         """
         Hook the process of making parser to handle deprecated options.
 
@@ -249,12 +275,12 @@ class NMangaCommandHandler(click.Command):
 
             orig_process = option.process
 
-            def make_process(opt: ParserOption, orig_process: Callable[..., None]):
+            def make_process(opt: "_Option", orig_process: Callable[..., None]):
                 def _process_intercept(
                     value: str,
-                    state: "ParsingState",
-                    upper_opt: ParserOption,
-                    original_func: Callable[[str, "ParsingState"], None],
+                    state: "_ParsingState",
+                    upper_opt: "_Option",
+                    original_func: Callable[[str, "_ParsingState"], None],
                 ):
                     is_deprecated = cast(bool, getattr(upper_opt.obj, "is_deprecated", False))
                     preferred = cast(list[str], getattr(upper_opt.obj, "preferred", []))
@@ -291,6 +317,7 @@ class NMangaCommandHandler(click.Command):
 
     def invoke(self, ctx: Context):
         try:
+            # Try to see if command is being run with deprecated options
             return super().invoke(ctx)
         except Exception as ex:
             # Invoke error handler

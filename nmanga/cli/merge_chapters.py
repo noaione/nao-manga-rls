@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import click
+import rich_click as click
 
 from .. import exporter, file_handler, term
 from . import options

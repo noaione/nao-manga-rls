@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-import click
+import rich_click as click
 
 from .. import term
 from ..common import format_archive_filename, format_volume_text, inject_metadata

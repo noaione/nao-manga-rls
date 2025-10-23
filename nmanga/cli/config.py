@@ -27,7 +27,7 @@ from __future__ import annotations
 import functools
 from typing import Callable, Literal, cast
 
-import click
+import rich_click as click
 
 from .. import config, term
 from ..constants import MANGA_PUBLICATION_TYPES

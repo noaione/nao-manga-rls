@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-import click
+import rich_click as click
 
 from .. import config, file_handler, term
 from ..common import (

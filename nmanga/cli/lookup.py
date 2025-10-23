@@ -29,7 +29,7 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
-import click
+import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
