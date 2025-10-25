@@ -33,7 +33,7 @@ import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 import rich_click as click
 from PIL import Image
@@ -103,6 +103,10 @@ def _find_local_peak_magick_wrapper(
         img_path, upper_limit=upper_limit, peak_percentage=peak_min_pct, skip_white_check=skip_white
     )
     return black_level, white_level, img_path, force_gray
+
+
+def _find_local_peak_magick_wrapper_star(args: tuple[Path, int, float, bool]) -> tuple[int, int, Path, bool]:
+    return _find_local_peak_magick_wrapper(*args)
 
 
 @click.command(
@@ -194,15 +198,24 @@ def autolevel(
         console.info("Aborting autolevel.")
         return 0
 
-    console.status("Calculating black levels for images...")
-    if threads <= 1:
-        results = [_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white) for file in all_files]
-    else:
+    progress = console.make_progress()
+    task_calculate = progress.add_task("Analzying images...", total=len(all_files))
+
+    results: list[tuple[int, int, Path, bool]] = []
+    if threads > 1:
+        console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
-            results = pool.starmap(
-                _find_local_peak_magick_wrapper, [(file, upper_limit, peak_min_pct, no_white) for file in all_files]
-            )
-    console.stop_status("Calculated black levels for images.")
+            for result in pool.imap_unordered(
+                _find_local_peak_magick_wrapper_star,
+                ((file, upper_limit, peak_min_pct, no_white) for file in all_files),
+            ):
+                results.append(result)
+                progress.update(task_calculate, advance=1)
+    else:
+        for file in all_files:
+            results.append(_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white))
+            progress.update(task_calculate, advance=1)
+    progress.update(task_calculate, completed=len(all_files))
 
     commands: list[list[str]] = []
     to_be_copied: list[Path] = []
@@ -228,9 +241,9 @@ def autolevel(
     console.info(f"Dumped autolevel debug data to: {dump_path}")
 
     # Pre-compute all the image magick commands
+    task_cmd = progress.add_task("Preparing autolevel commands...", total=len(results))
     total_results = len(results)
-    for idx, (black_level, white_level, img_path, force_gray) in enumerate(results):
-        console.status(f"Preparing autolevel commands [{idx + 1}/{total_results}]...")
+    for black_level, white_level, img_path, force_gray in results:
         if black_level == 0:
             # Skip images that don't need autolevel
             to_be_copied.append(img_path)
@@ -254,8 +267,9 @@ def autolevel(
             cmd.extend(["-colorspace", "Gray"])
         cmd.extend(["-level", params, str(dest_path)])
         commands.append(cmd)
+        progress.update(task_cmd, advance=1)
 
-    console.stop_status("Prepared autolevel commands.")
+    progress.update(task_cmd, completed=total_results)
 
     console.info(f"Images to be autoleveled: {len(commands)}")
     console.info(f"Images to be copied without autolevel: {len(to_be_copied)}")
@@ -265,26 +279,30 @@ def autolevel(
         console.info("Aborting autolevel.")
         return 0
 
-    console.status(f"Copying {len(to_be_copied)} images without autolevel...")
+    task_copy = progress.add_task("Copying images...", total=len(to_be_copied))
     # Do copying first
     for img_path in to_be_copied:
         dest_path = dest_output / img_path.name
         if dest_path.exists():
             console.warning(f"Skipping existing file: {dest_path}")
+            progress.update(task_copy, advance=1)
             continue
         shutil.copy2(img_path, dest_path)
+        progress.update(task_copy, advance=1)
 
-    console.stop_status(f"Copied {len(to_be_copied)} images without autolevel.")
+    progress.update(task_copy, completed=len(to_be_copied))
 
-    console.status(f"Processing {len(commands)} images with autolevel...")
-    if threads <= 1:
+    task_proc = progress.add_task("Auto-leveling images...", total=len(commands))
+    if threads > 1:
+        with threaded_worker(console, threads) as pool:
+            for _ in pool.imap_unordered(_autolevel_exec, commands):
+                progress.update(task_proc, advance=1)
+    else:
         for command in commands:
             _autolevel_exec(command)
-    else:
-        with threaded_worker(console, threads) as pool:
-            pool.map(_autolevel_exec, commands)
+            progress.update(task_proc, advance=1)
 
-    console.stop_status(f"Processed {len(commands)} images with autolevel.")
+    console.stop_progress(progress, f"Auto-leveled {len(commands)} images.")
 
 
 @dataclass
@@ -304,6 +322,8 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
         img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
     )
 
+    cnsl = term.get_console()
+
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not config.no_white else False
 
@@ -322,14 +342,14 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
         img.close()
 
         if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
+            cnsl.warning(f"Skipping existing file: {dest_path}")
             return AutoLevelResult.COPIED
         shutil.copy2(img_path, dest_path)
         return AutoLevelResult.COPIED
 
     dest_path = dest_output / img_path.with_suffix(f".{config.image_fmt}").name
     if dest_path.exists():
-        console.warning(f"Skipping existing file: {dest_path}")
+        cnsl.warning(f"Skipping existing file: {dest_path}")
         return AutoLevelResult.COPIED
 
     # Apply the black level with Pillow
@@ -353,6 +373,10 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
     adjusted_img.close()
     img.close()
     return AutoLevelResult.PROCESSED
+
+
+def _autolevel2_wrapper_star(args: tuple[Path, Path, Autolevel2Config]) -> AutoLevelResult:
+    return _autolevel2_wrapper(*args)
 
 
 @click.command(
@@ -455,25 +479,28 @@ def autolevel2(
         no_white=no_white,
     )
 
-    console.status("Processing images with autolevel...")
     dest_output.mkdir(parents=True, exist_ok=True)
     results: list[AutoLevelResult] = []
-    if threads <= 1:
-        for idx, img_path in enumerate(all_files):
-            console.status(f"Processing image with autolevel... [{idx + 1}/{total_files}]")
-            results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
-    else:
+    progress = console.make_progress()
+    task = progress.add_task("Auto-leveling images...", total=total_files)
+
+    if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
-            results = pool.starmap(
-                _autolevel2_wrapper,
-                [(img_path, dest_output, full_config) for img_path in all_files],
-            )
+            for result in pool.imap_unordered(
+                _autolevel2_wrapper_star, ((img_path, dest_output, full_config) for img_path in all_files)
+            ):
+                results.append(result)
+                progress.update(task, advance=1)
+    else:
+        for img_path in all_files:
+            results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
+            progress.update(task, advance=1)
 
+    console.stop_progress(progress, f"Auto-leveled {total_files} images.")
     autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
     copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
     grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
-    console.stop_status(f"Processed {total_files} images with autolevel2.")
 
     if copied_count > 0:
         console.info(f"Copied {copied_count} images without autolevel.")
@@ -532,8 +559,10 @@ def force_gray(
     magick_cmd: list[str] = make_prefix_convert(magick_exe)
 
     total_files = len(all_files)
-    for idx, img_path in enumerate(all_files):
-        console.status(f"Preparing force grayscale commands [{idx + 1}/{total_files}]...")
+    progress = console.make_progress()
+    task_prep = progress.add_task("Preparing commands...", total=total_files)
+
+    for img_path in all_files:
         if dest_output is not None and dest_output != path_or_archive:
             # Use the destination output directory
             dest_output.mkdir(parents=True, exist_ok=True)
@@ -551,34 +580,45 @@ def force_gray(
             str(dest_path),
         ]
         commands.append(cmd)
+        progress.update(task_prep, advance=1)
 
-    console.stop_status("Prepared force grayscale commands.")
+    progress.update(task_prep, completed=total_files)
 
     # Create a backup directory
     backup_dir = path_or_archive / "backup"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    console.info(f"Using {threads} CPU threads for processing.")
-    console.status(f"Processing {len(commands)} images to grayscale...")
-    if threads <= 1:
+    task_proc = progress.add_task("Processing images...", total=len(commands))
+    if threads > 1:
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, threads) as pool:
+            for _ in pool.imap_unordered(_forcegray_exec, commands):
+                progress.update(task_proc, advance=1)
+    else:
         for command in commands:
             _forcegray_exec(command)
-    else:
-        with threaded_worker(console, threads) as pool:
-            pool.map(_forcegray_exec, commands)
+            progress.update(task_proc, advance=1)
 
-    console.stop_status(f"Processed {len(commands)} images to grayscale.")
+    console.stop_progress(progress, f"Processed {len(commands)} images to grayscale.")
 
     # Move all original files to backup directory
     if dest_output is None or dest_output == path_or_archive:
-        console.status(f"Backing up original files to {backup_dir}...")
+        console.info(f"Backing up original files to {backup_dir}...")
         for img_path in all_files:
             dest_path = backup_dir / img_path.name
             img_path.rename(dest_path)
-        console.stop_status(f"Backed up original files to {backup_dir}.")
+        console.info(f"Backed up original files to {backup_dir}.")
 
 
-def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config):
+class AutolevelAnalyzeResult(TypedDict):
+    image: str
+    black: int
+    white: int
+    gamma: float
+    force_gray: bool
+
+
+def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config) -> AutolevelAnalyzeResult:
     img = Image.open(img_path)
     black_level, white_level, force_gray = find_local_peak(
         img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
@@ -592,6 +632,10 @@ def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config):
         "gamma": gamma_correct,
         "force_gray": force_gray,
     }
+
+
+def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config]) -> AutolevelAnalyzeResult:
+    return _analyze_levels_wrapper(*args)
 
 
 @click.command(
@@ -669,21 +713,25 @@ def analyze_level(
         image_fmt="png",
     )
 
-    console.status("Analyzing images peak levels...")
-    results: list[dict[str, Any]] = []
+    results: list[AutolevelAnalyzeResult] = []
+    progress = console.make_progress()
+    task = progress.add_task("Analzying images...", total=total_files)
+
     if threads <= 1:
-        for idx, img_path in enumerate(all_files):
-            console.status(f"Processing image... [{idx + 1}/{total_files}]")
+        for img_path in all_files:
             results.append(_analyze_levels_wrapper(img_path, full_config))
+            progress.update(task, advance=1)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
-            results = pool.starmap(
-                _analyze_levels_wrapper,
-                [(img_path, full_config) for img_path in all_files],
-            )
+            for result in pool.imap_unordered(
+                _analyze_level_wrapper_star,
+                ((img_path, full_config) for img_path in all_files),
+            ):
+                results.append(result)
+                progress.update(task, advance=1)
 
-    console.stop_status(f"Analyzed {total_files} images peak levels.")
+    console.stop_progress(progress, f"Analyzed {total_files} images peak levels.")
     complete_name = f"{path_or_archive.name}_autolevel.json"
     dump_path = Path.cwd() / complete_name
     dumped_data = json.dumps(results, indent=4)

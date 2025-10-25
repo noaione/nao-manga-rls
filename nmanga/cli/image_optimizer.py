@@ -30,6 +30,7 @@ import subprocess as sp
 from pathlib import Path
 
 import rich_click as click
+from click.exceptions import Exit
 
 from .. import file_handler, term
 from ..common import optimize_images, threaded_worker
@@ -75,7 +76,7 @@ def image_optimizer(
     pingo_exe = test_or_find_pingo(pingo_path, force_search)
     if pingo_exe is None:
         console.error("pingo not found, unable to optimize images!")
-        raise click.exceptions.Exit(1)
+        raise Exit(1)
 
     console.info(f"Using pingo at {pingo_exe}")
     console.info("Optimizing images...")
@@ -95,6 +96,12 @@ def _wrapper_jpegify_threaded(
 
     cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
     sp.run(cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+
+
+def _wrapper_jpegify_threaded_star(
+    args: tuple[Path, Path, str, int],
+) -> None:
+    return _wrapper_jpegify_threaded(*args)
 
 
 @click.command(
@@ -138,7 +145,7 @@ def image_jpegify(
     cjpegli_exe = test_or_find_cjpegli(cjpegli_path, force_search)
     if cjpegli_exe is None:
         console.error("cjpegli not found, unable to convert images to JPEG!")
-        raise click.exceptions.Exit(1)
+        raise Exit(1)
 
     console.info(f"Using cjpegli at {cjpegli_exe}")
 
@@ -149,17 +156,21 @@ def image_jpegify(
     dest_output.mkdir(parents=True, exist_ok=True)
 
     total_images = len(image_candidates)
-    console.status(f"Converting {total_images} images to JPEG with cjpegli...")
     quality = max(0, min(100, jpeg_quality))
+
+    progress = console.make_progress()
+    task = progress.add_task("Converting images...", total=total_images)
+
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
-            pool.starmap(
-                _wrapper_jpegify_threaded,
-                [(image, dest_output, cjpegli_exe, quality) for image in image_candidates],
-            )
+            for _ in pool.imap_unordered(
+                _wrapper_jpegify_threaded_star,
+                ((image, dest_output, cjpegli_exe, quality) for image in image_candidates),
+            ):
+                progress.update(task, advance=1)
     else:
-        for idx, image in enumerate(image_candidates):
-            console.status(f"Converting image to JPEG... [{idx + 1}/{total_images}]")
+        for image in image_candidates:
             _wrapper_jpegify_threaded(image, dest_output, cjpegli_exe, quality)
-    console.stop_status(f"Converted {total_images} images to JPEG.")
+            progress.update(task, advance=1)
+    console.stop_progress(progress, f"Converted {total_images} images to JPEG.")

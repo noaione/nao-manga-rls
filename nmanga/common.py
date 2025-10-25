@@ -50,6 +50,7 @@ __all__ = (
     "inject_metadata",
     "inquire_chapter_ranges",
     "is_pingo_alpha",
+    "make_metadata_command",
     "optimize_images",
     "run_pingo_and_verify",
     "safe_int",
@@ -318,6 +319,23 @@ def inquire_chapter_ranges(
             break
 
     return chapter_ranges
+
+
+def make_metadata_command(exiftool_path: str, image_title: str, image_email: str) -> list[str]:  # pragma: no cover
+    base_cmd = [exiftool_path]
+    update_tags = {
+        "XPComment": image_email,
+        "Artist": image_email,
+        "XPAuthor": image_email,
+        "XPTitle": image_title,
+        "ImageDescription": image_title,
+        "Title": image_title,
+        "Description": image_title,
+    }
+    for tag, value in update_tags.items():
+        base_cmd.append(f"-{tag}={value}")
+    base_cmd.append("-overwrite_original_in_place")
+    return base_cmd
 
 
 def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str, image_email: str):  # pragma: no cover

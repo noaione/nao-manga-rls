@@ -26,20 +26,58 @@ SOFTWARE.
 # This file is part of nmanga.
 from __future__ import annotations
 
+import subprocess as sp
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
 import rich_click as click
+from click.exceptions import Exit
+
+from nmanga import file_handler
 
 from .. import term
-from ..common import format_archive_filename, format_volume_text, inject_metadata
+from ..common import (
+    format_archive_filename,
+    format_volume_text,
+    make_metadata_command,
+    threaded_worker,
+)
 from ..constants import MangaPublication
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_exiftool
 
 console = term.get_console()
+
+# List of image extension that supports exif tagging
+ALLOWED_TAG = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
+
+
+def _threaded_tagging(
+    exiftool_exe: str,
+    image_path: Path,
+    archive_filename: str,
+    rls_email: str,
+) -> None:
+    """Threaded helper for tagging images"""
+    ext = image_path.suffix.lower().lstrip(".")
+    cnsl = term.get_console()
+    if ext not in ALLOWED_TAG:
+        cnsl.warning(f"Skipping unsupported image format for tagging: {image_path.name}")
+        return
+    base_cmd = make_metadata_command(exiftool_exe, archive_filename, rls_email)
+    proc = sp.Popen(
+        [*base_cmd, str(image_path)],
+        stdout=sp.PIPE,
+        stderr=sp.PIPE,
+    )
+    proc.wait()
+
+
+def _threaded_tagging_star(args: tuple[str, Path, str, str]) -> None:
+    """Star wrapper for threaded tagging"""
+    return _threaded_tagging(*args)
 
 
 @click.command(
@@ -65,6 +103,7 @@ console = term.get_console()
 @options.rls_extra_metadata
 @options.use_bracket_type
 @options.exiftool_path
+@options.threads
 @check_config_first
 @time_program
 def image_tagging(
@@ -80,6 +119,7 @@ def image_tagging(
     rls_extra_metadata: str | None,
     bracket_type: Literal["square", "round", "curly"],
     exiftool_path: str,
+    threads: int,
 ):  # pragma: no cover
     """
     Tag images with metadata
@@ -95,7 +135,7 @@ def image_tagging(
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
     if exiftool_exe is None:
         console.error("Exiftool not found, unable to tag image with exif metadata!")
-        raise click.exceptions.Exit(1)
+        raise Exit(1)
 
     current_pst = datetime.now(timezone(timedelta(hours=-8)))
     current_year = manga_year or current_pst.year
@@ -119,12 +159,26 @@ def image_tagging(
     )
 
     console.info("Tagging images with exif metadata...")
-    inject_metadata(
-        exiftool_exe,
-        path_or_archive,
-        archive_filename,
-        rls_email,
-    )
+    progress = console.make_progress()
+
+    precollect_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    precollect_images.sort(key=lambda p: p.name)
+
+    task = progress.add_task("Tagging images...", total=len(precollect_images))
+
+    if threads > 1:
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, threads) as pool:
+            for _ in pool.imap_unordered(
+                _threaded_tagging_star,
+                ((exiftool_exe, image, archive_filename, rls_email) for image in precollect_images),
+            ):
+                progress.update(task, advance=1)
+    else:
+        for image_path in precollect_images:
+            _threaded_tagging(exiftool_exe, image_path, archive_filename, rls_email)
+            progress.update(task, advance=1)
+    console.stop_progress(progress, "Tagged all possible images with exif metadata.")
 
 
 @click.command(
@@ -142,6 +196,7 @@ def image_tagging(
 )
 @options.rls_email
 @options.exiftool_path
+@options.threads
 @check_config_first
 @time_program
 def image_tagging_raw(
@@ -149,6 +204,7 @@ def image_tagging_raw(
     manga_title: str,
     rls_email: str,
     exiftool_path: str,
+    threads: int,
 ):  # pragma: no cover
     """
     Tag images with anything provided by user.
@@ -164,12 +220,26 @@ def image_tagging_raw(
     exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
     if exiftool_exe is None:
         console.error("Exiftool not found, unable to tag image with exif metadata!")
-        raise click.exceptions.Exit(1)
+        raise Exit(1)
 
     console.info("Tagging images with exif metadata...")
-    inject_metadata(
-        exiftool_exe,
-        path_or_archive,
-        manga_title,
-        rls_email,
-    )
+    progress = console.make_progress()
+
+    precollect_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    precollect_images.sort(key=lambda p: p.name)
+
+    task = progress.add_task("Tagging images...", total=len(precollect_images))
+
+    if threads > 1:
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, threads) as pool:
+            for _ in pool.imap_unordered(
+                _threaded_tagging_star,
+                ((exiftool_exe, image, manga_title, rls_email) for image in precollect_images),
+            ):
+                progress.update(task, advance=1)
+    else:
+        for image_path in precollect_images:
+            _threaded_tagging(exiftool_exe, image_path, manga_title, rls_email)
+            progress.update(task, advance=1)
+    console.stop_progress(progress, "Tagged all possible images with exif metadata.")

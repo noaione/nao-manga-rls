@@ -176,9 +176,10 @@ def denoiser(
     ]
     final_params = ["-o", str(dest_output)]
 
-    console.status("Denoising images...")
+    progress = console.make_progress()
+    task = progress.add_task("Denoising images...", total=total_files)
     errors = []
-    for idx, image in enumerate(all_files):
+    for image in all_files:
         params = [
             *base_params,
             "-i",
@@ -189,9 +190,9 @@ def denoiser(
         params.extend(final_params)
 
         console.debug("Running command: {}".format(" ".join(params)))
-        console.status(f"Denoising images... [{idx + 1}/{total_files}]")
         # silent output
         result = subprocess.run(params, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        progress.update(task, advance=1)
         if result.returncode != 0:
             console.error(f"Error denoising image: {image}, skipping...")
             # get stderr output
@@ -202,7 +203,7 @@ def denoiser(
             errors.append(image)
             continue
     correct_amount = total_files - len(errors)
-    console.stop_status(f"Denoised all {correct_amount} images.")
+    console.stop_progress(progress, f"Denoised all {correct_amount} images.")
     if len(errors) > 0:
         console.error(f"Failed to denoise {len(errors)} images:")
         for err in errors:
@@ -280,12 +281,17 @@ def identify_denoise_candidates(
 
     common_counters = {}
     console.info("Scanning images for quality...")
-    for idx, (image, _, total_img, _) in enumerate(file_handler.collect_image_from_folder(path_or_archive)):
-        console.status(f"Scanning images for quality... [{idx + 1}/{total_img}]")
+
+    progress = console.make_progress()
+    task = progress.add_task("Scanning images...", total=None)
+
+    for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
+        progress.update(task, total=total_img)
         path_obj = image.resolve()
         img_ext = path_obj.suffix.lower().strip(".")
         if img_ext not in ["jpg", "jpeg"]:
             console.debug(f"Skipping non-JPEG image: {path_obj}")
+            progress.update(task, advance=1)
             continue
 
         params = [*make_prefix_identify(magick_exe), "-format", "%Q", str(path_obj)]
@@ -297,6 +303,7 @@ def identify_denoise_candidates(
         )
         if executed.returncode != 0:
             console.error(f"Error identifying image: {path_obj}, skipping...")
+            progress.update(task, advance=1)
             continue
         quality_str = executed.stdout.strip()
         try:
@@ -304,9 +311,12 @@ def identify_denoise_candidates(
             dump_data.append({"img": str(image), "q": quality})
         except ValueError:
             console.error(f"Error parsing quality for image: {path_obj}, got '{quality_str}', skipping...")
+            progress.update(task, advance=1)
             continue
         common_counters[quality_str] = common_counters.get(quality_str, 0) + 1
-    console.stop_status("Scanned all images.")
+        progress.update(task, advance=1)
+
+    console.stop_progress(progress, "Completed scanning images.")
 
     # Save results to JSON file
     dump_path = cwd / dump_data_path
@@ -418,9 +428,10 @@ def denoiser_trt(
     total_files = len(all_files)
     dest_output.mkdir(parents=True, exist_ok=True)
 
-    console.status(f"Denoising images... [???/{total_files}]")
-    for idx, image_file in enumerate(all_files):
-        console.status(f"Denoising images... [{idx + 1}/{total_files}]")
+    progress = console.make_progress()
+    task = console.make_task(progress, "Denoising images...", total=total_files)
+
+    for image_file in all_files:
         output_path = dest_output / f"{image_file.stem}.png"
 
         img_file = Image.open(image_file)
@@ -436,4 +447,5 @@ def denoiser_trt(
         output_image.save(output_path, format="PNG")
         img_file.close()
         output_image.close()
-    console.stop_status(f"Denoised all {total_files} images.")
+        progress.update(task, advance=1)
+    console.stop_progress(progress, f"Denoised all {total_files} images.")

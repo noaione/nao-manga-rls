@@ -66,6 +66,10 @@ def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
     img.close()
 
 
+def _posterize_simple_wrapper_star(args: tuple[Path, Path, int]):
+    return _posterize_simple_wrapper(*args)
+
+
 @click.command(
     name="posterize",
     help="Force posterize images to a specific bit depth using Pillow",
@@ -105,21 +109,28 @@ def posterize_simple(
     total_files = len(all_files)
     console.info(f"Found {total_files} files in the directory.")
 
-    console.status("Processing images with posterize...")
+    progress = console.make_progress()
+    task = progress.add_task("Posterizing images...", total=total_files)
+
     dest_output.mkdir(parents=True, exist_ok=True)
-    if threads <= 1:
-        for idx, img_path in enumerate(all_files):
-            console.status(f"Processing image with posterize... [{idx + 1}/{total_files}]")
-            _posterize_simple_wrapper(img_path, dest_output, num_bits)
-    else:
+    if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
+            for _ in pool.imap_unordered(
+                _posterize_simple_wrapper_star,
+                [(img_path, dest_output, num_bits) for img_path in all_files],
+            ):
+                progress.update(task, advance=1)
             pool.starmap(
                 _posterize_simple_wrapper,
                 [(img_path, dest_output, num_bits) for img_path in all_files],
             )
+    else:
+        for img_path in all_files:
+            _posterize_simple_wrapper(img_path, dest_output, num_bits)
+            progress.update(task, advance=1)
 
-    console.stop_status(f"Processed {total_files} images with posterize.")
+    console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.")
 
 
 def _autoposterize_wrapper(
@@ -151,6 +162,10 @@ def _autoposterize_wrapper(
     posterized.close()
     img.close()
     return PosterizedResult.PROCESSED
+
+
+def _autoposterize_wrapper_star(args: tuple[Path, Path, float, bool]) -> PosterizedResult:
+    return _autoposterize_wrapper(*args)
 
 
 @click.command(
@@ -207,24 +222,27 @@ def auto_posterize(
     total_files = len(all_files)
     console.info(f"Found {total_files} files in the directory.")
 
-    console.status("Processing images with autoposterize...")
+    progress = console.make_progress()
+    taks = progress.add_task("Auto-posterizing images...", total=total_files)
     dest_output.mkdir(parents=True, exist_ok=True)
     results: list[PosterizedResult] = []
-    if threads <= 1:
-        for idx, img_path in enumerate(all_files):
-            console.status(f"Processing image with autoposterize... [{idx + 1}/{total_files}]")
-            results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct, use_palette_mode))
-    else:
+    if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as pool:
-            results = pool.starmap(
-                _autoposterize_wrapper,
+            for result in pool.imap_unordered(
+                _autoposterize_wrapper_star,
                 [(img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
-            )
+            ):
+                results.append(result)
+                progress.update(taks, advance=1)
+    else:
+        for img_path in all_files:
+            results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct, use_palette_mode))
+            progress.update(taks, advance=1)
 
+    console.stop_progress(progress, f"Auto-posterized {total_files} images.")
     posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
     copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
-    console.stop_status(f"Processed {total_files} images with autoposterize.")
 
     if copied_count > 0:
         console.info(f"Copied {copied_count} images without autoposterize.")
@@ -271,9 +289,9 @@ def analyze_shades(
     total_files = len(all_files)
     console.info(f"Found {total_files} files in the directory.")
 
-    console.status("Processing images with analyzer...")
+    progress = console.make_progress()
+    task = progress.add_task("Analyzing images...", total=total_files)
     for image_path in all_files:
-        console.status(f"Analyzing image... {image_path}")
         shades = analyze_gray_shades(Image.open(image_path), threshold_pct)
         if len(shades) == 0:
             console.info(f"No significant shades found in {image_path}")
@@ -282,5 +300,6 @@ def analyze_shades(
         closest_bpc = detect_nearest_bpc(shades)
         total_shades = len(shades)
         console.info(f"Shades found in {image_path}: (Total: {total_shades}, Closest bpc: {closest_bpc}bpp)")
+        progress.update(task, advance=1)
 
-    console.stop_status(f"Analyzed {total_files} images!")
+    console.stop_progress(progress, f"Analyzed {total_files} images!")

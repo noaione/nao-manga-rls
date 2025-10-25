@@ -57,6 +57,7 @@ TARGET_TITLE_NOVEL = "{mt} {vol} [{source}] [{c}]"
     "manga_title",
     required=True,
     help="The title of the series",
+    panel="Release Options",
 )
 @options.manga_year
 @options.manga_volume
@@ -157,6 +158,7 @@ def pack_releases(
     "epub_title",
     required=True,
     help="The title of the series",
+    panel="Release Options",
 )
 @click.option(
     "-s",
@@ -164,6 +166,7 @@ def pack_releases(
     "epub_source",
     required=True,
     help="The source where this is ripped from",
+    panel="Release Options",
 )
 @options.manga_volume
 @options.rls_credit

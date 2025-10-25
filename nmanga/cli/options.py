@@ -144,6 +144,7 @@ def manga_publication_type(chapter_mode: bool = False):
         help="The publication type for this series, use none to remove it from image filename",
         default=default_arg,
         show_default=True,
+        panel="Release Options",
     )
 
 
@@ -160,6 +161,7 @@ output_mode = click.option(
     type=click.Choice(ExporterType),
     help="The output mode for the archive packing",
     default=ExporterType.cbz,
+    panel="Archive Options",
     show_default=True,
 )
 compression_level = click.option(
@@ -170,6 +172,7 @@ compression_level = click.option(
     help="The compression level to use for packing the archive (0-9)",
     default=7,
     show_default=True,
+    panel="Archive Options",
 )
 magick_path = click.option(
     "-me",
@@ -177,6 +180,7 @@ magick_path = click.option(
     "magick_path",
     default=config.executables.magick_path,
     help="Path to the magick executable",
+    panel="Executable Path",
     show_default=True,
 )
 exiftool_path = click.option(
@@ -185,6 +189,7 @@ exiftool_path = click.option(
     "exiftool_path",
     default=config.executables.exiftool_path,
     help="Path to the exiftool executable",
+    panel="Executable Path",
     show_default=True,
 )
 pingo_path = click.option(
@@ -193,6 +198,7 @@ pingo_path = click.option(
     "pingo_path",
     default=config.executables.pingo_path,
     help="Path to the pingo executable",
+    panel="Executable Path",
     show_default=True,
 )
 w2x_trt_path = click.option(
@@ -201,6 +207,7 @@ w2x_trt_path = click.option(
     "w2x_trt_path",
     default=config.executables.w2x_trt_path,
     help="Path to the waifu2x-tensorrt executable",
+    panel="Executable Path",
     show_default=True,
 )
 cjpegli_path = click.option(
@@ -209,6 +216,7 @@ cjpegli_path = click.option(
     "cjpegli_path",
     default=config.executables.cjpegli_path,
     help="Path to the cjpegli executable",
+    panel="Executable Path",
     show_default=True,
 )
 use_bracket_type = click.option(
@@ -219,6 +227,7 @@ use_bracket_type = click.option(
     help="Bracket to use to surround the ripper name",
     show_default=True,
     type=click.Choice(["square", "round", "curly"]),
+    panel="Release Options",
 )
 manga_volume = click.option(
     "-vol",
@@ -227,6 +236,7 @@ manga_volume = click.option(
     type=FLOAT_INT,
     help="The volume of the series release",
     default=None,
+    panel="Release Options",
 )
 manga_chapter = click.option(
     "-ch",
@@ -235,6 +245,7 @@ manga_chapter = click.option(
     type=FLOAT_INT,
     help="The chapter of the series release",
     default=None,
+    panel="Release Options",
 )
 manga_ripper = click.option(
     "-ch",
@@ -243,6 +254,7 @@ manga_ripper = click.option(
     type=FLOAT_INT,
     help="The chapter of the series release",
     default=None,
+    panel="Release Options",
 )
 manga_year = click.option(
     "-y",
@@ -251,6 +263,7 @@ manga_year = click.option(
     default=None,
     type=int,
     help="The year of the series release",
+    panel="Release Options",
 )
 manga_title = click.option(
     "-t",
@@ -258,6 +271,7 @@ manga_title = click.option(
     "manga_title",
     required=True,
     help="The title of the series",
+    panel="Release Options",
 )
 manga_title_optional = click.option(
     "-t",
@@ -265,12 +279,14 @@ manga_title_optional = click.option(
     "manga_title",
     required=False,
     help="The title of the series",
+    panel="Release Options",
 )
 manga_publisher = click.option(
     "-pub",
     "--publisher",
     "manga_publisher",
     help="The publisher of the series",
+    panel="Release Options",
     required=True,
 )
 
@@ -281,6 +297,7 @@ rls_credit = click.option(
     help="The ripper credit for this series",
     show_default=True,
     default=config.defaults.ripper_credit,
+    panel="Release Options",
 )
 rls_email = click.option(
     "-e",
@@ -289,6 +306,7 @@ rls_email = click.option(
     help="The ripper email for this series",
     show_default=True,
     default=config.defaults.ripper_email,
+    panel="Release Options",
 )
 rls_revision = click.option(
     "-r",
@@ -298,6 +316,7 @@ rls_revision = click.option(
     type=click.IntRange(min=1, max_open=True),
     default=1,
     show_default=True,
+    panel="Release Options",
 )
 rls_extra_metadata = click.option(
     "-ex",
@@ -306,6 +325,7 @@ rls_extra_metadata = click.option(
     help="Extra metadata to add to the pack filename",
     default=None,
     required=False,
+    panel="Release Options",
 )
 
 is_oneshot = click.option(
@@ -315,6 +335,7 @@ is_oneshot = click.option(
     is_flag=True,
     default=False,
     help="Mark the series as oneshot, this will not add volume to the filename",
+    panel="Release Options",
 )
 
 threads = click.option(
@@ -325,6 +346,7 @@ threads = click.option(
     default=cpu_count(),
     show_default=True,
     help="The number of threads to use for processing",
+    panel="Performance Options",
 )
 
 
@@ -339,4 +361,5 @@ def dest_output(file_okay: bool = False, dir_okay: bool = True, optional: bool =
         type=click.Path(file_okay=file_okay, dir_okay=dir_okay, path_type=Path),
         required=not optional,
         help="The output directory/file to save the results",
+        panel="Output Options",
     )

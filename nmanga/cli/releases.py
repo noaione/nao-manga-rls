@@ -96,6 +96,7 @@ class SpecialNaming:
     default=False,
     deprecated=True,
     preferred=["-mq", "--quality"],
+    panel="Deprecated Options",
 )
 @click.option(
     "-mq",
@@ -104,6 +105,7 @@ class SpecialNaming:
     type=click.Choice(["LQ", "HQ"]),
     default=None,
     help="Image quality of this release.",
+    panel="Release Options",
 )
 @click.option(
     "--tag/--no-tag",
@@ -350,6 +352,7 @@ def prepare_releases(
     default=False,
     deprecated=True,
     preferred=["-mq", "--quality"],
+    panel="Deprecated Options",
 )
 @click.option(
     "-mq",
@@ -358,6 +361,7 @@ def prepare_releases(
     type=click.Choice(["LQ", "HQ"]),
     default=None,
     help="Image quality of this release.",
+    panel="Release Options",
 )
 @click.option(
     "--tag/--no-tag",
