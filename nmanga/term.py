@@ -30,6 +30,16 @@ from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar, overload
 
 import inquirer
 from rich.console import Console as RichConsole
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.theme import Theme as RichTheme
 
 if TYPE_CHECKING:
@@ -130,6 +140,32 @@ class Console:
             self.__beautiful_status(message, **kwargs_spinner_style)
         else:
             self.__debug_status(message)
+
+    def make_progress(self) -> Progress:
+        progress = Progress(
+            SpinnerColumn(spinner_name="dots"),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=None),
+            MofNCompleteColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=self.console,
+        )
+        # Auto-start
+        progress.start()
+        return progress
+
+    def make_task(self, progress: Progress, description: str, total: int | None = None) -> TaskID:
+        task = progress.add_task(description, total=total)
+        return task
+
+    def stop_progress(self, progress: Progress, text: str | None = None) -> None:
+        for task in progress.tasks:
+            progress.update(task.id, completed=task.total or 0)
+        progress.stop()
+        if text is not None:
+            self.info(text)
 
     @overload
     def stop_status(self) -> None: ...
