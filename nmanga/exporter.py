@@ -86,6 +86,10 @@ class MangaExporter:
         self._out_dir = output_directory
         self._out_dir.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def target_path(self) -> Path:
+        return self._out_dir
+
     def is_existing(self):
         return self._out_dir.exists()
 
@@ -107,6 +111,7 @@ class MangaExporter:
 class ArchiveMangaExporter(MangaExporter):
     _file_name: str
     _compress_level: int
+    _out_path: Path
 
     def __init__(self, file_name: str, output_directory: Path, *, compression_level: int = 5):
         # Check if class used is the child class and not this class
@@ -117,6 +122,11 @@ class ArchiveMangaExporter(MangaExporter):
 
         self._file_name = file_name
         self._compress_level = compression_level
+        self._out_path = output_directory / f"{file_name}"
+
+    @property
+    def target_path(self) -> Path:
+        return self._out_path
 
 
 class CBZMangaExporter(ArchiveMangaExporter):
@@ -128,9 +138,9 @@ class CBZMangaExporter(ArchiveMangaExporter):
 
         super().__init__(file_name, output_directory, compression_level=compression_level)
 
-        self._target_cbz: ZipFile = ZipFile(
-            self._out_dir / f"{file_name}.cbz", "w", compression=ZIP_DEFLATED, compresslevel=compression_level
-        )
+        output_file = self._out_dir / f"{file_name}.cbz"
+        self._target_cbz: ZipFile = ZipFile(output_file, "w", compression=ZIP_DEFLATED, compresslevel=compression_level)
+        self._out_path = output_file
 
     def is_existing(self):
         parent_dir = self._out_dir.parent
@@ -163,9 +173,9 @@ class CB7MangaExporter(ArchiveMangaExporter):
             # We use LZMA2 only since you really should pre-optimize the images before putting them in CB7
             {"id": py7zr.FILTER_LZMA2, "preset": compression_level | py7zr.PRESET_EXTREME},
         ]
-        self._target_cb7: py7zr.SevenZipFile = py7zr.SevenZipFile(
-            self._out_dir / f"{file_name}.cb7", "w", filters=filters
-        )
+        output_file = self._out_dir / f"{file_name}.cb7"
+        self._target_cb7: py7zr.SevenZipFile = py7zr.SevenZipFile(output_file, "w", filters=filters)
+        self._out_path = output_file
 
     def is_existing(self):
         parent_dir = self._out_dir.parent
@@ -191,9 +201,9 @@ class EPUBMangaExporter(ArchiveMangaExporter):
     def __init__(self, file_name: str, output_directory: Path, *, manga_title: str, compression_level: int = 5):
         super().__init__(file_name, output_directory, compression_level=compression_level)
 
-        self._target_epub = ZipFile(
-            self._out_dir / f"{file_name}.epub", "w", compression=ZIP_DEFLATED, compresslevel=compression_level
-        )
+        output_file = self._out_dir / f"{file_name}.epub"
+        self._target_epub = ZipFile(output_file, "w", compression=ZIP_DEFLATED, compresslevel=compression_level)
+        self._out_path = output_file
         self._meta_injected: bool = False
         self._page_counter = 1
         self._manga_title = manga_title

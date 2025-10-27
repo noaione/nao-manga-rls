@@ -104,7 +104,7 @@ def _find_exec_path(
             for test_cmd in test_cmd_list:
                 exec_cmd.append(test_cmd)
             if _test_exec(exec_cmd, extra_check=extra_check):
-                console.stop_status()
+                console.stop_status(f"Found executable at {exec_path}")
                 return exec_path
     console.stop_status()
 

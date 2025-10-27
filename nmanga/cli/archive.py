@@ -134,16 +134,15 @@ def pack_releases(
         console.warning("Packing as EPUB, this will be a slower operation because of size checking!")
 
     arc_target.set_comment(rls_email)
-    console.status("Packing... (0/???)")
-    idx = 1
     total_count = 0
+    progress = console.make_progress()
+    task = progress.add_task("Packing images...", total=None)
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, total_count in archive:
             arc_target.add_image(image.name, cast(Path, image.access()))
-            console.status(f"Packing... ({idx}/{total_count})")
-            idx += 1
-    console.stop_status(f"Packed ({idx - 1}/{total_count})")
+            progress.update(task, advance=1, total=total_count)
     arc_target.close()
+    console.stop_progress(progress, f"Packed {total_count} images to {arc_target.target_path}")
 
 
 @click.command(
@@ -217,15 +216,18 @@ def pack_releases_epub_mode(
             param_hint="path_or_archive",
         )
 
-    console.status("Packing... (0/???)")
-    idx = 1
+    progress = console.make_progress()
+    task = progress.add_task("Packing...", total=None)
+
+    counted_data = 0
     for path in path_or_archive.glob("**/*"):
         if path.name == "mimetype":
             continue
-        console.status(f"Packing... ({idx}/???)")
         epub_target.write(path, path.relative_to(path_or_archive))
-        idx += 1
-    console.stop_status(f"Packed ({idx - 1}/{idx})")
+        counted_data += 1
+        progress.update(task, advance=1)
+    progress.update(task, total=counted_data)
+    console.stop_progress(progress, f"Packed {counted_data} files.")
     epub_target.close()
 
     MIMETYPE_MAGIC = b"mimetypeapplication/epub+zip"
