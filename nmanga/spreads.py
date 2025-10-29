@@ -144,7 +144,7 @@ def join_spreads_imagemagick(
     images.sort(key=lambda x: x.name, reverse=direction == SpreadDirection.RTL)
 
     commands = [magick_path]
-    commands.extend(x.name for x in images)
+    commands.extend(str(x) for x in images)
     commands.extend(["-quality", f"{quality:.2f}%", "+append", f"{output_directory / output_name}"])
 
     try:
