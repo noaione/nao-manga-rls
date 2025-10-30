@@ -242,6 +242,16 @@ class UnrecoverableNMangaError(click.ClickException):
     def __init__(self, message, exc_info):
         super().__init__(message)
         self.exc_info = exc_info
+        self.message = message
+
+    def format_message(self) -> str:
+        error_msg = "*** An unrecoverable error occured ***\n"
+        error_msg += self.message
+        # Includde traceback
+        tb_lines = traceback.format_exception(*self.exc_info)
+        error_msg += "\n\n"
+        error_msg += "".join(tb_lines)
+        return error_msg
 
     def show(self, file=None):
         emoji = ""
@@ -321,6 +331,7 @@ class NMangaCommandHandler(click.RichCommand):
             return super().invoke(ctx)
         except Exception as ex:
             # Invoke error handler
+            console.stop_status()  # So it doesn't consume the indicator in iTerm (and maybe more)
             raise UnrecoverableNMangaError(str(ex), sys.exc_info()) from ex
 
 
