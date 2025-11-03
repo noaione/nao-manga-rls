@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import subprocess as sp
 from datetime import datetime, timedelta, timezone
+from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Literal
 
@@ -62,8 +63,8 @@ def _threaded_tagging(
 ) -> None:
     """Threaded helper for tagging images"""
     ext = image_path.suffix.lower().lstrip(".")
-    cnsl = term.get_console()
     if ext not in ALLOWED_TAG:
+        cnsl = term.get_console()
         cnsl.warning(f"Skipping unsupported image format for tagging: {image_path.name}")
         return
     base_cmd = make_metadata_command(exiftool_exe, archive_filename, rls_email)
@@ -103,7 +104,16 @@ def _threaded_tagging_star(args: tuple[str, Path, str, str]) -> None:
 @options.rls_extra_metadata
 @options.use_bracket_type
 @options.exiftool_path
-@options.threads
+@click.option(
+    "-th",
+    "--threads",
+    "threads",
+    type=options.POSITIVE_INT,
+    default=cpu_count(),
+    show_default=True,
+    help="The number of threads to use for processing",
+    panel="Performance Options",
+)
 @check_config_first
 @time_program
 def image_tagging(
@@ -196,7 +206,16 @@ def image_tagging(
 )
 @options.rls_email
 @options.exiftool_path
-@options.threads
+@click.option(
+    "-th",
+    "--threads",
+    "threads",
+    type=options.POSITIVE_INT,
+    default=cpu_count(),
+    show_default=True,
+    help="The number of threads to use for processing",
+    panel="Performance Options",
+)
 @check_config_first
 @time_program
 def image_tagging_raw(
