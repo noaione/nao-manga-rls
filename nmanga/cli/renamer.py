@@ -31,6 +31,7 @@ import rich_click as click
 
 from .. import file_handler, term
 from ..common import format_volume_text
+from ..renamer import shift_renaming_gen
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -60,6 +61,13 @@ console = term.get_console()
     is_flag=True,
     help="Reverse the direction of renaming",
 )
+@click.option(
+    "-sa",
+    "--spreads-aware",
+    "spreads_aware",
+    is_flag=True,
+    help="Consider spreads when renaming",
+)
 @options.manga_title_optional
 @options.manga_volume
 @time_program
@@ -67,6 +75,7 @@ def shift_renamer(
     path_or_archive: Path,
     start_index: int,
     reverse: bool,
+    spreads_aware: bool,
     manga_title: str | None,
     manga_volume: int | float | None,
 ):
@@ -87,48 +96,20 @@ def shift_renamer(
     for image_file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive):
         all_images.append(image_file.resolve())
 
-    all_images.sort(key=lambda x: x.stem, reverse=reverse)
-
-    # we do the padding at minimum 3 digits, if page number has more than 3 digits we add additional padding
-    total_files = len(all_images) + start_index
-    padding = max(3, len(str(total_files + start_index - 1)))
-
     console.status(f"Renaming {len(all_images)} images...")
-    remapped_names = set()
-    should_revert = False
+    renaming_maps: dict[Path, Path] = shift_renaming_gen(
+        all_images,
+        start_index=start_index,
+        title=manga_title,
+        volume=volume_text,
+        reverse=reverse,
+        spreads_aware=spreads_aware,
+    )
+
     total_rename = 0
-    for idx, image_path in enumerate(all_images):
-        console.status(f"Renaming images [{idx + 1}/{total_files}]...")
-        new_name = f"p{str(start_index + idx).zfill(padding)}"
-
-        manga_title_join = manga_title
-        if volume_text is not None and manga_title_join:
-            manga_title_join += f" - {volume_text}"
-
-        if manga_title_join:
-            # final: Manga Title - v01 - 001.ext
-            new_name = f"{manga_title_join} - {new_name}"
-
-        img_suffix = image_path.suffix.lower()
-        new_path = image_path.with_name(new_name).with_suffix(img_suffix)
-        remapped_names.add((image_path, new_path))
-        if new_path.exists():
-            console.warning("Conflict detected, reverting all changes...")
-            console.log(f"Conflicting file: {new_path}")
-            should_revert = True
-            break
-        image_path.rename(new_path)
+    for original_path, new_path in renaming_maps.items():
+        original_path.rename(new_path)
         total_rename += 1
-
-    if should_revert:
-        console.stop_status(f"Renamed {total_rename} images, reverting...")
-        console.log()
-        console.status("Reverting all changes...")
-        for old_path, new_path in remapped_names:
-            if new_path.exists():
-                new_path.rename(old_path)
-        console.stop_status("Reverted all changes.")
-        return 1
 
     console.stop_status(f"Renamed {total_rename} images successfully.")
     return 0
