@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Literal
 from PIL import Image
 from pydantic import ConfigDict, Field
 
+from nmanga.orchestrator.actions._base import ToolsKind
+
 from ... import file_handler
 from ...autolevel import (
     posterize_image_by_bits,
@@ -127,7 +129,7 @@ class ActionPosterize(BaseAction):
 
         imagick = context.toolsets.get("magick")
         if imagick is None and not self.pillow:
-            context.terminal.error("ImageMagick is required for spreads joining, but not found!")
+            context.terminal.error("ImageMagick is required for posterizing, but not found!")
             raise RuntimeError("Spreads action failed due to missing ImageMagick.")
 
         page_re = RegexCollection.page_re()
@@ -182,3 +184,17 @@ class ActionPosterize(BaseAction):
 
         # Update CWD
         context.update_cwd(output_dir)
+
+    def get_tools(self):
+        """
+        Get the required tools for the action
+
+        :return: A dictionary of tool names and their kinds
+        """
+
+        if self.pillow:
+            return {}
+
+        return {
+            "magick": ToolsKind.BINARY,
+        }
