@@ -108,8 +108,10 @@ class ActionDenoise(BaseAction):
         current_index = 1
         total_image = 0
         context.terminal.info(f"Denoising images in {context.current_dir}...")
+        progress = context.terminal.make_progress()
+        task = context.terminal.make_task(progress, "Denoising images...", total=None)
         for file_path, _, total_image, _ in file_handler.collect_image_from_folder(context.current_dir):
-            context.terminal.status(f"Denoising images... [{current_index}/{total_image}]")
+            progress.update(task, total=total_image, completed=current_index - 1)
 
             if title_match := page_re.match(file_path.stem):
                 first_part = int(title_match.group("a"))  # We only care about this
@@ -132,7 +134,7 @@ class ActionDenoise(BaseAction):
             img_file.close()
             output_image.close()
             current_index += 1
-        context.terminal.stop_status(f"Denoised {total_image} images.")
+        context.terminal.stop_progress(progress, f"Denoised {total_image} images.")
 
         # Update CWD
         context.update_cwd(output_dir)

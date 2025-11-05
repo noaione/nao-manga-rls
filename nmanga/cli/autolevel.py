@@ -482,7 +482,7 @@ def autolevel2(
     dest_output.mkdir(parents=True, exist_ok=True)
     results: list[AutoLevelResult] = []
     progress = console.make_progress()
-    task = progress.add_task("Auto-leveling images...", total=total_files)
+    task = progress.add_task("Processing images...", total=total_files)
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
@@ -497,7 +497,7 @@ def autolevel2(
             results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
             progress.update(task, advance=1)
 
-    console.stop_progress(progress, f"Auto-leveled {total_files} images.")
+    console.stop_progress(progress, f"Processed {total_files} images.")
     autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
     copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
     grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
