@@ -26,6 +26,7 @@ SOFTWARE.
 # This file is part of nmanga.
 from __future__ import annotations
 
+import shutil
 import subprocess as sp
 from pathlib import Path
 
@@ -174,3 +175,73 @@ def image_jpegify(
             _wrapper_jpegify_threaded(image, dest_output, cjpegli_exe, quality)
             progress.update(task, advance=1)
     console.stop_progress(progress, f"Converted {total_images} images to JPEG.")
+
+
+@click.command(
+    name="mixmatch",
+    help="Mix and match images from two directories",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True, param_name="dir_a")
+@options.path_or_archive(disable_archive=True, param_name="dir_b")
+@options.dest_output(optional=False)
+@check_config_first
+@time_program
+def image_mixmatch(
+    dir_a: Path,
+    dir_b: Path,
+    dest_output: Path,
+):
+    """
+    Mix and match images from two directories
+    """
+
+    if not dir_a.is_dir():
+        raise click.BadParameter(
+            f"{dir_a} is not a directory. Please provide a directory.",
+            param_hint="dir_a",
+        )
+
+    if not dir_b.is_dir():
+        raise click.BadParameter(
+            f"{dir_b} is not a directory. Please provide a directory.",
+            param_hint="dir_b",
+        )
+
+    console.info(f"Mixing and matching images from {dir_a} and {dir_b}...")
+
+    images_a = sorted([img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(dir_a)])
+    images_b = sorted([img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(dir_b)])
+
+    total_images = min(len(images_a), len(images_b))
+    console.info(f"Found {len(images_a)} images in dir_a and {len(images_b)} images in dir_b.")
+    console.info(f"Mixing and matching {total_images} images...")
+
+    dest_output.mkdir(parents=True, exist_ok=True)
+
+    progress = console.make_progress()
+    task = progress.add_task("Mixing and matching images...", total=total_images)
+
+    for file_a, file_b in zip(images_a, images_b, strict=True):
+        console.debug(f"Dir A Image: {file_a}, Dir B Image: {file_b}")
+        a_stem = file_a.stem
+        b_stem = file_b.stem
+        if a_stem != b_stem:
+            console.warning(f"Image name mismatch: {a_stem} vs {b_stem}")
+            progress.update(task, advance=1)
+            continue
+
+        a_size = file_a.stat().st_size
+        b_size = file_b.stat().st_size
+        console.debug(f"Sizes: Dir A: {a_size}, Dir B: {b_size}")
+        # Take smaller
+        chosen_file = file_a if a_size <= b_size else file_b
+        dest_file = dest_output / chosen_file.name
+        if dest_file.exists():
+            console.warning(f"Skipping existing file: {dest_file}")
+        else:
+            # Copy
+            shutil.copy2(chosen_file, dest_file)
+        progress.update(task, advance=1)
+
+    console.stop_progress(progress, f"Mixed and matched {total_images} images.")

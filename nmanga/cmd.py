@@ -37,7 +37,7 @@ from .cli.autolevel import analyze_level, autolevel, autolevel2, force_gray
 from .cli.base import NMangaCommandHandler
 from .cli.config import cli_config
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
-from .cli.image_optimizer import image_jpegify, image_optimizer
+from .cli.image_optimizer import image_jpegify, image_mixmatch, image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
@@ -166,7 +166,7 @@ help_config = click.RichHelpConfiguration(
 @click.command_panel(
     name="Image Utilities",
     help="Commands for optimizing and converting images",
-    commands=["forcegray", "posterize", "jpegify", "spreads", "optimize"],
+    commands=["forcegray", "posterize", "jpegify", "spreads", "optimize", "mixmatch"],
 )
 @click.command_panel(
     name="Configuration",
@@ -218,6 +218,7 @@ main.add_command(image_tagging)
 main.add_command(image_tagging_raw)
 main.add_command(image_optimizer)
 main.add_command(image_jpegify)
+main.add_command(image_mixmatch)
 main.add_command(timewizard_modify)
 main.add_command(autolevel)
 main.add_command(autolevel2)

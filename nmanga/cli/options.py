@@ -37,7 +37,9 @@ from ..exporter import ExporterType
 config = get_config()
 
 
-def path_or_archive(disable_archive: bool = False, disable_folder: bool = False):
+def path_or_archive(
+    disable_archive: bool = False, disable_folder: bool = False, *, param_name: str = "path_or_archive"
+):
     if disable_archive and disable_folder:
         raise click.UsageError("You can't disable both archive and folder")
 
@@ -48,7 +50,7 @@ def path_or_archive(disable_archive: bool = False, disable_folder: bool = False)
         metavar = "archive_file"
 
     return click.argument(
-        "path_or_archive",
+        param_name,
         metavar=metavar.upper(),
         required=True,
         type=click.Path(
