@@ -31,6 +31,7 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler
 from ...common import ChapterRange, RegexCollection, format_daiz_like_filename, format_volume_text
+from ...renamer import shift_renaming_gen
 from ._base import ActionKind, BaseAction, WorkerContext
 
 if TYPE_CHECKING:
@@ -63,6 +64,10 @@ class ActionShiftName(BaseAction):
     """The starting index to rename the files to"""
     title: str | None = Field(None, title="Title of the Series")
     """Optional override title for the shift rename action"""
+    reverse: bool = Field(False, title="Reverse Renaming Order")
+    """Reverse the direction of renaming"""
+    spreads_aware: bool = Field(False, title="Spreads Aware Renaming")
+    """Whether to be spreads aware when renaming"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -82,45 +87,27 @@ class ActionShiftName(BaseAction):
         for image_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             all_images.append(image_file.resolve())
 
-        all_images.sort(key=lambda x: x.stem)
+        all_images.sort(key=lambda x: x.stem, reverse=self.reverse)
 
-        volume_text = format_volume_text(manga_volume=volume.number, manga_chapter=None)
-        total_files = len(all_images) + self.start
-        padding = max(3, len(str(total_files + self.start - 1)))
+        volume_text = format_volume_text(manga_volume=volume.number)
+
         context.terminal.status(f"Renaming {len(all_images)} images in {context.current_dir}...")
-        remapped_names = set()
-        should_revert = False
+        renaming_maps = shift_renaming_gen(
+            all_images,
+            start_index=self.start,
+            title=self.title or orchestrator.title,
+            volume=volume_text,
+            spreads_aware=self.spreads_aware,
+            reverse=self.reverse,
+        )
+
         total_rename = 0
-
-        manga_title = self.title or orchestrator.title
-        for idx, image_path in enumerate(all_images):
-            context.terminal.status(f"Renaming images [{idx + 1}/{total_files}]...")
-            new_name = f"{manga_title} - {volume_text} - p{str(self.start + idx).zfill(padding)}"
-
-            img_suffix = image_path.suffix.lower()
-            new_path = image_path.with_name(new_name).with_suffix(img_suffix)
-            if new_path.name == image_path.name:
-                continue
-            remapped_names.add((image_path, new_path))
-            if new_path.exists():
-                context.terminal.warning("Conflict detected, reverting all changes...")
-                context.terminal.log(f"Conflicting file: {new_path}")
-                should_revert = True
-                break
-            image_path.rename(new_path)
+        for original_path, new_path in renaming_maps.items():
+            context.terminal.status(f"Renaming images [{total_rename + 1}/{len(renaming_maps)}]...")
+            original_path.rename(new_path)
             total_rename += 1
 
-        if should_revert:
-            context.terminal.stop_status(f"Renamed {total_rename} images in {context.current_dir}, reverting...")
-            context.terminal.enter()
-            context.terminal.status("Reverting all changes...")
-            for old_path, new_path in remapped_names:
-                if new_path.exists():
-                    new_path.rename(old_path)
-            context.terminal.stop_status("Reverted all changes.")
-            raise RuntimeError("Shift rename action failed due to filename conflicts.")
-        else:
-            context.terminal.stop_status(f"Renamed {total_rename} images in {context.current_dir}.")
+        context.terminal.stop_status(f"Renamed {total_rename} images in {context.current_dir}.")
 
 
 class ActionRename(BaseAction):
@@ -173,7 +160,6 @@ class ActionRename(BaseAction):
         meta_namings = volume.meta_name_maps
         renaming_maps: dict[str, Path] = {}  # This is new name -> old path (yeah)
         for image, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
-            # console.status(f"Renaming with daiz-like format: {image.name}/{total_img}...")
             title_match = cmx_re.match(image.name)
             if title_match is None:
                 context.terminal.error(f"Image {image} does not match regex, aborting...")
