@@ -190,12 +190,7 @@ def main(ctx: click.Context, verbose: bool):
     help="Show nmanga version information",
     cls=NMangaCommandHandler,
 )
-@click.option(
-    "--deprecated",
-    is_flag=True,
-    help="(Deprecated) Show deprecated version information",
-)
-def show_version(deprecated: bool):
+def show_version():
     """Show nmanga version information."""
     console.console.print(f"[bold]{__name__} version:[/bold] {__version__}")
     console.console.print(f"[bold]Created by:[/bold] {__author__}")
