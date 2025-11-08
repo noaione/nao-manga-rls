@@ -350,6 +350,16 @@ threads = click.option(
     help="The number of threads to use for processing",
     panel="Performance Options",
 )
+threads_alt = click.option(
+    "-th",
+    "--threads",
+    "threads",
+    type=POSITIVE_INT,
+    default=cpu_count(),
+    show_default=True,
+    help="The number of threads to use for processing",
+    panel="Performance Options",
+)
 
 
 def dest_output(file_okay: bool = False, dir_okay: bool = True, optional: bool = False):

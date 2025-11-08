@@ -40,10 +40,10 @@ from ..common import (
     format_archive_filename,
     format_daiz_like_filename,
     format_volume_text,
-    inject_metadata,
     inquire_chapter_ranges,
     optimize_images,
     safe_int,
+    threaded_worker,
 )
 from ..constants import MangaPublication
 from . import options
@@ -55,6 +55,7 @@ from .base import (
     test_or_find_exiftool,
     test_or_find_pingo,
 )
+from .image_tagging import _threaded_tagging_star
 
 console = term.get_console()
 conf = config.get_config()
@@ -124,6 +125,7 @@ class SpecialNaming:
 @options.exiftool_path
 @options.pingo_path
 @options.use_bracket_type
+@options.threads_alt
 @check_config_first
 @time_program
 def prepare_releases(
@@ -144,6 +146,7 @@ def prepare_releases(
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
+    threads: int,
 ):  # pragma: no cover
     """
     Prepare a release of a manga series.
@@ -310,12 +313,27 @@ def prepare_releases(
         optimize_images(pingo_exe, path_or_archive)
     if exiftool_exe is not None and do_exif_tagging:
         console.info("Tagging images with exif metadata...")
-        inject_metadata(
-            exiftool_exe,
-            path_or_archive,
-            image_titling,
-            rls_email,
-        )
+        progress = console.make_progress()
+        precollect_images = [
+            file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)
+        ]
+        precollect_images.sort(key=lambda p: p.name)
+
+        task = progress.add_task("Tagging images...", total=len(precollect_images))
+
+        if threads > 1:
+            console.info(f"Using {threads} CPU threads for processing.")
+            with threaded_worker(console, threads) as pool:
+                for _ in pool.imap_unordered(
+                    _threaded_tagging_star,
+                    ((exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
+                ):
+                    progress.update(task, advance=1)
+        else:
+            for image_path in precollect_images:
+                _threaded_tagging_star((exiftool_exe, image_path, image_titling, rls_email))
+                progress.update(task, advance=1)
+        console.stop_progress(progress, "Tagged all possible images with exif metadata.")
 
 
 @click.command(
@@ -380,6 +398,7 @@ def prepare_releases(
 @options.exiftool_path
 @options.pingo_path
 @options.use_bracket_type
+@options.threads_alt
 @check_config_first
 @time_program
 def prepare_releases_chapter(
@@ -402,6 +421,7 @@ def prepare_releases_chapter(
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
+    threads: int,
 ):  # pragma: no cover
     """
     Prepare a release of a manga chapter.
@@ -506,9 +526,24 @@ def prepare_releases_chapter(
         optimize_images(pingo_exe, path_or_archive)
     if exiftool_exe is not None and do_exif_tagging:
         console.info("Tagging images with exif metadata...")
-        inject_metadata(
-            exiftool_exe,
-            path_or_archive,
-            image_titling,
-            rls_email,
-        )
+        progress = console.make_progress()
+        precollect_images = [
+            file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)
+        ]
+        precollect_images.sort(key=lambda p: p.name)
+
+        task = progress.add_task("Tagging images...", total=len(precollect_images))
+
+        if threads > 1:
+            console.info(f"Using {threads} CPU threads for processing.")
+            with threaded_worker(console, threads) as pool:
+                for _ in pool.imap_unordered(
+                    _threaded_tagging_star,
+                    ((exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
+                ):
+                    progress.update(task, advance=1)
+        else:
+            for image_path in precollect_images:
+                _threaded_tagging_star((exiftool_exe, image_path, image_titling, rls_email))
+                progress.update(task, advance=1)
+        console.stop_progress(progress, "Tagged all possible images with exif metadata.")

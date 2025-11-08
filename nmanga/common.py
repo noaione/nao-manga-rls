@@ -37,6 +37,7 @@ from . import config, term, utils
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
 
 __all__ = (
+    "ALLOWED_TAG_EXTENSIONS",
     "BRACKET_MAPPINGS",
     "ChapterRange",
     "PseudoChapterMatch",
@@ -67,6 +68,8 @@ BRACKET_MAPPINGS = {
     "round": ["(", ")"],
     "curly": ["{", "}"],
 }
+# List of image extension that supports exif tagging
+ALLOWED_TAG_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
 
 
 def _worker_initializer():

@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import subprocess as sp
 from datetime import datetime, timedelta, timezone
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Literal
 
@@ -39,6 +38,7 @@ from nmanga import file_handler
 
 from .. import term
 from ..common import (
+    ALLOWED_TAG_EXTENSIONS,
     format_archive_filename,
     format_volume_text,
     make_metadata_command,
@@ -51,9 +51,6 @@ from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find
 
 console = term.get_console()
 
-# List of image extension that supports exif tagging
-ALLOWED_TAG = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
-
 
 def _threaded_tagging(
     exiftool_exe: str,
@@ -63,7 +60,7 @@ def _threaded_tagging(
 ) -> None:
     """Threaded helper for tagging images"""
     ext = image_path.suffix.lower().lstrip(".")
-    if ext not in ALLOWED_TAG:
+    if ext not in ALLOWED_TAG_EXTENSIONS:
         cnsl = term.get_console()
         cnsl.warning(f"Skipping unsupported image format for tagging: {image_path.name}")
         return
@@ -104,16 +101,7 @@ def _threaded_tagging_star(args: tuple[str, Path, str, str]) -> None:
 @options.rls_extra_metadata
 @options.use_bracket_type
 @options.exiftool_path
-@click.option(
-    "-th",
-    "--threads",
-    "threads",
-    type=options.POSITIVE_INT,
-    default=cpu_count(),
-    show_default=True,
-    help="The number of threads to use for processing",
-    panel="Performance Options",
-)
+@options.threads_alt
 @check_config_first
 @time_program
 def image_tagging(
@@ -206,16 +194,7 @@ def image_tagging(
 )
 @options.rls_email
 @options.exiftool_path
-@click.option(
-    "-th",
-    "--threads",
-    "threads",
-    type=options.POSITIVE_INT,
-    default=cpu_count(),
-    show_default=True,
-    help="The number of threads to use for processing",
-    panel="Performance Options",
-)
+@options.threads_alt
 @check_config_first
 @time_program
 def image_tagging_raw(
