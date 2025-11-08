@@ -69,7 +69,7 @@ version = {attr = "nmanga._metadata.__version__"}
 nmanga = "nmanga.cmd:main"
 
 [tool.setuptools]
-packages = ["nmanga", "nmanga.cli", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"]
+packages = ["nmanga", "nmanga.cli", "nmanga.term", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"]
 
 [tool.ruff]
 line-length = 120

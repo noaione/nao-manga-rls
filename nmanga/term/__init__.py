@@ -1,46 +1,27 @@
 """
-MIT License
+nmanga.term
+~~~~~~~~~~~
+Terminal utilities and classes for nmanga.
 
-Copyright (c) 2022-present noaione
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+:copyright: (c) 2022-present noaione
+:license: MIT, see LICENSE for more details.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar, overload
+from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar, cast, overload
 
 import inquirer
 from rich.console import Console as RichConsole
 from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
     Progress,
-    SpinnerColumn,
     TaskID,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
 )
 from rich.theme import Theme as RichTheme
+
+from .progress import NMProgress
 
 if TYPE_CHECKING:
     from rich.status import Status as RichStatus
@@ -53,6 +34,11 @@ rich_theme = RichTheme({
     "error": "red bold",
     "highlight": "magenta bold",
     "info": "cyan bold",
+    "tracker-bar.pulse": "yellow bold",
+    "tracker-bar.remaining": "grey23",
+    "tracker-bar.complete": "cyan bold",
+    "tracker-bar.finished": "green bold",
+    "tracker-bar.outer": "bold",
 })
 AnyType = TypeVar("AnyType", str, bytes, int, float)
 ValidateFunc: TypeAlias = Callable[[str], bool]
@@ -71,9 +57,11 @@ class ConsoleChoice:
 class Console:
     def __init__(self, debug_mode: bool = False):
         self.__debug_mode = debug_mode
-        self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True)
+        self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True, width=None)
         self._status: "RichStatus | None" = None
         self.__last_known_status: str | None = None
+
+        self.__current_progress: NMProgress | None = None
 
         self.shift_space = 0
 
@@ -141,28 +129,30 @@ class Console:
         else:
             self.__debug_status(message)
 
-    def make_progress(self) -> Progress:
-        progress = Progress(
-            SpinnerColumn(spinner_name="dots"),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=None),
-            MofNCompleteColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
+    def make_progress(self) -> NMProgress:
+        if self.__current_progress is not None and self.__current_progress.live.is_started:
+            # If already started, return the current one
+            return self.__current_progress
+        progress = NMProgress(
+            *NMProgress.get_default_columns(),  # Use custom default columns
             console=self.console,
+            expand=True,
         )
+        self.__current_progress = progress
         # Auto-start
         progress.start()
         return progress
 
-    def make_task(self, progress: Progress, description: str, total: int | None = None) -> TaskID:
-        task = progress.add_task(description, total=total)
+    def make_task(
+        self, progress: NMProgress, description: str, total: int | None = None, *, finished_text: str | None = None
+    ) -> TaskID:
+        task = progress.add_task(description, total=total, finished_text=finished_text)
         return task
 
     def stop_progress(self, progress: Progress, text: str | None = None) -> None:
         for task in progress.tasks:
-            progress.update(task.id, completed=task.total or 0)
+            if task.total is not None:
+                progress.update(task.id, completed=task.total)
         progress.stop()
         if text is not None:
             self.info(text)
