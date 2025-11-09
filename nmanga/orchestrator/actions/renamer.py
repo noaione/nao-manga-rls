@@ -91,7 +91,7 @@ class ActionShiftName(BaseAction):
 
         volume_text = format_volume_text(manga_volume=volume.number)
 
-        context.terminal.status(f"Renaming {len(all_images)} images in {context.current_dir}...")
+        context.terminal.info(f"Renaming {len(all_images)} images in {context.current_dir}...")
         renaming_maps = shift_renaming_gen(
             all_images,
             start_index=self.start,
@@ -101,13 +101,14 @@ class ActionShiftName(BaseAction):
             reverse=self.reverse,
         )
 
-        total_rename = 0
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Renaming images...", total=len(renaming_maps))
         for original_path, new_path in renaming_maps.items():
-            context.terminal.status(f"Renaming images [{total_rename + 1}/{len(renaming_maps)}]...")
             original_path.rename(new_path)
-            total_rename += 1
+            progress.update(task, advance=1)
+        task_info = progress.tasks[task]
 
-        context.terminal.stop_status(f"Renamed {total_rename} images in {context.current_dir}.")
+        context.terminal.stop_progress(progress, f"Renamed {task_info.completed} images in {context.current_dir}.")
 
 
 class ActionRename(BaseAction):

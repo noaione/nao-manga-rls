@@ -85,13 +85,14 @@ class ActionMoveColor(BaseAction):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         moved_count = 0
-        for img_file, _, total_img, _ in file_handler.collect_image_from_folder(context.current_dir):
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Moving color images...", total=len(volume.colors))
+        for img_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             title_match = cmx_re.match(img_file.stem)
             if title_match is None:
                 context.terminal.error(f"Image {img_file} does not match page regex, aborting...")
                 continue
 
-            context.terminal.status(f"Moving color images... [{moved_count}/{total_img}]")
             p01 = int(title_match.group("a"))
             if p01 in volume.colors:
                 dest_path = output_dir / img_file.name
@@ -99,9 +100,10 @@ class ActionMoveColor(BaseAction):
                     context.terminal.warning(f"Skipping existing file: {dest_path}")
                     continue
                 shutil.move(img_file, dest_path)
+                progress.update(task, advance=1)
                 moved_count += 1
 
-        context.terminal.stop_status(f"Moved {moved_count} color images to {output_dir}")
+        context.terminal.stop_progress(progress, f"Moved {moved_count} color images to {output_dir}", skip_total=True)
 
 
 def _runner_jpegify_threaded(
@@ -123,6 +125,10 @@ def _runner_jpegify_threaded(
     cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
     sp.run(cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
     return ThreadedResult.PROCESSED
+
+
+def _runner_jpegify_threaded_star(args: tuple[Path, Path, str, int, SkipActionKind | None]) -> ThreadedResult:
+    return _runner_jpegify_threaded(*args)
 
 
 class ActionColorJpegify(BaseAction):
@@ -200,21 +206,24 @@ class ActionColorJpegify(BaseAction):
         total_images = len(image_candidates)
         quality = max(0, min(100, self.quality))
 
-        context.terminal.status(f"Converting {total_images} images to JPEG with cjpegli...")
+        progress = context.terminal.make_progress()
+        task = progress.add_task("JPEGifying...", total=total_images)
         results: list[ThreadedResult] = []
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as pool:
-                results = pool.starmap(
-                    _runner_jpegify_threaded,
+                for result in pool.imap_unordered(
+                    _runner_jpegify_threaded_star,
                     [(image, output_dir, cjpegli, quality, skip_action) for image, skip_action in image_candidates],
-                )
+                ):
+                    results.append(result)
+                    progress.update(task, advance=1)
         else:
-            for idx, (image, skip_action) in enumerate(image_candidates):
-                context.terminal.status(f"Converting images to JPEG... [{idx + 1}/{total_images}]")
+            for image, skip_action in image_candidates:
                 results.append(_runner_jpegify_threaded(image, output_dir, cjpegli, quality, skip_action))
+                progress.update(task, advance=1)
 
-        context.terminal.stop_status(f"Converted {total_images} images to JPEG in {output_dir}")
+        context.terminal.stop_progress(progress, f"Converted {total_images} images to JPEG.")
         jpegified_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
         copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
         ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
