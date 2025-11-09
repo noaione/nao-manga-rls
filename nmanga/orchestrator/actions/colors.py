@@ -85,7 +85,7 @@ class ActionMoveColor(BaseAction):
 
         moved_count = 0
         progress = context.terminal.make_progress()
-        task = progress.add_task("Moving color images...", total=len(volume.colors))
+        task = progress.add_task("Moving color images...", finished_text="Moved color images", total=len(volume.colors))
         for img_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             title_match = cmx_re.match(img_file.stem)
             if title_match is None:
@@ -209,7 +209,7 @@ class ActionColorJpegify(BaseAction):
         quality = max(0, min(100, self.quality))
 
         progress = context.terminal.make_progress()
-        task = progress.add_task("JPEGifying...", total=total_images)
+        task = progress.add_task("JPEGifying images...", finished_text="JPEGified images", total=total_images)
         results: list[ThreadedResult] = []
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")

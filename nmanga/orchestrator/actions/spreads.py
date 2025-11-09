@@ -189,7 +189,7 @@ class ActionSpreads(BaseAction):
         context.terminal.info(f"Joining {total_match_spreads} spreads from {context.current_dir}...")
 
         progress = context.terminal.make_progress()
-        task = progress.add_task("Joining spreads...", total=total_match_spreads)
+        task = progress.add_task("Joining spreads...", finished_text="Joined spreads", total=total_match_spreads)
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as (pool, log_q):

@@ -102,7 +102,7 @@ class ActionShiftName(BaseAction):
         )
 
         progress = context.terminal.make_progress()
-        task = progress.add_task("Renaming images...", total=len(renaming_maps))
+        task = progress.add_task("Renaming images...", finished_text="Renamed images", total=len(renaming_maps))
         for original_path, new_path in renaming_maps.items():
             original_path.rename(new_path)
             progress.update(task, advance=1)
@@ -240,7 +240,7 @@ class ActionRename(BaseAction):
         context.terminal.info(f"Renaming {total_img} images in {context.current_dir}...")
 
         progress = context.terminal.make_progress()
-        task = progress.add_task("Renaming images...", total=total_img)
+        task = progress.add_task("Renaming images...", finished_text="Renamed images", total=total_img)
         for new_name, old_path in renaming_maps.items():
             new_path = old_path.with_stem(new_name)
             if new_path.name != old_path.name:

@@ -134,7 +134,7 @@ class ActionTagging(BaseAction):
         context.terminal.info(f"Tagging images in {context.current_dir} with exif metadata...")
 
         progress = context.terminal.make_progress()
-        task = progress.add_task("Tagging images...", total=total_images)
+        task = progress.add_task("Tagging images...", finished_text="Tagged images", total=total_images)
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as (pool, log_q):
