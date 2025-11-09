@@ -163,7 +163,7 @@ def image_tagging(
     precollect_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
     precollect_images.sort(key=lambda p: p.name)
 
-    task = progress.add_task("Tagging images...", total=len(precollect_images))
+    task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
@@ -227,7 +227,7 @@ def image_tagging_raw(
     precollect_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
     precollect_images.sort(key=lambda p: p.name)
 
-    task = progress.add_task("Tagging images...", total=len(precollect_images))
+    task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")

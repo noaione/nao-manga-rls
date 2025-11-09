@@ -204,7 +204,7 @@ def autolevel(
         return 0
 
     progress = console.make_progress()
-    task_calculate = progress.add_task("Analzying images...", total=len(all_files))
+    task_calculate = progress.add_task("Analzying images...", finished_text="Analzyed images", total=len(all_files))
 
     results: list[tuple[int, int, Path, bool]] = []
     if threads > 1:
@@ -246,7 +246,9 @@ def autolevel(
     console.info(f"Dumped autolevel debug data to: {dump_path}")
 
     # Pre-compute all the image magick commands
-    task_cmd = progress.add_task("Preparing autolevel commands...", total=len(results))
+    task_cmd = progress.add_task(
+        "Preparing autolevel commands...", finished_text="Prepared autolevel commands", total=len(results)
+    )
     total_results = len(results)
     for black_level, white_level, img_path, force_gray in results:
         if black_level == 0:
@@ -284,7 +286,7 @@ def autolevel(
         console.info("Aborting autolevel.")
         return 0
 
-    task_copy = progress.add_task("Copying images...", total=len(to_be_copied))
+    task_copy = progress.add_task("Copying images...", finished_text="Copied images", total=len(to_be_copied))
     # Do copying first
     for img_path in to_be_copied:
         dest_path = dest_output / img_path.name
@@ -297,7 +299,7 @@ def autolevel(
 
     progress.update(task_copy, completed=len(to_be_copied))
 
-    task_proc = progress.add_task("Auto-leveling images...", total=len(commands))
+    task_proc = progress.add_task("Auto-leveling images...", finished_text="Auto-leveled images", total=len(commands))
     if threads > 1:
         with threaded_worker(console, threads) as (pool, log_q):
             for _ in pool.imap_unordered(_autolevel_exec_star, [(log_q, cmd) for cmd in commands]):
@@ -489,7 +491,7 @@ def autolevel2(
     dest_output.mkdir(parents=True, exist_ok=True)
     results: list[AutoLevelResult] = []
     progress = console.make_progress()
-    task = progress.add_task("Processing images...", total=total_files)
+    task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
@@ -572,7 +574,7 @@ def force_gray(
 
     total_files = len(all_files)
     progress = console.make_progress()
-    task_prep = progress.add_task("Preparing commands...", total=total_files)
+    task_prep = progress.add_task("Preparing commands...", finished_text="Prepared images", total=total_files)
 
     for img_path in all_files:
         if dest_output is not None and dest_output != path_or_archive:
@@ -600,7 +602,7 @@ def force_gray(
     backup_dir = path_or_archive / "backup"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    task_proc = progress.add_task("Processing images...", total=len(commands))
+    task_proc = progress.add_task("Processing images...", finished_text="Processed images", total=len(commands))
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as (pool, log_q):
@@ -727,7 +729,7 @@ def analyze_level(
 
     results: list[AutolevelAnalyzeResult] = []
     progress = console.make_progress()
-    task = progress.add_task("Analzying images...", total=total_files)
+    task = progress.add_task("Analzying images...", finished_text="Analyzed images", total=total_files)
 
     if threads <= 1:
         for img_path in all_files:

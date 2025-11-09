@@ -177,7 +177,7 @@ def denoiser(
     final_params = ["-o", str(dest_output)]
 
     progress = console.make_progress()
-    task = progress.add_task("Denoising images...", total=total_files)
+    task = progress.add_task("Denoising images...", finished_text="Denoised images", total=total_files)
     errors = []
     for image in all_files:
         params = [
@@ -283,7 +283,7 @@ def identify_denoise_candidates(
     console.info("Scanning images for quality...")
 
     progress = console.make_progress()
-    task = progress.add_task("Scanning images...", total=None)
+    task = progress.add_task("Scanning images...", finished_text="Scanned images", total=None)
 
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         progress.update(task, total=total_img)

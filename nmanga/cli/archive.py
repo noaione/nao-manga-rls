@@ -136,7 +136,7 @@ def pack_releases(
     arc_target.set_comment(rls_email)
     total_count = 0
     progress = console.make_progress()
-    task = progress.add_task("Packing images...", total=None)
+    task = progress.add_task("Packing...", finished_text="Packed", total=None)
     with file_handler.MangaArchive(path_or_archive) as archive:
         for image, total_count in archive:
             arc_target.add_image(image.name, cast(Path, image.access()))
@@ -217,7 +217,7 @@ def pack_releases_epub_mode(
         )
 
     progress = console.make_progress()
-    task = progress.add_task("Packing...", total=None)
+    task = progress.add_task("Packing...", finished_text="Packed", total=None)
 
     counted_data = 0
     for path in path_or_archive.glob("**/*"):

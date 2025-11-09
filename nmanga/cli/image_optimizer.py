@@ -162,7 +162,7 @@ def image_jpegify(
     quality = max(0, min(100, jpeg_quality))
 
     progress = console.make_progress()
-    task = progress.add_task("Converting images...", total=total_images)
+    task = progress.add_task("Converting images...", finished_text="Converted images", total=total_images)
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
@@ -222,7 +222,9 @@ def image_mixmatch(
     dest_output.mkdir(parents=True, exist_ok=True)
 
     progress = console.make_progress()
-    task = progress.add_task("Mixing and matching images...", total=total_images)
+    task = progress.add_task(
+        "Mixing and matching images...", finished_text="Mixed and matched images", total=total_images
+    )
 
     for file_a, file_b in zip(images_a, images_b, strict=True):
         console.log(f"Dir A Image: {file_a}, Dir B Image: {file_b}")

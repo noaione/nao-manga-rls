@@ -110,7 +110,7 @@ def posterize_simple(
     console.info(f"Found {total_files} files in the directory.")
 
     progress = console.make_progress()
-    task = progress.add_task("Posterizing images...", total=total_files)
+    task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
 
     dest_output.mkdir(parents=True, exist_ok=True)
     if threads > 1:
@@ -220,7 +220,7 @@ def auto_posterize(
     console.info(f"Found {total_files} files in the directory.")
 
     progress = console.make_progress()
-    taks = progress.add_task("Auto-posterizing images...", total=total_files)
+    taks = progress.add_task("Auto-posterizing images...", finished_text="Auto-posterized images", total=total_files)
     dest_output.mkdir(parents=True, exist_ok=True)
     results: list[PosterizedResult] = []
     if threads > 1:
@@ -287,7 +287,7 @@ def analyze_shades(
     console.info(f"Found {total_files} files in the directory.")
 
     progress = console.make_progress()
-    task = progress.add_task("Analyzing images...", total=total_files)
+    task = progress.add_task("Analyzing images...", finished_text="Analyzed images", total=total_files)
     for image_path in all_files:
         shades = analyze_gray_shades(Image.open(image_path), threshold_pct)
         if len(shades) == 0:

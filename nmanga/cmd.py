@@ -36,6 +36,7 @@ from .cli.auto_split import auto_split
 from .cli.autolevel import analyze_level, autolevel, autolevel2, force_gray
 from .cli.base import NMangaCommandHandler
 from .cli.config import cli_config
+from .cli.debugging import simulate_progress
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.image_optimizer import image_jpegify, image_mixmatch, image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
@@ -231,6 +232,7 @@ main.add_command(pdf_manager)
 main.add_command(orchestractor)
 main.add_command(lookup_group)
 main.add_command(show_version)
+main.add_command(simulate_progress)
 
 
 if __name__ == "__main__":

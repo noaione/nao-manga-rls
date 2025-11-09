@@ -319,7 +319,7 @@ def prepare_releases(
         ]
         precollect_images.sort(key=lambda p: p.name)
 
-        task = progress.add_task("Tagging images...", total=len(precollect_images))
+        task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
         if threads > 1:
             console.info(f"Using {threads} CPU threads for processing.")
@@ -532,7 +532,7 @@ def prepare_releases_chapter(
         ]
         precollect_images.sort(key=lambda p: p.name)
 
-        task = progress.add_task("Tagging images...", total=len(precollect_images))
+        task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
         if threads > 1:
             console.info(f"Using {threads} CPU threads for processing.")

@@ -332,6 +332,8 @@ class NMangaCommandHandler(click.RichCommand):
         except Exception as ex:
             # Invoke error handler
             console.stop_status()  # So it doesn't consume the indicator in iTerm (and maybe more)
+            console.stop_current_progress()
+            console.console.show_cursor()
             raise UnrecoverableNMangaError(str(ex), sys.exc_info()) from ex
 
 
