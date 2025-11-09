@@ -32,10 +32,9 @@ from typing import TYPE_CHECKING, Literal
 from PIL import Image
 from pydantic import ConfigDict, Field
 
-from ... import file_handler
+from ... import file_handler, term
 from ...autolevel import apply_levels, find_local_peak, gamma_correction
 from ...common import RegexCollection, threaded_worker
-from ...term import get_console
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
@@ -46,18 +45,19 @@ __all__ = ("ActionAutolevel",)
 
 
 def _runner_autolevel2_threaded(
+    log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
     action: "ActionAutolevel",
     is_color: bool,
     is_skipped_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
-    console = get_console()
+    cnsl = term.with_thread_queue(log_q)
     if is_skipped_action is not None:
-        perform_skip_action(img_path, output_dir, is_skipped_action, console)
+        perform_skip_action(img_path, output_dir, is_skipped_action, cnsl)
         return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     if is_color and action.skip_color:
-        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, console)
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
         return ThreadedResult.COPIED
 
     img = Image.open(img_path)
@@ -83,14 +83,14 @@ def _runner_autolevel2_threaded(
         img.close()
 
         if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
+            cnsl.warning(f"Skipping existing file: {dest_path}")
             return ThreadedResult.COPIED
         shutil.copy2(img_path, dest_path)
         return ThreadedResult.COPIED
 
     dest_path = output_dir / f"{img_path.stem}.png"
     if dest_path.exists():
-        console.warning(f"Skipping existing file: {dest_path}")
+        cnsl.warning(f"Skipping existing file: {dest_path}")
         return ThreadedResult.COPIED
 
     if not is_color:
@@ -193,18 +193,20 @@ class ActionAutolevel(BaseAction):
         context.terminal.status(f"Auto-leveling {total_images} images...")
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as pool:
+            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
                 results = pool.starmap(
                     _runner_autolevel2_threaded,
                     [
-                        (image, output_dir, self, is_color, is_skip_action)
+                        (log_q, image, output_dir, self, is_color, is_skip_action)
                         for image, is_color, is_skip_action in images_complete
                     ],
                 )
         else:
             for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
                 context.terminal.status(f"Auto-leveling images... [{idx + 1}/{total_images}]")
-                results.append(_runner_autolevel2_threaded(image, output_dir, self, is_color, is_skip_action))
+                results.append(
+                    _runner_autolevel2_threaded(context.terminal, image, output_dir, self, is_color, is_skip_action)
+                )
 
         context.terminal.stop_status(f"Auto-leveled {total_images} images in {context.current_dir}")
         autolevel_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)

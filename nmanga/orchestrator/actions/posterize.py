@@ -33,13 +33,12 @@ from pydantic import ConfigDict, Field
 
 from nmanga.orchestrator.actions._base import ToolsKind
 
-from ... import file_handler
+from ... import file_handler, term
 from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
 from ...common import RegexCollection, threaded_worker
-from ...term import get_console
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
 
@@ -50,6 +49,7 @@ __all__ = ("ActionPosterize",)
 
 
 def _runner_posterize_threaded(
+    log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
     action: "ActionPosterize",
@@ -57,17 +57,17 @@ def _runner_posterize_threaded(
     is_color: bool = False,
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
-    console = get_console()
+    cnsl = term.with_thread_queue(log_q)
     if skip_action is not None:
-        perform_skip_action(img_path, output_dir, skip_action, console)
+        perform_skip_action(img_path, output_dir, skip_action, cnsl)
         return ThreadedResult.COPIED if skip_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     if is_color:
-        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, console)
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
         return ThreadedResult.COPIED
 
     dest_path = output_dir / f"{img_path.stem}.png"
     if dest_path.exists():
-        console.warning(f"Skipping existing file: {dest_path}")
+        cnsl.warning(f"Skipping existing file: {dest_path}")
         return ThreadedResult.COPIED
 
     if imagick is not None:
@@ -158,18 +158,22 @@ class ActionPosterize(BaseAction):
         context.terminal.status(f"Posterizing {total_images} images...")
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as pool:
+            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
                 results = pool.starmap(
                     _runner_posterize_threaded,
                     [
-                        (image, output_dir, self, imagick, is_color, is_skip_action)
+                        (log_q, image, output_dir, self, imagick, is_color, is_skip_action)
                         for image, is_color, is_skip_action in images_complete
                     ],
                 )
         else:
             for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
                 context.terminal.status(f"Posterizing images... [{idx + 1}/{total_images}]")
-                results.append(_runner_posterize_threaded(image, output_dir, self, imagick, is_color, is_skip_action))
+                results.append(
+                    _runner_posterize_threaded(
+                        context.terminal, image, output_dir, self, imagick, is_color, is_skip_action
+                    )
+                )
 
         context.terminal.stop_status(f"Posterized {total_images} images in {context.current_dir}")
         posterized_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)

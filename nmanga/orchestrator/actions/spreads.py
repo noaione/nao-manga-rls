@@ -32,10 +32,9 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 from PIL import Image
 from pydantic import ConfigDict, Field
 
-from ... import file_handler
+from ... import file_handler, term
 from ...common import RegexCollection, threaded_worker
 from ...spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
-from ...term import get_console
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
@@ -51,16 +50,17 @@ class _SpreadStuff(TypedDict):
 
 
 def _runner_image_spreads_threaded(
+    log_q: term.MessageOrInterface,
     current_dir: Path,
     spread_key: str,
     images: _SpreadStuff,
     imagick: str,
     action: "ActionSpreads",
 ) -> None:
-    console = get_console()
+    cnsl = term.with_thread_queue(log_q)
     final_filename = f"{images['prefix']}p{spread_key}{images['postfix']}"
     if len(images["images"]) < 2:
-        console.warning(f"Spread {spread_key} has less than 2 images, skipping...")
+        cnsl.warning(f"Spread {spread_key} has less than 2 images, skipping...")
         return
 
     if action.pillow:
@@ -184,18 +184,20 @@ class ActionSpreads(BaseAction):
         context.terminal.status(f"Joining {total_match_spreads} spreads from {context.current_dir}...")
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as pool:
+            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
                 pool.starmap(
                     _runner_image_spreads_threaded,
                     [
-                        (context.current_dir, spread, images, imagick, self)
+                        (log_q, context.current_dir, spread, images, imagick, self)
                         for spread, images in exported_images.items()
                     ],
                 )
         else:
             for spread, images in exported_images.items():
                 context.terminal.status(f"Joining spreads: {current}/{total_match_spreads} ({spread})...")
-                _runner_image_spreads_threaded(context.current_dir, spread, images, cast(str, imagick), self)
+                _runner_image_spreads_threaded(
+                    context.terminal, context.current_dir, spread, images, cast(str, imagick), self
+                )
                 current += 1
         context.terminal.stop_status(f"Joined {total_match_spreads} spreads from {context.current_dir}")
 

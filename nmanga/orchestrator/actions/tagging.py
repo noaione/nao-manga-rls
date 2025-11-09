@@ -50,6 +50,7 @@ __all__ = ("ActionTagging",)
 
 
 def _runner_tagging_threaded(
+    log_q: term.MessageOrInterface,
     exiftool_exe: str,
     image_path: Path,
     archive_filename: str,
@@ -58,7 +59,7 @@ def _runner_tagging_threaded(
     """Threaded helper for tagging images"""
     ext = image_path.suffix.lower().lstrip(".")
     if ext not in ALLOWED_TAG_EXTENSIONS:
-        cnsl = term.get_console()
+        cnsl = term.with_thread_queue(log_q)
         cnsl.warning(f"Skipping unsupported image format for tagging: {image_path.name}")
         return
     base_cmd = make_metadata_command(exiftool_exe, archive_filename, rls_email)
@@ -70,7 +71,7 @@ def _runner_tagging_threaded(
     proc.wait()
 
 
-def _runner_tagging_threaded_star(args: tuple[str, Path, str, str]) -> None:
+def _runner_tagging_threaded_star(args: tuple[term.MessageQueue, str, Path, str, str]) -> None:
     return _runner_tagging_threaded(*args)
 
 
@@ -136,15 +137,15 @@ class ActionTagging(BaseAction):
         task = progress.add_task("Tagging images...", total=total_images)
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as pool:
+            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
                 for _ in pool.imap_unordered(
                     _runner_tagging_threaded_star,
-                    [(exiftool, image, archive_filename, orchestrator.email) for image in all_images],
+                    [(log_q, exiftool, image, archive_filename, orchestrator.email) for image in all_images],
                 ):
                     progress.update(task, advance=1)
         else:
             for image in all_images:
-                _runner_tagging_threaded(exiftool, image, archive_filename, orchestrator.email)
+                _runner_tagging_threaded(context.terminal, exiftool, image, archive_filename, orchestrator.email)
                 progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Finished tagging images in {context.current_dir}")

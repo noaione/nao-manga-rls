@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
-    from ..term import Console
+    from ..term import ConsoleInterface
 
 __all__ = (
     "SkipActionConfig",
@@ -79,7 +79,7 @@ def perform_skip_action(
     img_path: Path,
     output_dir: Path,
     action: SkipActionKind,
-    console: "Console",
+    console: "ConsoleInterface",
 ) -> None:
     dest_path = output_dir / img_path.name
     match action:

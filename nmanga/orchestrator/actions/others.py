@@ -65,7 +65,7 @@ class ActionInterrupt(BaseAction):
         """
 
         # TODO: Implement interrupt logic, in here
-        context.terminal.warn("Not implemented")
+        context.terminal.warning("Not implemented")
         if context.dry_run:
             context.terminal.info(f"- Whole Chain: {'Yes' if self.whole_chain else 'No'}")
             return

@@ -32,9 +32,8 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import ConfigDict, Field
 
-from ... import file_handler
+from ... import file_handler, term
 from ...common import RegexCollection, threaded_worker
-from ...term import get_console
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
@@ -107,19 +106,20 @@ class ActionMoveColor(BaseAction):
 
 
 def _runner_jpegify_threaded(
+    log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
     cjpegli: str,
     quality: int,
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
-    console = get_console()
+    cnsl = term.with_thread_queue(log_q)
     if skip_action is not None:
-        perform_skip_action(img_path, output_dir, skip_action, console)
+        perform_skip_action(img_path, output_dir, skip_action, cnsl)
         return ThreadedResult.COPIED if skip_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
     dest_path = output_dir / f"{img_path.stem}.jpg"
     if dest_path.exists():
-        console.warning(f"Skipping existing file: {dest_path}")
+        cnsl.warning(f"Skipping existing file: {dest_path}")
         return ThreadedResult.COPIED
 
     cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
@@ -127,7 +127,9 @@ def _runner_jpegify_threaded(
     return ThreadedResult.PROCESSED
 
 
-def _runner_jpegify_threaded_star(args: tuple[Path, Path, str, int, SkipActionKind | None]) -> ThreadedResult:
+def _runner_jpegify_threaded_star(
+    args: tuple[term.MessageQueue, Path, Path, str, int, SkipActionKind | None],
+) -> ThreadedResult:
     return _runner_jpegify_threaded(*args)
 
 
@@ -190,7 +192,7 @@ class ActionColorJpegify(BaseAction):
         for img_path, _, _, _ in file_handler.collect_image_from_folder(source_dir):
             title_match = page_re.match(img_path.stem)
             if title_match is None:
-                context.terminal.warn(f"Image {img_path} does not match page regex, ignoring...")
+                context.terminal.warning(f"Image {img_path} does not match page regex, ignoring...")
                 continue
             p01 = int(title_match.group("a"))
             if p01 in volume.colors:
@@ -211,16 +213,21 @@ class ActionColorJpegify(BaseAction):
         results: list[ThreadedResult] = []
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as pool:
+            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
                 for result in pool.imap_unordered(
                     _runner_jpegify_threaded_star,
-                    [(image, output_dir, cjpegli, quality, skip_action) for image, skip_action in image_candidates],
+                    [
+                        (log_q, image, output_dir, cjpegli, quality, skip_action)
+                        for image, skip_action in image_candidates
+                    ],
                 ):
                     results.append(result)
                     progress.update(task, advance=1)
         else:
             for image, skip_action in image_candidates:
-                results.append(_runner_jpegify_threaded(image, output_dir, cjpegli, quality, skip_action))
+                results.append(
+                    _runner_jpegify_threaded(context.terminal, image, output_dir, cjpegli, quality, skip_action)
+                )
                 progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Converted {total_images} images to JPEG.")
