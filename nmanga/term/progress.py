@@ -178,10 +178,10 @@ class TrackerBarColumn(ProgressColumn):
         if half_bar_count:
             bar_text.append(self.complete_glyph, style=complete_style)
         remaining_bars = width - bar_count - half_bar_count
+        if not is_finished:
+            bar_text.append(self.head_style, style=self.pulse_style)
+            remaining_bars -= 1
         if remaining_bars:
-            if not half_bar_count and bar_count:
-                bar_text.append(self.head_style, style=self.pulse_style)
-                remaining_bars -= 1
             if remaining_bars > 0:
                 bar_text.append(self.pending_glyph * remaining_bars, style=self.remain_style)
         bar_text.append("]", style=self.outer_style)

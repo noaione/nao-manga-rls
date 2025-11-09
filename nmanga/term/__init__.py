@@ -149,9 +149,9 @@ class Console:
         task = progress.add_task(description, total=total, finished_text=finished_text)
         return task
 
-    def stop_progress(self, progress: Progress, text: str | None = None) -> None:
+    def stop_progress(self, progress: Progress, text: str | None = None, *, skip_total: bool = False) -> None:
         for task in progress.tasks:
-            if task.total is not None:
+            if task.total is not None and not skip_total:
                 progress.update(task.id, completed=task.total)
         progress.stop()
         if text is not None:
