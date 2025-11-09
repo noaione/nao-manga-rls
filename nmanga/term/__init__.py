@@ -198,6 +198,13 @@ class Console(ConsoleInterface):
         progress.stop()
         if text is not None:
             self.info(text)
+        if progress == self.__current_progress:
+            self.__current_progress = None
+
+    def stop_current_progress(self, text: str | None = None, *, skip_total: bool = False) -> None:
+        if self.__current_progress is not None:
+            self.stop_progress(self.__current_progress, text, skip_total=skip_total)
+            self.__current_progress = None
 
     def new_task(self, description: str, total: int | None = None) -> TaskID:
         if self.__current_progress is None:
