@@ -340,6 +340,10 @@ Rewritten every thing as a module with `nmanga` namespace.
 **New Features**
 - `nmanga orchestra` - Create/run a JSON file that will run multiple functions in nmanga together
 - `nmanga lookup imagesize` - Lookup image sizes in an archive or folder
+- Reworked CLI display with `rich-click` for better experience
+- Implemented threaded tagging for better performance
+- Use `rich` progress bar for better progress display
+- Implement better support for outputing to STDOUT/STDERR in threaded functions
 
 **Changes**
 - Improve manual split filename matcher

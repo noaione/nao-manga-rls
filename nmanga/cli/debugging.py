@@ -53,7 +53,10 @@ def simulate_thread_progress_creation(args: tuple[term.MessageQueue, str]) -> No
     sleep(random.uniform(0.1, 0.5))  # noqa: S311
 
     TOTAL_GEN = 50
-    task_id = console.new_task(task_name, total=TOTAL_GEN)
+    task_name_task = None
+    if "-2" in task_name:
+        task_name_task = f"{task_name} (done)"
+    task_id = console.new_task(task_name, total=TOTAL_GEN, finished_text=task_name_task)
     for _ in range(TOTAL_GEN):
         console.update_progress(task_id, advance=1)
         sleep(0.1)
@@ -63,6 +66,7 @@ def simulate_thread_progress_creation(args: tuple[term.MessageQueue, str]) -> No
     name="simulate-progress",
     help="Simulate a progress bar for testing purposes",
     cls=NMangaCommandHandler,
+    hidden=True,
 )
 def simulate_progress():
     """Simulate a progress bar for testing purposes."""

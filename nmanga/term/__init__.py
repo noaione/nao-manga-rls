@@ -80,7 +80,7 @@ class ConsoleInterface(abc.ABC):
     @abc.abstractmethod
     def enter(self): ...
     @abc.abstractmethod
-    def new_task(self, description: str, total: int | None = None) -> TaskID: ...
+    def new_task(self, description: str, total: int | None = None, *, finished_text: str | None = None) -> TaskID: ...
 
     @abc.abstractmethod
     def update_progress(
@@ -206,12 +206,12 @@ class Console(ConsoleInterface):
             self.stop_progress(self.__current_progress, text, skip_total=skip_total)
             self.__current_progress = None
 
-    def new_task(self, description: str, total: int | None = None) -> TaskID:
+    def new_task(self, description: str, total: int | None = None, *, finished_text: str | None = None) -> TaskID:
         if self.__current_progress is None:
             progress = self.make_progress()
         else:
             progress = self.__current_progress
-        return progress.add_task(description, total=total)
+        return progress.add_task(description, total=total, finished_text=finished_text)
 
     def update_progress(
         self,
@@ -407,7 +407,7 @@ class ThreadConsoleQueue(ConsoleInterface):
     def enter(self) -> None:
         self.queue.put(("enter", ""))
 
-    def new_task(self, description: str, total: int | None = None) -> TaskID:
+    def new_task(self, description: str, total: int | None = None, *, finished_text: str | None = None) -> TaskID:
         # Put then wait for response
         consistent_id = str(uuid4())
         self.queue.put((
@@ -415,6 +415,7 @@ class ThreadConsoleQueue(ConsoleInterface):
             {
                 "description": description,
                 "total": total,
+                "finished_text": finished_text,
                 "consistent_id": consistent_id,
             },
         ))
@@ -516,6 +517,7 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                     task_id = console.new_task(
                         description=params.get("description", ""),
                         total=params.get("total"),
+                        finished_text=params.get("finished_text"),
                     )
                     if not consist_id:
                         continue
