@@ -115,16 +115,12 @@ def posterize_simple(
     dest_output.mkdir(parents=True, exist_ok=True)
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
+        with threaded_worker(console, threads) as (pool, _):
             for _ in pool.imap_unordered(
                 _posterize_simple_wrapper_star,
                 [(img_path, dest_output, num_bits) for img_path in all_files],
             ):
                 progress.update(task, advance=1)
-            pool.starmap(
-                _posterize_simple_wrapper,
-                [(img_path, dest_output, num_bits) for img_path in all_files],
-            )
     else:
         for img_path in all_files:
             _posterize_simple_wrapper(img_path, dest_output, num_bits)
@@ -134,7 +130,7 @@ def posterize_simple(
 
 
 def _autoposterize_wrapper(
-    img_path: Path, dest_output: Path, threshold: float, use_palette_mode: bool
+    log_q: term.MessageOrInterface, img_path: Path, dest_output: Path, threshold: float, use_palette_mode: bool
 ) -> PosterizedResult:
     img = Image.open(img_path)
     dest_path = dest_output / img_path.with_suffix(".png").name
@@ -148,7 +144,8 @@ def _autoposterize_wrapper(
         # same 8bpc, just copy the image
         img.close()
         if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
+            cnsl = term.with_thread_queue(log_q)
+            cnsl.warning(f"Skipping existing file: {dest_path}")
             return PosterizedResult.COPIED
         shutil.copy2(img_path, dest_path)
         return PosterizedResult.COPIED
@@ -164,7 +161,7 @@ def _autoposterize_wrapper(
     return PosterizedResult.PROCESSED
 
 
-def _autoposterize_wrapper_star(args: tuple[Path, Path, float, bool]) -> PosterizedResult:
+def _autoposterize_wrapper_star(args: tuple[term.MessageQueue, Path, Path, float, bool]) -> PosterizedResult:
     return _autoposterize_wrapper(*args)
 
 
@@ -228,16 +225,16 @@ def auto_posterize(
     results: list[PosterizedResult] = []
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
+        with threaded_worker(console, threads) as (pool, log_q):
             for result in pool.imap_unordered(
                 _autoposterize_wrapper_star,
-                [(img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
+                [(log_q, img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
             ):
                 results.append(result)
                 progress.update(taks, advance=1)
     else:
         for img_path in all_files:
-            results.append(_autoposterize_wrapper(img_path, dest_output, threshold_pct, use_palette_mode))
+            results.append(_autoposterize_wrapper(console, img_path, dest_output, threshold_pct, use_palette_mode))
             progress.update(taks, advance=1)
 
     console.stop_progress(progress, f"Auto-posterized {total_files} images.")

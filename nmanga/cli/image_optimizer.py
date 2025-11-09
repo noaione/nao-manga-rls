@@ -85,6 +85,7 @@ def image_optimizer(
 
 
 def _wrapper_jpegify_threaded(
+    log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
     cjpegli: str,
@@ -92,7 +93,8 @@ def _wrapper_jpegify_threaded(
 ) -> None:
     dest_path = output_dir / f"{img_path.stem}.jpg"
     if dest_path.exists():
-        console.warning(f"Skipping existing file: {dest_path}")
+        cnsl = term.with_thread_queue(log_q)
+        cnsl.warning(f"Skipping existing file: {dest_path}")
         return
 
     cmd = [cjpegli, "-q", str(quality), str(img_path), str(dest_path)]
@@ -100,7 +102,7 @@ def _wrapper_jpegify_threaded(
 
 
 def _wrapper_jpegify_threaded_star(
-    args: tuple[Path, Path, str, int],
+    args: tuple[term.MessageQueue, Path, Path, str, int],
 ) -> None:
     return _wrapper_jpegify_threaded(*args)
 
@@ -164,15 +166,15 @@ def image_jpegify(
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
+        with threaded_worker(console, threads) as (pool, log_q):
             for _ in pool.imap_unordered(
                 _wrapper_jpegify_threaded_star,
-                ((image, dest_output, cjpegli_exe, quality) for image in image_candidates),
+                ((log_q, image, dest_output, cjpegli_exe, quality) for image in image_candidates),
             ):
                 progress.update(task, advance=1)
     else:
         for image in image_candidates:
-            _wrapper_jpegify_threaded(image, dest_output, cjpegli_exe, quality)
+            _wrapper_jpegify_threaded(console, image, dest_output, cjpegli_exe, quality)
             progress.update(task, advance=1)
     console.stop_progress(progress, f"Converted {total_images} images to JPEG.")
 
@@ -223,7 +225,7 @@ def image_mixmatch(
     task = progress.add_task("Mixing and matching images...", total=total_images)
 
     for file_a, file_b in zip(images_a, images_b, strict=True):
-        console.debug(f"Dir A Image: {file_a}, Dir B Image: {file_b}")
+        console.log(f"Dir A Image: {file_a}, Dir B Image: {file_b}")
         a_stem = file_a.stem
         b_stem = file_b.stem
         if a_stem != b_stem:
@@ -233,7 +235,7 @@ def image_mixmatch(
 
         a_size = file_a.stat().st_size
         b_size = file_b.stat().st_size
-        console.debug(f"Sizes: Dir A: {a_size}, Dir B: {b_size}")
+        console.log(f"Sizes: Dir A: {a_size}, Dir B: {b_size}")
         # Take smaller
         chosen_file = file_a if a_size <= b_size else file_b
         dest_file = dest_output / chosen_file.name

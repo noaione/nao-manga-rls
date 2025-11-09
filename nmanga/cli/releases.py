@@ -55,7 +55,7 @@ from .base import (
     test_or_find_exiftool,
     test_or_find_pingo,
 )
-from .image_tagging import _threaded_tagging_star
+from .image_tagging import _threaded_tagging, _threaded_tagging_star
 
 console = term.get_console()
 conf = config.get_config()
@@ -323,15 +323,15 @@ def prepare_releases(
 
         if threads > 1:
             console.info(f"Using {threads} CPU threads for processing.")
-            with threaded_worker(console, threads) as pool:
+            with threaded_worker(console, threads) as (pool, log_q):
                 for _ in pool.imap_unordered(
                     _threaded_tagging_star,
-                    ((exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
+                    ((log_q, exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
                 ):
                     progress.update(task, advance=1)
         else:
             for image_path in precollect_images:
-                _threaded_tagging_star((exiftool_exe, image_path, image_titling, rls_email))
+                _threaded_tagging(console, exiftool_exe, image_path, image_titling, rls_email)
                 progress.update(task, advance=1)
         console.stop_progress(progress, "Tagged all possible images with exif metadata.")
 
@@ -536,14 +536,14 @@ def prepare_releases_chapter(
 
         if threads > 1:
             console.info(f"Using {threads} CPU threads for processing.")
-            with threaded_worker(console, threads) as pool:
+            with threaded_worker(console, threads) as (pool, log_q):
                 for _ in pool.imap_unordered(
                     _threaded_tagging_star,
-                    ((exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
+                    ((log_q, exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
                 ):
                     progress.update(task, advance=1)
         else:
             for image_path in precollect_images:
-                _threaded_tagging_star((exiftool_exe, image_path, image_titling, rls_email))
+                _threaded_tagging(console, exiftool_exe, image_path, image_titling, rls_email)
                 progress.update(task, advance=1)
         console.stop_progress(progress, "Tagged all possible images with exif metadata.")

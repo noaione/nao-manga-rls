@@ -79,11 +79,16 @@ def make_prefix_convert(magick_exe: str):
     raise ValueError("Invalid magick executable name, must be 'magick' or 'convert'")
 
 
-def _autolevel_exec(command: list[str]) -> None:
+def _autolevel_exec(term_q: term.MessageOrInterface, command: list[str]) -> None:
     output = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # check exit code
     if output.returncode != 0:
-        console.error(f"Command {' '.join(command)} failed with exit code {output.returncode}")
+        cnsl = term.with_thread_queue(term_q)
+        cnsl.error(f"Command {' '.join(command)} failed with exit code {output.returncode}")
+
+
+def _autolevel_exec_star(args: tuple[term.MessageQueue, list[str]]) -> None:
+    return _autolevel_exec(*args)
 
 
 def determine_image_format(img_path: Path, prefer: str) -> str:
@@ -204,7 +209,7 @@ def autolevel(
     results: list[tuple[int, int, Path, bool]] = []
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
+        with threaded_worker(console, threads) as (pool, _):
             for result in pool.imap_unordered(
                 _find_local_peak_magick_wrapper_star,
                 ((file, upper_limit, peak_min_pct, no_white) for file in all_files),
@@ -294,12 +299,12 @@ def autolevel(
 
     task_proc = progress.add_task("Auto-leveling images...", total=len(commands))
     if threads > 1:
-        with threaded_worker(console, threads) as pool:
-            for _ in pool.imap_unordered(_autolevel_exec, commands):
+        with threaded_worker(console, threads) as (pool, log_q):
+            for _ in pool.imap_unordered(_autolevel_exec_star, [(log_q, cmd) for cmd in commands]):
                 progress.update(task_proc, advance=1)
     else:
         for command in commands:
-            _autolevel_exec(command)
+            _autolevel_exec(console, command)
             progress.update(task_proc, advance=1)
 
     console.stop_progress(progress, f"Auto-leveled {len(commands)} images.")
@@ -316,13 +321,15 @@ class Autolevel2Config:
     no_white: bool
 
 
-def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Config) -> AutoLevelResult:
+def _autolevel2_wrapper(
+    log_q: term.MessageOrInterface, img_path: Path, dest_output: Path, config: Autolevel2Config
+) -> AutoLevelResult:
     img = Image.open(img_path)
     black_level, white_level, _ = find_local_peak(
         img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
     )
 
-    cnsl = term.get_console()
+    cnsl = term.with_thread_queue(log_q)
 
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not config.no_white else False
@@ -375,7 +382,7 @@ def _autolevel2_wrapper(img_path: Path, dest_output: Path, config: Autolevel2Con
     return AutoLevelResult.PROCESSED
 
 
-def _autolevel2_wrapper_star(args: tuple[Path, Path, Autolevel2Config]) -> AutoLevelResult:
+def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autolevel2Config]) -> AutoLevelResult:
     return _autolevel2_wrapper(*args)
 
 
@@ -486,15 +493,15 @@ def autolevel2(
 
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
+        with threaded_worker(console, threads) as (pool, log_q):
             for result in pool.imap_unordered(
-                _autolevel2_wrapper_star, ((img_path, dest_output, full_config) for img_path in all_files)
+                _autolevel2_wrapper_star, ((log_q, img_path, dest_output, full_config) for img_path in all_files)
             ):
                 results.append(result)
                 progress.update(task, advance=1)
     else:
         for img_path in all_files:
-            results.append(_autolevel2_wrapper(img_path, dest_output, full_config))
+            results.append(_autolevel2_wrapper(console, img_path, dest_output, full_config))
             progress.update(task, advance=1)
 
     console.stop_progress(progress, f"Processed {total_files} images.")
@@ -510,11 +517,16 @@ def autolevel2(
         console.info(f"Grayscaled {grayscaled_count} images.")
 
 
-def _forcegray_exec(command: list[str]) -> None:
+def _forcegray_exec(log_q: term.MessageOrInterface, command: list[str]) -> None:
     output = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # check exit code
     if output.returncode != 0:
-        console.error(f"Command {' '.join(command)} failed with exit code {output.returncode}")
+        cnsl = term.with_thread_queue(log_q)
+        cnsl.error(f"Command {' '.join(command)} failed with exit code {output.returncode}")
+
+
+def _forcegray_exec_star(args: tuple[term.MessageQueue, list[str]]) -> None:
+    return _forcegray_exec(*args)
 
 
 @click.command(
@@ -591,12 +603,12 @@ def force_gray(
     task_proc = progress.add_task("Processing images...", total=len(commands))
     if threads > 1:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
-            for _ in pool.imap_unordered(_forcegray_exec, commands):
+        with threaded_worker(console, threads) as (pool, log_q):
+            for _ in pool.imap_unordered(_forcegray_exec_star, [(log_q, cmd) for cmd in commands]):
                 progress.update(task_proc, advance=1)
     else:
         for command in commands:
-            _forcegray_exec(command)
+            _forcegray_exec(console, command)
             progress.update(task_proc, advance=1)
 
     console.stop_progress(progress, f"Processed {len(commands)} images to grayscale.")
@@ -723,7 +735,7 @@ def analyze_level(
             progress.update(task, advance=1)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as pool:
+        with threaded_worker(console, threads) as (pool, _):
             for result in pool.imap_unordered(
                 _analyze_level_wrapper_star,
                 ((img_path, full_config) for img_path in all_files),
