@@ -102,13 +102,14 @@ class ActionPack(BaseAction):
         if self.output_mode == exporter.ExporterType.epub:
             context.terminal.warning("Packing as EPUB, this will be a slower operation because of size checking!")
 
+        precollected_images = [file for file, _, _, _ in file_handler.collect_image_from_folder(source_dir)]
+        precollected_images.sort(key=lambda x: x.name)
+
         arc_target.set_comment(orchestrator.email)
-        context.terminal.status("Packing... (0/???)")
-        idx = 1
-        total_img = 0
-        for img_file, _, total_img, _ in file_handler.collect_image_from_folder(source_dir):
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Packing...", finished_text="Packed", total=len(precollected_images))
+        for img_file in precollected_images:
             arc_target.add_image(img_file.name, img_file)
-            context.terminal.status(f"Packing... ({idx}/{total_img})")
-            idx += 1
-        context.terminal.stop_status(f"Packed ({idx - 1}/{total_img})")
+            progress.update(task, advance=1)
+        context.terminal.stop_progress(progress, f"Finished packing volume {volume.number} to {archive_filename}")
         arc_target.close()

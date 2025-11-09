@@ -109,6 +109,12 @@ def _runner_autolevel2_threaded(
     return ThreadedResult.PROCESSED
 
 
+def _runner_autolevel2_threaded_star(
+    args: tuple[term.MessageQueue, Path, Path, "ActionAutolevel", bool, SkipActionKind | None],
+) -> ThreadedResult:
+    return _runner_autolevel2_threaded(*args)
+
+
 class ActionAutolevel(BaseAction):
     """
     Action to auto level all images in a volume with Pillow
@@ -169,7 +175,7 @@ class ActionAutolevel(BaseAction):
 
         page_re = RegexCollection.page_re()
 
-        context.terminal.status(f"Processing {context.current_dir} with autolevel...")
+        context.terminal.info(f"Processing {context.current_dir} with autolevel...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
         all_images.sort(key=lambda x: x.stem)
@@ -190,10 +196,20 @@ class ActionAutolevel(BaseAction):
             images_complete.append((image, is_color, is_skip_action))
 
         results: list[ThreadedResult] = []
-        context.terminal.status(f"Auto-leveling {total_images} images...")
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Auto-leveling images...", finished_text="Auto-leveled images", total=total_images)
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as (pool, log_q):
+                for result in pool.imap_unordered(
+                    _runner_autolevel2_threaded_star,
+                    [
+                        (log_q, image, output_dir, self, is_color, is_skip_action)
+                        for image, is_color, is_skip_action in images_complete
+                    ],
+                ):
+                    results.append(result)
+                    progress.update(task, advance=1)
                 results = pool.starmap(
                     _runner_autolevel2_threaded,
                     [
@@ -202,13 +218,15 @@ class ActionAutolevel(BaseAction):
                     ],
                 )
         else:
-            for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
-                context.terminal.status(f"Auto-leveling images... [{idx + 1}/{total_images}]")
+            for image, is_color, is_skip_action in images_complete:
                 results.append(
                     _runner_autolevel2_threaded(context.terminal, image, output_dir, self, is_color, is_skip_action)
                 )
+                progress.update(task, advance=1)
 
-        context.terminal.stop_status(f"Auto-leveled {total_images} images in {context.current_dir}")
+        context.terminal.stop_progress(
+            progress, f"Processed {total_images} images with autolevel in {context.current_dir}"
+        )
         autolevel_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
         copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
         grayscaled_count = sum(1 for result in results if result == ThreadedResult.GRAYSCALED)

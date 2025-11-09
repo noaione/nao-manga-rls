@@ -94,6 +94,12 @@ def _runner_image_spreads_threaded(
         input_name.rename(current_dir / final_filename)
 
 
+def _runner_image_spreads_threaded_star(
+    args: tuple[term.MessageQueue, Path, str, _SpreadStuff, str, "ActionSpreads"],
+) -> None:
+    return _runner_image_spreads_threaded(*args)
+
+
 class ActionSpreads(BaseAction):
     """
     Action to join spreads of a volume
@@ -179,27 +185,33 @@ class ActionSpreads(BaseAction):
             context.terminal.warning(f"No spreads found in {context.current_dir}, skipping...")
             return
 
-        current = 1
         total_match_spreads = len(list(exported_images.keys()))
-        context.terminal.status(f"Joining {total_match_spreads} spreads from {context.current_dir}...")
+        context.terminal.info(f"Joining {total_match_spreads} spreads from {context.current_dir}...")
+
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Joining spreads...", total=total_match_spreads)
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as (pool, log_q):
-                pool.starmap(
-                    _runner_image_spreads_threaded,
+                for _ in pool.imap_unordered(
+                    _runner_image_spreads_threaded_star,
                     [
-                        (log_q, context.current_dir, spread, images, imagick, self)
+                        (log_q, context.current_dir, spread, images, cast(str, imagick), self)
                         for spread, images in exported_images.items()
                     ],
-                )
+                ):
+                    progress.update(task, advance=1)
         else:
             for spread, images in exported_images.items():
-                context.terminal.status(f"Joining spreads: {current}/{total_match_spreads} ({spread})...")
                 _runner_image_spreads_threaded(
                     context.terminal, context.current_dir, spread, images, cast(str, imagick), self
                 )
-                current += 1
-        context.terminal.stop_status(f"Joined {total_match_spreads} spreads from {context.current_dir}")
+                progress.update(task, advance=1)
+
+        task = progress.tasks[task]
+        context.terminal.stop_progress(
+            progress, f"Joined {task.completed} spreads from {context.current_dir}", skip_total=True
+        )
 
         # Make backup folder here
         backup_dir = context.root_dir / "backup" / context.current_dir.name

@@ -82,6 +82,12 @@ def _runner_posterize_threaded(
         return ThreadedResult.PROCESSED
 
 
+def _runner_posterize_threaded_star(
+    args: tuple[term.MessageQueue, Path, Path, "ActionPosterize", str | None, bool, SkipActionKind | None],
+) -> ThreadedResult:
+    return _runner_posterize_threaded(*args)
+
+
 class ActionPosterize(BaseAction):
     """
     Action to posterize all images in a volume with imagemagick or Pillow
@@ -134,7 +140,7 @@ class ActionPosterize(BaseAction):
 
         page_re = RegexCollection.page_re()
 
-        context.terminal.status(f"Processing {context.current_dir} with posterizer...")
+        context.terminal.info(f"Processing {context.current_dir} with posterizer...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
         all_images.sort(key=lambda x: x.stem)
@@ -155,27 +161,30 @@ class ActionPosterize(BaseAction):
             images_complete.append((image, is_color, is_skip_action))
 
         results: list[ThreadedResult] = []
-        context.terminal.status(f"Posterizing {total_images} images...")
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_images)
         if self.threads > 1:
             context.terminal.info(f"Using {self.threads} CPU threads for processing.")
             with threaded_worker(context.terminal, self.threads) as (pool, log_q):
-                results = pool.starmap(
-                    _runner_posterize_threaded,
+                for result in pool.imap_unordered(
+                    _runner_posterize_threaded_star,
                     [
                         (log_q, image, output_dir, self, imagick, is_color, is_skip_action)
                         for image, is_color, is_skip_action in images_complete
                     ],
-                )
+                ):
+                    results.append(result)
+                    progress.update(task, advance=1)
         else:
-            for idx, (image, is_color, is_skip_action) in enumerate(images_complete):
-                context.terminal.status(f"Posterizing images... [{idx + 1}/{total_images}]")
+            for image, is_color, is_skip_action in images_complete:
                 results.append(
                     _runner_posterize_threaded(
                         context.terminal, image, output_dir, self, imagick, is_color, is_skip_action
                     )
                 )
+                progress.update(task, advance=1)
 
-        context.terminal.stop_status(f"Posterized {total_images} images in {context.current_dir}")
+        context.terminal.stop_progress(progress, f"Posterized {total_images} images in {context.current_dir}")
         posterized_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
         copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
         ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)

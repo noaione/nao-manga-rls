@@ -237,11 +237,13 @@ class ActionRename(BaseAction):
             unique_names.add(new_name)
 
         total_img = len(renaming_maps)
-        context.terminal.status(f"Renaming {total_img} images in {context.current_dir}...")
-        for idx, (new_name, old_path) in enumerate(renaming_maps.items()):
-            context.terminal.status(f"Renaming images: {idx + 1}/{total_img} ({new_name})...")
+        context.terminal.info(f"Renaming {total_img} images in {context.current_dir}...")
+
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Renaming images...", total=total_img)
+        for new_name, old_path in renaming_maps.items():
             new_path = old_path.with_stem(new_name)
-            if new_path.name == old_path.name:
-                continue
-            old_path.rename(new_path)
-        context.terminal.stop_status(f"Renamed {total_img} images in {context.current_dir}.")
+            if new_path.name != old_path.name:
+                old_path.rename(new_path)
+            progress.update(task, advance=1)
+        context.terminal.stop_progress(progress, f"Renamed {total_img} images in {context.current_dir}.")
