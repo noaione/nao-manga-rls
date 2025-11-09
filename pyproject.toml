@@ -38,7 +38,7 @@ dependencies = [
     "py7zr==1.0.0",
     "pymupdf==1.26.5",
     "defusedxml==0.7.1",
-    "rich-click>=1.9.3",
+    "rich-click>=1.9.4",
 ]
 
 [project.optional-dependencies]
