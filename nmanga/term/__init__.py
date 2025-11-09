@@ -13,7 +13,8 @@ import abc
 import queue
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, TypeAlias, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, TypeAlias, TypeVar, Union, cast, overload
+from uuid import uuid4
 
 import inquirer
 from rich.console import Console as RichConsole
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 __all__ = (
     "Console",
     "ConsoleChoice",
+    "MessageOrInterface",
     "MessageQueue",
     "ThreadConsoleQueue",
     "get_console",
@@ -54,6 +56,7 @@ AnyType = TypeVar("AnyType", str, bytes, int, float)
 ValidateFunc: TypeAlias = Callable[[str], bool]
 ValidationType: TypeAlias = ValidateFunc | str
 MessageQueue: TypeAlias = queue.Queue[Any]
+MessageOrInterface: TypeAlias = Union["Console", MessageQueue]
 
 
 @dataclass
@@ -76,6 +79,21 @@ class ConsoleInterface(abc.ABC):
     def log(self, *args, **kwargs): ...
     @abc.abstractmethod
     def enter(self): ...
+    @abc.abstractmethod
+    def new_task(self, description: str, total: int | None = None) -> TaskID: ...
+
+    @abc.abstractmethod
+    def update_progress(
+        self,
+        task_id: TaskID,
+        total: float | None = None,
+        completed: float | None = None,
+        advance: float | None = None,
+        description: str | None = None,
+        visible: bool | None = None,
+        refresh: bool = False,
+        **fields: Any,
+    ) -> None: ...
 
 
 class Console(ConsoleInterface):
@@ -180,6 +198,40 @@ class Console(ConsoleInterface):
         progress.stop()
         if text is not None:
             self.info(text)
+
+    def new_task(self, description: str, total: int | None = None) -> TaskID:
+        if self.__current_progress is None:
+            progress = self.make_progress()
+        else:
+            progress = self.__current_progress
+        return progress.add_task(description, total=total)
+
+    def update_progress(
+        self,
+        task_id: TaskID,
+        total: float | None = None,
+        completed: float | None = None,
+        advance: float | None = None,
+        description: str | None = None,
+        visible: bool | None = None,
+        refresh: bool = False,
+        **fields: Any,
+    ) -> None:
+        if self.__current_progress is None:
+            return
+        if task_id < 0:
+            return  # In case of invalid task id
+
+        self.__current_progress.update(
+            task_id=task_id,
+            total=total,
+            completed=completed,
+            advance=advance,
+            description=description,
+            visible=visible,
+            refresh=refresh,
+            **fields,
+        )
 
     @overload
     def stop_status(self) -> None: ...
@@ -348,6 +400,65 @@ class ThreadConsoleQueue(ConsoleInterface):
     def enter(self) -> None:
         self.queue.put(("enter", ""))
 
+    def new_task(self, description: str, total: int | None = None) -> TaskID:
+        # Put then wait for response
+        consistent_id = str(uuid4())
+        self.queue.put((
+            "new_task",
+            {
+                "description": description,
+                "total": total,
+                "consistent_id": consistent_id,
+            },
+        ))
+
+        close_signal = False
+        while True:
+            raw_q = self.queue.get()
+            if raw_q is None:
+                continue
+
+            method, resp_data = raw_q
+            if method == "new_task_response":
+                resp_data = cast(dict[str, Any], resp_data)
+                if resp_data.get("consistent_id") == consistent_id:
+                    return TaskID(resp_data.get("task_id", -1))
+            elif method == "__CLOSE__":
+                close_signal = True
+                break  # Exit loop if we got any close signal
+
+            # Re-queue if not matched
+            self.queue.put_nowait(raw_q)
+
+        if close_signal:
+            self.queue.put_nowait(("__CLOSE__", ""))  # Re-queue close signal
+        return TaskID(-1)  # In case of failure
+
+    def update_progress(
+        self,
+        task_id: TaskID,
+        total: float | None = None,
+        completed: float | None = None,
+        advance: float | None = None,
+        description: str | None = None,
+        visible: bool | None = None,
+        refresh: bool = False,
+        **fields: Any,
+    ) -> None:
+        self.queue.put((
+            "update_progress",
+            {
+                "task_id": task_id,
+                "total": total,
+                "completed": completed,
+                "advance": advance,
+                "description": description,
+                "visible": visible,
+                "refresh": refresh,
+                "fields": fields,
+            },
+        ))
+
 
 def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
     """
@@ -380,6 +491,37 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                     console.log(message)
                 case "enter":
                     console.enter()
+                case "update_progress":
+                    params = cast(dict[str, Any], message)
+                    console.update_progress(
+                        task_id=params.get("task_id", -1),
+                        total=params.get("total"),
+                        completed=params.get("completed"),
+                        advance=params.get("advance"),
+                        description=params.get("description"),
+                        visible=params.get("visible"),
+                        refresh=params.get("refresh", False),
+                        **params.get("fields", {}),
+                    )
+                case "new_task":
+                    params = cast(dict[str, Any], message)
+                    consist_id = params.get("consistent_id", "")
+                    task_id = console.new_task(
+                        description=params.get("description", ""),
+                        total=params.get("total"),
+                    )
+                    if not consist_id:
+                        continue
+                    log_q.put_nowait((
+                        "new_task_response",
+                        {
+                            "consistent_id": consist_id,
+                            "task_id": task_id,
+                        },
+                    ))
+                case "new_task_response":
+                    # Re-queue
+                    log_q.put_nowait((level, message))
         except Exception as exc:
             console.error("Error in ThreadConsoleQueue callback", exc)
 
@@ -391,12 +533,16 @@ def get_console():
     return ROOT_CONSOLE
 
 
-def with_thread_queue(queue: MessageQueue | Console) -> ConsoleInterface:
+def with_thread_queue(queue: MessageOrInterface) -> ConsoleInterface:
     """
     Create a ThreadConsoleQueue from a standard queue.
 
+    This will wrap the given queue into a ThreadConsoleQueue if it is not already a Console.
+
+    Note: This is only necessary when using threading and logging from multiple threads.
+
     :param queue: The queue to use.
-    :return: A ThreadConsoleQueue instance.
+    :return: A ConsoleInterface instance.
     """
 
     if isinstance(queue, Console):
