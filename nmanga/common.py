@@ -28,6 +28,7 @@ import multiprocessing as mp
 import re
 import signal
 import subprocess as sp
+import threading
 import traceback
 from contextlib import contextmanager
 from pathlib import Path
@@ -80,9 +81,18 @@ def _worker_initializer():
 @contextmanager
 def threaded_worker(console: term.Console, threads: int):
     """Initialize worker processes to handle keyboard interrupts properly."""
-    with mp.Pool(processes=threads, initializer=_worker_initializer) as pool:
+    with mp.Manager() as manager, mp.Pool(processes=threads, initializer=_worker_initializer) as pool:
+        log_queue = manager.Queue()
+
+        listener = threading.Thread(
+            target=term.thread_queue_callback,
+            args=(log_queue, console),
+            daemon=True,
+        )
+        listener.start()
+
         try:
-            yield pool
+            yield pool, log_queue
         except KeyboardInterrupt as ke:
             console.warning("Process interrupted by user, terminating workers...")
             pool.terminate()
@@ -95,6 +105,8 @@ def threaded_worker(console: term.Console, threads: int):
             pool.join()
             raise e
         finally:
+            log_queue.put(("__CLOSE__", ""))
+            listener.join()
             pool.close()
 
 

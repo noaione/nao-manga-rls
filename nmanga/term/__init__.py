@@ -9,9 +9,11 @@ Terminal utilities and classes for nmanga.
 
 from __future__ import annotations
 
+import abc
+import queue
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, TypeAlias, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, TypeAlias, TypeVar, cast, overload
 
 import inquirer
 from rich.console import Console as RichConsole
@@ -26,7 +28,15 @@ from .progress import NMProgress
 if TYPE_CHECKING:
     from rich.status import Status as RichStatus
 
-__all__ = ("ConsoleChoice", "get_console")
+__all__ = (
+    "Console",
+    "ConsoleChoice",
+    "MessageQueue",
+    "ThreadConsoleQueue",
+    "get_console",
+    "thread_queue_callback",
+    "with_thread_queue",
+)
 
 rich_theme = RichTheme({
     "success": "green bold",
@@ -43,6 +53,7 @@ rich_theme = RichTheme({
 AnyType = TypeVar("AnyType", str, bytes, int, float)
 ValidateFunc: TypeAlias = Callable[[str], bool]
 ValidationType: TypeAlias = ValidateFunc | str
+MessageQueue: TypeAlias = queue.Queue[Any]
 
 
 @dataclass
@@ -54,7 +65,20 @@ class ConsoleChoice:
         self.value = self.value or self.name
 
 
-class Console:
+class ConsoleInterface(abc.ABC):
+    @abc.abstractmethod
+    def info(self, *args, **kwargs): ...
+    @abc.abstractmethod
+    def warning(self, *args, **kwargs): ...
+    @abc.abstractmethod
+    def error(self, *args, **kwargs): ...
+    @abc.abstractmethod
+    def log(self, *args, **kwargs): ...
+    @abc.abstractmethod
+    def enter(self): ...
+
+
+class Console(ConsoleInterface):
     def __init__(self, debug_mode: bool = False):
         self.__debug_mode = debug_mode
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True, width=None)
@@ -297,15 +321,67 @@ class Console:
     def enter(self):
         self.console.print()
 
-    # Aliases
-    warn = warning
-    verbose = log
-    debug = log
-    i = info
-    w = warning
-    e = error
-    d = log
-    v = log
+
+class ThreadConsoleQueue(ConsoleInterface):
+    """
+    A thread-safe console queue for logging from multiple threads.
+    """
+
+    def __init__(self, queue: MessageQueue) -> None:
+        self.queue = queue
+
+    def info(self, message: str) -> None:
+        self.queue.put(("info", message))
+
+    def warning(self, message: str) -> None:
+        self.queue.put(("warning", message))
+
+    def error(self, message: str) -> None:
+        self.queue.put(("error", message))
+
+    def log(self, message: str) -> None:
+        self.queue.put(("log", message))
+
+    def close(self) -> None:
+        self.queue.put(("__CLOSE__", ""))
+
+    def enter(self) -> None:
+        self.queue.put(("enter", ""))
+
+
+def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
+    """
+    Where the queue is processed and messages are printed to the console.
+
+    :param console: The console to print messages to.
+    """
+
+    while True:
+        try:
+            item = log_q.get()
+            if item is None:
+                continue
+
+            if not isinstance(item, tuple) or len(item) != 2:
+                continue
+
+            level, message = item
+            if level == "__CLOSE__":
+                break
+
+            match level:
+                case "info":
+                    console.info(message)
+                case "warning":
+                    console.warning(message)
+                case "error":
+                    console.error(message)
+                case "log":
+                    console.log(message)
+                case "enter":
+                    console.enter()
+        except Exception as exc:
+            console.error("Error in ThreadConsoleQueue callback", exc)
 
 
 ROOT_CONSOLE = Console()
@@ -313,3 +389,16 @@ ROOT_CONSOLE = Console()
 
 def get_console():
     return ROOT_CONSOLE
+
+
+def with_thread_queue(queue: MessageQueue | Console) -> ConsoleInterface:
+    """
+    Create a ThreadConsoleQueue from a standard queue.
+
+    :param queue: The queue to use.
+    :return: A ThreadConsoleQueue instance.
+    """
+
+    if isinstance(queue, Console):
+        return queue
+    return ThreadConsoleQueue(queue)
