@@ -107,4 +107,4 @@ def lookup_imagesize(path_or_archive: Path, recursive: bool):
             console.info(f" - {img_size}: {len(image_list)} images")
             if console.debugged:
                 for img_name in image_list:
-                    console.debug(f"    - {img_name}")
+                    console.log(f"    - {img_name}")

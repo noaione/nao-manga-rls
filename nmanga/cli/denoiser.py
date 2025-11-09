@@ -189,17 +189,17 @@ def denoiser(
             params.append("--tta")
         params.extend(final_params)
 
-        console.debug("Running command: {}".format(" ".join(params)))
+        console.log("Running command: {}".format(" ".join(params)))
         # silent output
         result = subprocess.run(params, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         progress.update(task, advance=1)
         if result.returncode != 0:
             console.error(f"Error denoising image: {image}, skipping...")
             # get stderr output
-            console.debug("Error output:")
-            console.debug(result.stderr.decode("utf-8"))
-            console.debug("STDOUT output:")
-            console.debug(result.stdout.decode("utf-8"))
+            console.log("Error output:")
+            console.log(result.stderr.decode("utf-8"))
+            console.log("STDOUT output:")
+            console.log(result.stdout.decode("utf-8"))
             errors.append(image)
             continue
     correct_amount = total_files - len(errors)
@@ -290,12 +290,12 @@ def identify_denoise_candidates(
         path_obj = image.resolve()
         img_ext = path_obj.suffix.lower().strip(".")
         if img_ext not in ["jpg", "jpeg"]:
-            console.debug(f"Skipping non-JPEG image: {path_obj}")
+            console.log(f"Skipping non-JPEG image: {path_obj}")
             progress.update(task, advance=1)
             continue
 
         params = [*make_prefix_identify(magick_exe), "-format", "%Q", str(path_obj)]
-        console.debug(f"Running command: {' '.join(params)}")
+        console.log(f"Running command: {' '.join(params)}")
         executed = subprocess.run(
             params,
             capture_output=True,
