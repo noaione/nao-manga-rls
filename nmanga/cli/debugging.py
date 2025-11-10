@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import logging
 import random
 from time import sleep
 
@@ -34,12 +35,14 @@ from ..common import threaded_worker
 from .base import NMangaCommandHandler
 
 console = term.get_console()
+logger = logging.getLogger(__name__)
 
 
 def simulate_thread_progress(log_queue: term.MessageQueue, thread_id: int, task_name: str) -> None:
     console = term.with_thread_queue(log_queue)
     sleep(random.uniform(0.1, 0.5))  # noqa: S311
     console.info(f"Thread {thread_id} starting task: {task_name}")
+    logger.info(f"Logger {thread_id} starting task: {task_name}")
     sleep(0.5 + thread_id * 0.2)
 
 
@@ -88,7 +91,6 @@ def simulate_progress():
             [(log_queue, i, task_name) for i, task_name in tasque],
         ):
             progress.update(task2, advance=1)
-    console.stop_progress(progress, "Finished simulated progress.")
 
     console.info("Thread worker progress creation...")
     new_tasque = [(f"New-Task-Thread-{i}") for i in range(5)]

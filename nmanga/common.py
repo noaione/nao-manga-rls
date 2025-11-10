@@ -24,6 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import logging
+import logging.handlers
 import multiprocessing as mp
 import re
 import signal
@@ -73,15 +75,23 @@ BRACKET_MAPPINGS = {
 ALLOWED_TAG_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
 
 
-def _worker_initializer():
+def _worker_initializer(log_queue: term.MessageQueue):
     """Initializer for worker processes to handle keyboard interrupts properly."""
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+
+    handler = logging.handlers.QueueHandler(log_queue)
+    root_logger.addHandler(handler)
+
+    root_logger.setLevel(logging.DEBUG)  # Needed sadly
 
 
 @contextmanager
 def threaded_worker(console: term.Console, threads: int):
     """Initialize worker processes to handle keyboard interrupts properly."""
-    with mp.Manager() as manager, mp.Pool(processes=threads, initializer=_worker_initializer) as pool:
+    with mp.Manager() as manager:
         log_queue = manager.Queue()
 
         listener = threading.Thread(
@@ -91,23 +101,24 @@ def threaded_worker(console: term.Console, threads: int):
         )
         listener.start()
 
-        try:
-            yield pool, log_queue
-        except KeyboardInterrupt as ke:
-            console.warning("Process interrupted by user, terminating workers...")
-            pool.terminate()
-            pool.join()
-            raise RuntimeError("Process interrupted by user.") from ke
-        except Exception as e:
-            console.error(f"An error occurred: {e}, terminating workers...")
-            traceback.print_exc()
-            pool.terminate()
-            pool.join()
-            raise e
-        finally:
-            log_queue.put(("__CLOSE__", ""))
-            listener.join()
-            pool.close()
+        with mp.Pool(processes=threads, initializer=_worker_initializer, initargs=(log_queue,)) as pool:
+            try:
+                yield pool, log_queue
+            except KeyboardInterrupt as ke:
+                console.warning("Process interrupted by user, terminating workers...")
+                pool.terminate()
+                pool.join()
+                raise RuntimeError("Process interrupted by user.") from ke
+            except Exception as e:
+                console.error(f"An error occurred: {e}, terminating workers...")
+                traceback.print_exc()
+                pool.terminate()
+                pool.join()
+                raise e
+            finally:
+                log_queue.put(("__CLOSE__", ""))
+                listener.join()
+                pool.close()
 
 
 def assert_proc(stuff: IO[bytes] | None) -> None:

@@ -10,6 +10,7 @@ Terminal utilities and classes for nmanga.
 from __future__ import annotations
 
 import abc
+import logging
 import queue
 import time
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ from uuid import uuid4
 
 import inquirer
 from rich.console import Console as RichConsole
+from rich.logging import RichHandler
 from rich.progress import (
     Progress,
     TaskID,
@@ -36,6 +38,7 @@ __all__ = (
     "MessageQueue",
     "ThreadConsoleQueue",
     "get_console",
+    "get_logger",
     "thread_queue_callback",
     "with_thread_queue",
 )
@@ -99,7 +102,19 @@ class ConsoleInterface(abc.ABC):
 class Console(ConsoleInterface):
     def __init__(self, debug_mode: bool = False):
         self.__debug_mode = debug_mode
+
+        # Init logger
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True, width=None)
+        logging.basicConfig(
+            level=logging.DEBUG if self.__debug_mode else logging.INFO,
+            datefmt="[%X]",
+            handlers=[
+                RichHandler(
+                    console=self.console,
+                    rich_tracebacks=True,
+                )
+            ],
+        )
         self._status: "RichStatus | None" = None
         self.__last_known_status: str | None = None
 
@@ -426,6 +441,11 @@ class ThreadConsoleQueue(ConsoleInterface):
             if raw_q is None:
                 continue
 
+            if isinstance(raw_q, logging.LogRecord):
+                logger = logging.getLogger(raw_q.name)
+                logger.handle(raw_q)
+                continue
+
             method, resp_data = raw_q
             if method == "new_task_response":
                 resp_data = cast(dict[str, Any], resp_data)
@@ -481,6 +501,10 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
             if item is None:
                 continue
 
+            if isinstance(item, logging.LogRecord):
+                logger = logging.getLogger(item.name)
+                logger.handle(item)
+                continue
             if not isinstance(item, tuple) or len(item) != 2:
                 continue
 
@@ -540,6 +564,14 @@ ROOT_CONSOLE = Console()
 
 def get_console():
     return ROOT_CONSOLE
+
+
+def get_logger(child_name: str | None = None, *, override_name: str | None = None) -> logging.Logger:
+    log_name = "nmanga"
+    if child_name is not None:
+        child_name = child_name.lstrip(".")
+        log_name += f".{child_name}"
+    return logging.getLogger(override_name or log_name)
 
 
 def with_thread_queue(queue: MessageOrInterface) -> ConsoleInterface:
