@@ -25,6 +25,7 @@ SOFTWARE.
 # Contains pure constants string data for .epub document
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, cast
@@ -91,14 +92,6 @@ class TrackerBarColumn(ProgressColumn):
         self.head_style = head_glyph
         self.min_segments = min_segments
 
-    def _glyph_width(self) -> int:
-        return max(
-            len(self.complete_glyph),
-            len(self.pending_glyph),
-            len(self.head_style),
-            1,
-        )
-
     def _fake_render(self, progress_bar: "NMProgress") -> int | None:
         """
         Render a fake version of the progress bar to calculate width.
@@ -151,13 +144,15 @@ class TrackerBarColumn(ProgressColumn):
                 bar_text.append("]", style=self.outer_style)
                 return bar_text
             # Indeterminate state with moving pulse
-            frame = int(time.monotonic() * 10)
             pulse_width = max(3, width // 8)
-            pos = frame % (width + pulse_width)
+            frame_buffer = math.ceil(pulse_width / 2)
+            frame = time.monotonic() * frame_buffer
+            pos = frame % width
 
             bar_text = Text("[", style=self.outer_style)
             for i in range(width):
-                if pos - pulse_width <= i < pos:
+                dist = (i - pos) % width
+                if dist < pulse_width:
                     bar_text.append(self.complete_glyph, style=self.pulse_style)
                 else:
                     bar_text.append(self.pending_glyph, style=self.remain_style)
@@ -192,8 +187,7 @@ class MaybePercentageColumn(ProgressColumn):
     def render(self, task) -> Text:
         if not task.total:
             return Text("???%", style="progress.percentage")
-        else:
-            return Text(f"{task.percentage:>3.0f}%", style="progress.percentage")
+        return Text(f"{task.percentage:>3.0f}%", style="progress.percentage")
 
 
 class BetterDescriptionColumn(ProgressColumn):

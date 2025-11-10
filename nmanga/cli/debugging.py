@@ -72,7 +72,8 @@ def simulate_thread_progress_creation(args: tuple[term.MessageQueue, str]) -> No
     cls=NMangaCommandHandler,
     hidden=True,
 )
-def simulate_progress():
+@click.option("--no-thread", "no_thread", help="Do not run any threaded progress bar", is_flag=True, default=False)
+def simulate_progress(no_thread: bool):
     """Simulate a progress bar for testing purposes."""
 
     progress = console.make_progress()
@@ -82,23 +83,30 @@ def simulate_progress():
         progress.update(task, advance=1)
 
     # Try threaded progress
-    console.info("Starting threaded progress simulation...")
+    if not no_thread:
+        console.info("Starting threaded progress simulation...")
 
-    tasque = [(i, f"Task-{i}") for i in range(10)]
-    task2 = progress.add_task("Threaded work...", total=len(tasque))
-    with threaded_worker(console, len(tasque)) as (pool, log_queue):
-        for _ in pool.imap_unordered(
-            simulate_thread_progress_star,
-            [(log_queue, i, task_name) for i, task_name in tasque],
-        ):
-            progress.update(task2, advance=1)
+        tasque = [(i, f"Task-{i}") for i in range(10)]
+        task2 = progress.add_task("Threaded work...", total=len(tasque))
+        with threaded_worker(console, len(tasque)) as (pool, log_queue):
+            for _ in pool.imap_unordered(
+                simulate_thread_progress_star,
+                [(log_queue, i, task_name) for i, task_name in tasque],
+            ):
+                progress.update(task2, advance=1)
 
-    console.info("Thread worker progress creation...")
-    new_tasque = [(f"New-Task-Thread-{i}") for i in range(5)]
-    with threaded_worker(console, len(new_tasque)) as (pool, log_queue):
-        for _ in pool.imap_unordered(
-            simulate_thread_progress_creation,
-            [(log_queue, task_name) for task_name in new_tasque],
-        ):
-            pass
-    console.stop_progress(progress, "Finished simulated progress.")
+        console.info("Thread worker progress creation...")
+        new_tasque = [(f"New-Task-Thread-{i}") for i in range(5)]
+        with threaded_worker(console, len(new_tasque)) as (pool, log_queue):
+            for _ in pool.imap_unordered(
+                simulate_thread_progress_creation,
+                [(log_queue, task_name) for task_name in new_tasque],
+            ):
+                pass
+
+    console.info("Starting long-running unknown tasks...")
+    task_long = progress.add_task("Long-running...", total=None, finished_text="Ran too much")
+    for _ in range(500):
+        progress.update(task_long, advance=1)
+        sleep(0.1)
+    console.stop_progress(progress, "Finished initial simulated progress.")
