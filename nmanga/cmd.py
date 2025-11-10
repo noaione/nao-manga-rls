@@ -24,9 +24,12 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import atexit
 import os
+import signal
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import rich_click as click
 
@@ -97,6 +100,23 @@ help_config = click.RichHelpConfiguration(
     ],
     commands_table_help_sections=["help"],
 )
+
+
+def cleanup():
+    console.stop_status()
+    console.stop_current_progress()
+    console.console.show_cursor()
+
+
+def abort_signal(*_) -> NoReturn:
+    cleanup()
+    console.console.print("[bold red]Aborted![/bold red]")
+    sys.exit(130)
+
+
+atexit.register(cleanup)
+signal.signal(signal.SIGINT, abort_signal)
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
