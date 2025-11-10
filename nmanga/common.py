@@ -80,12 +80,11 @@ def _worker_initializer(log_queue: term.MessageQueue):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     root_logger = logging.getLogger()
-    root_logger.handlers.clear()
-
+    # root_logger.handlers.clear()
     handler = logging.handlers.QueueHandler(log_queue)
     root_logger.addHandler(handler)
 
-    root_logger.setLevel(logging.DEBUG)  # Needed sadly
+    # root_logger.setLevel(logging.DEBUG)  # Needed sadly
 
 
 @contextmanager
