@@ -63,6 +63,7 @@ def simulate_thread_progress_creation(args: tuple[term.MessageQueue, str]) -> No
     for _ in range(TOTAL_GEN):
         console.update_progress(task_id, advance=1)
         sleep(0.1)
+        logger.debug(f"Updated: {task_name} += 1")
 
 
 @click.command(

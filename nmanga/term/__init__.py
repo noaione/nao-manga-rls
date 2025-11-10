@@ -62,6 +62,26 @@ MessageQueue: TypeAlias = queue.Queue[Any]
 MessageOrInterface: TypeAlias = Union["Console", MessageQueue]
 
 
+def attach_logger(console: "RichConsole", *, is_debug: bool = False) -> None:
+    log_lvl = logging.DEBUG if is_debug else logging.INFO
+
+    logging.basicConfig(
+        level=log_lvl,
+        datefmt="[%X]",
+        format="[bold][[bright_magenta]%(name)s[/bright_magenta]][/bold] %(message)s",
+        handlers=[
+            RichHandler(
+                console=console,
+                markup=True,
+                rich_tracebacks=True,
+            )
+        ],
+    )
+
+    logging.getLogger("rich").setLevel(logging.WARNING)
+    logging.getLogger("multiprocessing").setLevel(logging.WARNING)
+
+
 @dataclass
 class ConsoleChoice:
     name: str
@@ -105,16 +125,8 @@ class Console(ConsoleInterface):
 
         # Init logger
         self.console = RichConsole(highlight=False, theme=rich_theme, soft_wrap=True, width=None)
-        logging.basicConfig(
-            level=logging.DEBUG if self.__debug_mode else logging.INFO,
-            datefmt="[%X]",
-            handlers=[
-                RichHandler(
-                    console=self.console,
-                    rich_tracebacks=True,
-                )
-            ],
-        )
+        attach_logger(self.console, is_debug=debug_mode)
+
         self._status: "RichStatus | None" = None
         self.__last_known_status: str | None = None
 
@@ -124,17 +136,17 @@ class Console(ConsoleInterface):
 
     def enable_debug(self):
         self.__debug_mode = True
+        logging.getLogger().setLevel(logging.DEBUG)
 
     def disable_debug(self):
         self.__debug_mode = False
+        logging.getLogger().setLevel(logging.INFO)
 
     @property
     def debugged(self) -> bool:
         return self.__debug_mode
 
     def __wrap_theme(self, text: str, theme: str):
-        if self.__debug_mode:
-            return f"[{text}]"
         return f"[[{theme}]{text}[/{theme}]]"
 
     def set_space(self, space: int):

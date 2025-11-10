@@ -75,16 +75,16 @@ BRACKET_MAPPINGS = {
 ALLOWED_TAG_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
 
 
-def _worker_initializer(log_queue: term.MessageQueue):
+def _worker_initializer(log_queue: term.MessageQueue, log_level: int):
     """Initializer for worker processes to handle keyboard interrupts properly."""
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     root_logger = logging.getLogger()
-    # root_logger.handlers.clear()
+    root_logger.handlers.clear()
     handler = logging.handlers.QueueHandler(log_queue)
     root_logger.addHandler(handler)
 
-    # root_logger.setLevel(logging.DEBUG)  # Needed sadly
+    root_logger.setLevel(log_level)
 
 
 @contextmanager
@@ -92,6 +92,7 @@ def threaded_worker(console: term.Console, threads: int):
     """Initialize worker processes to handle keyboard interrupts properly."""
     with mp.Manager() as manager:
         log_queue = manager.Queue()
+        root_logger = logging.getLogger()
 
         listener = threading.Thread(
             target=term.thread_queue_callback,
@@ -100,7 +101,9 @@ def threaded_worker(console: term.Console, threads: int):
         )
         listener.start()
 
-        with mp.Pool(processes=threads, initializer=_worker_initializer, initargs=(log_queue,)) as pool:
+        with mp.Pool(
+            processes=threads, initializer=_worker_initializer, initargs=(log_queue, root_logger.level)
+        ) as pool:
             try:
                 yield pool, log_queue
             except KeyboardInterrupt as ke:
