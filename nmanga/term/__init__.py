@@ -430,7 +430,7 @@ class ThreadConsoleQueue(ConsoleInterface):
         self.queue.put(("log", message))
 
     def close(self) -> None:
-        self.queue.put(STOP_SIGNAL)
+        self.queue.put_nowait(STOP_SIGNAL)
 
     def enter(self) -> None:
         self.queue.put(("enter", ""))

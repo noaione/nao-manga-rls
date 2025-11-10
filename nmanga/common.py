@@ -119,7 +119,7 @@ def threaded_worker(console: term.Console, threads: int):
                 pool.join()
                 raise e
             finally:
-                log_queue.put(STOP_SIGNAL)
+                log_queue.put_nowait(STOP_SIGNAL)
                 listener.join()
                 pool.close()
 
