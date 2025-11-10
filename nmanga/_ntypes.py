@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal, TypedDict
 
 __all__ = (
+    "STOP_SIGNAL",
     "BracketTypeT",
     "ConfigT",
 )
@@ -38,3 +39,34 @@ class ConfigT(TypedDict, total=False):
     defaults: _ConfigDefaultsT
     executables: _ConfigExecutableT
     experimentals: _ConfigExperimentsT
+
+
+class _Sentinel:
+    """
+    A singleton sentinel.
+    You can safely use `is` to check for it, even across processes.
+    """
+
+    __slots__ = ()
+
+    def __reduce__(self):
+        # This tells pickle to rebuild the object by
+        # looking up the global variable "STOP_SIGNAL"
+        return "STOP_SIGNAL"
+
+    def __eq__(self, other) -> bool:
+        # `is` is preferred, but this makes `==` work too
+        return self is other
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __hash__(self) -> int:
+        return 0
+
+    def __repr__(self):
+        return "STOP_SIGNAL"
+
+
+# Create the one-and-only instance
+STOP_SIGNAL = _Sentinel()

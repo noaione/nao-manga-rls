@@ -26,6 +26,7 @@ from rich.progress import (
 )
 from rich.theme import Theme as RichTheme
 
+from .._ntypes import STOP_SIGNAL
 from .progress import NMProgress
 
 if TYPE_CHECKING:
@@ -429,7 +430,7 @@ class ThreadConsoleQueue(ConsoleInterface):
         self.queue.put(("log", message))
 
     def close(self) -> None:
-        self.queue.put(("__CLOSE__", ""))
+        self.queue.put(STOP_SIGNAL)
 
     def enter(self) -> None:
         self.queue.put(("enter", ""))
@@ -457,21 +458,21 @@ class ThreadConsoleQueue(ConsoleInterface):
                 logger = logging.getLogger(raw_q.name)
                 logger.handle(raw_q)
                 continue
+            if raw_q is STOP_SIGNAL:
+                close_signal = True
+                break  # Exit loop if we got any close signal
 
             method, resp_data = raw_q
             if method == "new_task_response":
                 resp_data = cast(dict[str, Any], resp_data)
                 if resp_data.get("consistent_id") == consistent_id:
                     return TaskID(resp_data.get("task_id", -1))
-            elif method == "__CLOSE__":
-                close_signal = True
-                break  # Exit loop if we got any close signal
 
             # Re-queue if not matched
             self.queue.put_nowait(raw_q)
 
         if close_signal:
-            self.queue.put_nowait(("__CLOSE__", ""))  # Re-queue close signal
+            self.close()
         return TaskID(-1)  # In case of failure
 
     def update_progress(
@@ -517,12 +518,12 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                 logger = logging.getLogger(item.name)
                 logger.handle(item)
                 continue
+            if item is STOP_SIGNAL:
+                break
             if not isinstance(item, tuple) or len(item) != 2:
                 continue
 
             level, message = item
-            if level == "__CLOSE__":
-                break
 
             match level:
                 case "info":
@@ -567,6 +568,8 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                 case "new_task_response":
                     # Re-queue
                     log_q.put_nowait((level, message))
+        except queue.Empty:
+            break
         except Exception as exc:
             console.error("Error in ThreadConsoleQueue callback", exc)
 

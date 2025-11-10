@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import IO, Match, Pattern, cast, overload
 
 from . import config, term, utils
+from ._ntypes import STOP_SIGNAL
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
 
 __all__ = (
@@ -118,7 +119,7 @@ def threaded_worker(console: term.Console, threads: int):
                 pool.join()
                 raise e
             finally:
-                log_queue.put(("__CLOSE__", ""))
+                log_queue.put(STOP_SIGNAL)
                 listener.join()
                 pool.close()
 
