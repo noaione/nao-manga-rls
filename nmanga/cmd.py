@@ -28,6 +28,7 @@ import atexit
 import os
 import signal
 import sys
+from multiprocessing import current_process
 from pathlib import Path
 from typing import NoReturn
 
@@ -103,6 +104,8 @@ help_config = click.RichHelpConfiguration(
 
 
 def cleanup():
+    if current_process().name != "MainProcess":
+        return
     console.stop_status()
     console.stop_current_progress()
     console.console.show_cursor()
@@ -114,9 +117,15 @@ def abort_signal(*_) -> NoReturn:
     sys.exit(130)
 
 
+def exit_143(*_):
+    if current_process().name != "MainProcess":
+        return
+    sys.exit(143)
+
+
 atexit.register(cleanup)
 signal.signal(signal.SIGINT, abort_signal)
-signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+signal.signal(signal.SIGTERM, exit_143)
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
