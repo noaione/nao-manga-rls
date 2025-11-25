@@ -27,7 +27,7 @@ from rich.progress import (
 from rich.theme import Theme as RichTheme
 
 from .._ntypes import STOP_SIGNAL
-from .progress import NMProgress
+from .progress import NMProgress, ProgressStopState
 
 if TYPE_CHECKING:
     from rich.status import Status as RichStatus
@@ -52,6 +52,7 @@ rich_theme = RichTheme({
     "info": "cyan bold",
     "tracker-bar.pulse": "yellow bold",
     "tracker-bar.remaining": "grey23",
+    "tracker-bar.failure": "red bold",
     "tracker-bar.complete": "cyan bold",
     "tracker-bar.finished": "green bold",
     "tracker-bar.outer": "bold",
@@ -219,10 +220,13 @@ class Console(ConsoleInterface):
         task = progress.add_task(description, total=total, finished_text=finished_text)
         return task
 
-    def stop_progress(self, progress: Progress, text: str | None = None, *, skip_total: bool = False) -> None:
+    def stop_progress(self, progress: NMProgress, text: str | None = None, *, skip_total: bool = False) -> None:
         for task in progress.tasks:
             if task.total is not None and not skip_total:
-                progress.update(task.id, completed=task.total)
+                run_state = (
+                    ProgressStopState.COMPLETED if task.completed >= task.total else ProgressStopState.EARLY_STOP
+                )
+                progress.update(task.id, completed=task.total, run_state=run_state)
         progress.stop()
         if text is not None:
             self.info(text)

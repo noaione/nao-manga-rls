@@ -106,8 +106,8 @@ help_config = click.RichHelpConfiguration(
 def cleanup():
     if current_process().name != "MainProcess":
         return
+    console.stop_current_progress(skip_total=True)
     console.stop_status()
-    console.stop_current_progress()
     console.console.show_cursor()
 
 

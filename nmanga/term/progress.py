@@ -28,13 +28,15 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, cast
+from enum import Enum
+from typing import Any, Callable, Union, cast
 
 from rich.console import Console as RichConsole
 from rich.progress import (
     MofNCompleteColumn,
     Progress,
     ProgressColumn,
+    ProgressSample,
     SpinnerColumn,
     TaskID,
     TimeElapsedColumn,
@@ -65,6 +67,14 @@ class _FakeTrackerBarColumn(ProgressColumn):
         return Text("[xxx]")
 
 
+class ProgressStopState(int, Enum):
+    """Enum for progress stop states."""
+
+    RUNNING = 0
+    COMPLETED = 1
+    EARLY_STOP = 2
+
+
 class TrackerBarColumn(ProgressColumn):
     """Custom progress bar column that fills all available width."""
 
@@ -73,6 +83,7 @@ class TrackerBarColumn(ProgressColumn):
         remain_style: StyleType = "tracker-bar.remaining",
         complete_style: StyleType = "tracker-bar.complete",
         finished_style: StyleType = "tracker-bar.finished",
+        failure_style: StyleType = "tracker-bar.failure",
         head_style: StyleType = "tracker-bar.pulse",
         outer_style: StyleType = "tracker-bar.outer",
         complete_glyph: str = "#",
@@ -88,6 +99,7 @@ class TrackerBarColumn(ProgressColumn):
         self.pulse_style = head_style
         self.outer_style = outer_style
         self.complete_glyph = complete_glyph
+        self.failure_style = failure_style
         self.pending_glyph = pending_glyph
         self.head_style = head_glyph
         self.min_segments = min_segments
@@ -132,7 +144,7 @@ class TrackerBarColumn(ProgressColumn):
             return task_column_width
         return None
 
-    def render(self, task) -> Text:
+    def render(self, task: Union["NMRichTask", "RichTask"]) -> Text:
         """Render the tracker bar for a given task."""
         progress_bar = cast(NMProgress, self.progress)  # pyright: ignore[reportAttributeAccessIssue]
         width = self._fake_render(progress_bar) or self.min_segments
@@ -166,6 +178,11 @@ class TrackerBarColumn(ProgressColumn):
         is_finished = task.completed >= task.total
 
         complete_style = self.finished_style if is_finished else self.complete_style
+        is_runner_stop = False
+        if isinstance(task, NMRichTask):
+            if task.stop_state == ProgressStopState.EARLY_STOP:
+                complete_style = self.failure_style
+                is_runner_stop = True
 
         bar_text = Text("[", style=self.outer_style)
         if bar_count:
@@ -173,7 +190,7 @@ class TrackerBarColumn(ProgressColumn):
         if half_bar_count:
             bar_text.append(self.complete_glyph, style=complete_style)
         remaining_bars = width - bar_count - half_bar_count
-        if not is_finished:
+        if not is_finished and not is_runner_stop:
             bar_text.append(self.head_style, style=self.pulse_style)
             remaining_bars -= 1
         if remaining_bars:
@@ -199,10 +216,32 @@ class BetterDescriptionColumn(ProgressColumn):
         return Text(task.description, style="progress.description")
 
 
+class BetterSpinnerColumn(SpinnerColumn):
+    def __init__(
+        self,
+        spinner_name: str = "dots",
+        style: str | StyleType | None = "progress.spinner",
+        speed: float = 1,
+        finished_text: str | Text = " ",
+        failure_text: str | Text = " ",
+        table_column: Column | None = None,
+    ):
+        super().__init__(spinner_name, style, speed, finished_text, table_column)
+        self.failure_text = Text.from_markup(failure_text) if isinstance(failure_text, str) else failure_text
+
+    def render(self, task: RichTask | NMRichTask):
+        if isinstance(task, NMRichTask):
+            if task.stop_state == ProgressStopState.EARLY_STOP:
+                return self.failure_text
+        return super().render(task)
+
+
 @dataclass
 class NMRichTask(RichTask):
     finished_text: str | None = None
     """:class:`str`: Custom finished text to display when the task is completed."""
+    stop_state: ProgressStopState = ProgressStopState.RUNNING
+    """:class:`bool`: Whether to force the task to be considered complete."""
 
     @property
     def finish_or_description(self) -> str:
@@ -315,7 +354,62 @@ class NMProgress(Progress):
             if task.total is None and not task.finished:
                 task.total = task.completed
                 task.finished_time = task.elapsed
+            elif task.total is not None and task.finished_time is None:
+                task.finished_time = task.elapsed
+                if isinstance(task, NMRichTask):
+                    task.stop_state = ProgressStopState.EARLY_STOP
         return super().stop()
+
+    def update(
+        self,
+        task_id: TaskID,
+        *,
+        total: float | None = None,
+        completed: float | None = None,
+        advance: float | None = None,
+        description: str | None = None,
+        visible: bool | None = None,
+        refresh: bool = False,
+        run_state: ProgressStopState | None = None,
+        **fields: Any,
+    ) -> None:
+        # Update parent
+        with self._lock:
+            task = self._tasks[task_id]
+            completed_start = task.completed
+
+            if total is not None and total != task.total:
+                task.total = total
+                task._reset()
+            if advance is not None:
+                task.completed += advance
+            if completed is not None:
+                task.completed = completed
+            if description is not None:
+                task.description = description
+            if visible is not None:
+                task.visible = visible
+            task.fields.update(fields)
+            update_completed = task.completed - completed_start
+
+            current_time = self.get_time()
+            old_sample_time = current_time - self.speed_estimate_period
+            progress_deq = task._progress
+
+            popleft = progress_deq.popleft
+            while progress_deq and progress_deq[0].timestamp < old_sample_time:
+                popleft()
+            if update_completed > 0:
+                progress_deq.append(ProgressSample(current_time, update_completed))
+            if task.total is not None and task.completed >= task.total and task.finished_time is None:
+                task.finished_time = task.elapsed
+                if isinstance(task, NMRichTask):
+                    task.stop_state = ProgressStopState.COMPLETED
+            if isinstance(task, NMRichTask) and run_state is not None:
+                task.stop_state = run_state  # Override stop state
+
+        if refresh:
+            self.refresh()
 
     @classmethod
     def get_default_columns(cls) -> tuple[ProgressColumn, ...]:
@@ -339,7 +433,7 @@ class NMProgress(Progress):
         """
 
         return (
-            SpinnerColumn(spinner_name="dots", finished_text="[green]✔[/green]"),
+            BetterSpinnerColumn(spinner_name="dots", finished_text="[green]✓[/green]", failure_text="[red]✗[/red]"),
             BetterDescriptionColumn(),
             TrackerBarColumn(),
             MofNCompleteColumn(table_column=Column(no_wrap=True, justify="right")),
