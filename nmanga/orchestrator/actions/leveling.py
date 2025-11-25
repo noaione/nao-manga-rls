@@ -210,13 +210,6 @@ class ActionAutolevel(BaseAction):
                 ):
                     results.append(result)
                     progress.update(task, advance=1)
-                results = pool.starmap(
-                    _runner_autolevel2_threaded,
-                    [
-                        (log_q, image, output_dir, self, is_color, is_skip_action)
-                        for image, is_color, is_skip_action in images_complete
-                    ],
-                )
         else:
             for image, is_color, is_skip_action in images_complete:
                 results.append(
