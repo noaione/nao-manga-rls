@@ -33,7 +33,7 @@ from PIL import Image
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...autolevel import apply_levels, find_local_peak, gamma_correction
+from ...autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
 from ...common import RegexCollection, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
@@ -61,9 +61,14 @@ def _runner_autolevel2_threaded(
         return ThreadedResult.COPIED
 
     img = Image.open(img_path)
-    black_level, white_level, _ = find_local_peak(
-        img, upper_limit=action.upper_limit, peak_percentage=action.min_peak_pct
-    )
+    if action.legacy_mode:
+        black_level, white_level, _ = find_local_peak_legacy(
+            img, upper_limit=action.upper_limit, skip_white_peaks=action.skip_white
+        )
+    else:
+        black_level, white_level, _ = find_local_peak(
+            img, upper_limit=action.upper_limit, peak_percentage=action.min_peak_pct
+        )
 
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not action.skip_white else False
@@ -145,6 +150,8 @@ class ActionAutolevel(BaseAction):
     """Whether to skip white peaks when finding local peaks in the histogram"""
     skip_color: bool = Field(False, title="Skip Color Images")
     """Skip color images when auto leveling, only level half-tones/b&w images"""
+    legacy_mode: bool = Field(False, title="Use the initial auto level algorithm")
+    """Whether to use the initial auto level algorithm (might or not might be better)"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 

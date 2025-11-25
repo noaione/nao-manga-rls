@@ -39,6 +39,7 @@ __all__ = (
     "create_magick_params",
     "detect_nearest_bpc",
     "find_local_peak",
+    "find_local_peak_legacy",
     "gamma_correction",
     "pad_shades_to_bpc",
     "posterize_image_by_bits",
@@ -197,6 +198,54 @@ def find_local_peak(
             white_level = peak_val_w
 
     return black_level, white_level, force_gray
+
+
+def find_local_peak_legacy(
+    img_path: Path | BytesIO | Image.Image, *, upper_limit: int = 60, skip_white_peaks: bool = False
+) -> tuple[int, int, bool]:
+    """
+    Automatically determine the optimal black level for an image by finding local peaks in its histogram.
+
+    Returns a tuple of (black_level, img_path, force_gray).
+    """
+
+    global NumpyLib, ScipySignalLib
+
+    if NumpyLib is None or ScipySignalLib is None:
+        try_imports()
+
+    image = img_path if isinstance(img_path, Image.Image) else Image.open(img_path)
+    force_gray = image.mode != "L"
+
+    if image.mode == "P":
+        palette = image.getpalette()
+        if (palette is not None) and is_grayscale_palette(palette):
+            force_gray = True
+
+    img_array = NumpyLib.array(image)  # pyright: ignore[reportOptionalMemberAccess]
+    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 255))  # pyright: ignore[reportOptionalMemberAccess]
+
+    width = NumpyLib.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess]
+    result = ScipySignalLib.find_peaks_cwt(hist, widths=width)  # pyright: ignore[reportOptionalMemberAccess]
+
+    if not isinstance(img_path, Image.Image):
+        # temp image, close
+        image.close()
+
+    black_level = 0
+    if result.any():
+        if hist[result[0] - 1] > hist[result[0]]:
+            result[0] = result[0] - 1
+        elif hist[result[0] + 1] > hist[result[0]]:
+            result[0] = result[0] + 1
+
+        black_level = math.ceil(binedges[result[0]])
+
+    if skip_white_peaks:
+        return black_level, 255, force_gray
+
+    # TODO: White level detection
+    return black_level, 255, force_gray
 
 
 def gamma_correction(black_level: int) -> int | float:
