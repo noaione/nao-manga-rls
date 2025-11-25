@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Contains pure constants string data for .epub document
 from __future__ import annotations
 
 import math
@@ -50,9 +49,12 @@ from rich.table import Column, Table
 from rich.text import Text
 
 __all__ = (
+    "BetterDescriptionColumn",
+    "BetterSpinnerColumn",
     "MaybePercentageColumn",
     "NMProgress",
     "NMRichTask",
+    "ProgressStopState",
     "TrackerBarColumn",
 )
 
@@ -149,6 +151,9 @@ class TrackerBarColumn(ProgressColumn):
 
     def render(self, task: Union["NMRichTask", "RichTask"]) -> Text:
         """Render the tracker bar for a given task."""
+        if not hasattr(self, "progress"):
+            raise RuntimeError("`TrackerBarColumn` must be used within a `NMProgress` instance.")
+
         progress_bar = cast(NMProgress, self.progress)  # pyright: ignore[reportAttributeAccessIssue]
         width = self._fake_render(progress_bar) or self.min_segments
 
@@ -243,12 +248,16 @@ class BetterSpinnerColumn(SpinnerColumn):
 class NMRichTask(RichTask):
     finished_text: str | None = None
     """:class:`str`: Custom finished text to display when the task is completed."""
+    failure_text: str | None = None
+    """:class:`str`: Custom failure text to display when the task is stopped early."""
     stop_state: ProgressStopState = ProgressStopState.RUNNING
     """:class:`bool`: Whether to force the task to be considered complete."""
 
     @property
     def finish_or_description(self) -> str:
         """:class:`str`: finished text if available and task is completed, else description."""
+        if self.failure_text is not None and self.stop_state == ProgressStopState.EARLY_STOP:
+            return self.failure_text
         if self.finished_text is not None and self.finished:
             return self.finished_text
         return self.description
@@ -300,6 +309,7 @@ class NMProgress(Progress):
         completed: int = 0,
         visible: bool = True,
         finished_text: str | None = None,
+        failure_text: str | None = None,
         **fields: Any,
     ) -> TaskID:
         """Add a new 'task' to the Progress display.
@@ -321,6 +331,8 @@ class NMProgress(Progress):
             Whether the task is visible. Default to ``True``.
         finished_text: :class:`str` | :class:`None`, optional
             Custom finished text to display when the task is completed.
+        failure_text: :class:`str` | :class:`None`, optional
+            Custom failure text to display when the task is stopped early.
         **fields: Any
             Additional fields for the task.
 
@@ -338,6 +350,7 @@ class NMProgress(Progress):
                 completed=completed,
                 visible=visible,
                 finished_text=finished_text,
+                failure_text=failure_text,
                 fields=fields,
                 _get_time=self.get_time,
                 _lock=self._lock,
@@ -426,7 +439,7 @@ class NMProgress(Progress):
         ```
 
         Which utilize:
-        - :class:`SpinnerColumn` - spinner at the start
+        - :class:`BetterSpinnerColumn` - spinner at the start with more granular display
         - :class:`BetterDescriptionColumn` - description with finished text support
         - :class:`TrackerBarColumn` - custom progress bar that fills available width
         - :class:`MofNCompleteColumn` - shows completed/total

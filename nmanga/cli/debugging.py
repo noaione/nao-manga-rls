@@ -77,7 +77,7 @@ def simulate_progress(no_thread: bool):
     """Simulate a progress bar for testing purposes."""
 
     progress = console.make_progress()
-    task = progress.add_task("Simulating work...", total=10)
+    task = progress.add_task("Simulating work...", total=10, finished_text="Complete!", failure_text="Failed!")
     for _ in range(10):
         sleep(0.1)
         progress.update(task, advance=1)

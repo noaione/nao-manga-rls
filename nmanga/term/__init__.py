@@ -105,7 +105,14 @@ class ConsoleInterface(abc.ABC):
     @abc.abstractmethod
     def enter(self): ...
     @abc.abstractmethod
-    def new_task(self, description: str, total: int | None = None, *, finished_text: str | None = None) -> TaskID: ...
+    def new_task(
+        self,
+        description: str,
+        total: int | None = None,
+        *,
+        finished_text: str | None = None,
+        failure_text: str | None = None,
+    ) -> TaskID: ...
 
     @abc.abstractmethod
     def update_progress(
@@ -117,6 +124,7 @@ class ConsoleInterface(abc.ABC):
         description: str | None = None,
         visible: bool | None = None,
         refresh: bool = False,
+        run_state: ProgressStopState | None = None,
         **fields: Any,
     ) -> None: ...
 
@@ -215,9 +223,15 @@ class Console(ConsoleInterface):
         return progress
 
     def make_task(
-        self, progress: NMProgress, description: str, total: int | None = None, *, finished_text: str | None = None
+        self,
+        progress: NMProgress,
+        description: str,
+        total: int | None = None,
+        *,
+        finished_text: str | None = None,
+        failure_text: str | None = None,
     ) -> TaskID:
-        task = progress.add_task(description, total=total, finished_text=finished_text)
+        task = progress.add_task(description, total=total, finished_text=finished_text, failure_text=failure_text)
         return task
 
     def stop_progress(self, progress: NMProgress, text: str | None = None, *, skip_total: bool = False) -> None:
@@ -238,12 +252,19 @@ class Console(ConsoleInterface):
             self.stop_progress(self.__current_progress, text, skip_total=skip_total)
             self.__current_progress = None
 
-    def new_task(self, description: str, total: int | None = None, *, finished_text: str | None = None) -> TaskID:
+    def new_task(
+        self,
+        description: str,
+        total: int | None = None,
+        *,
+        finished_text: str | None = None,
+        failure_text: str | None = None,
+    ) -> TaskID:
         if self.__current_progress is None:
             progress = self.make_progress()
         else:
             progress = self.__current_progress
-        return progress.add_task(description, total=total, finished_text=finished_text)
+        return progress.add_task(description, total=total, finished_text=finished_text, failure_text=failure_text)
 
     def update_progress(
         self,
@@ -254,6 +275,7 @@ class Console(ConsoleInterface):
         description: str | None = None,
         visible: bool | None = None,
         refresh: bool = False,
+        run_state: ProgressStopState | None = None,
         **fields: Any,
     ) -> None:
         if self.__current_progress is None:
@@ -269,6 +291,7 @@ class Console(ConsoleInterface):
             description=description,
             visible=visible,
             refresh=refresh,
+            run_state=run_state,
             **fields,
         )
 
@@ -439,7 +462,14 @@ class ThreadConsoleQueue(ConsoleInterface):
     def enter(self) -> None:
         self.queue.put(("enter", ""))
 
-    def new_task(self, description: str, total: int | None = None, *, finished_text: str | None = None) -> TaskID:
+    def new_task(
+        self,
+        description: str,
+        total: int | None = None,
+        *,
+        finished_text: str | None = None,
+        failure_text: str | None = None,
+    ) -> TaskID:
         # Put then wait for response
         consistent_id = str(uuid4())
         self.queue.put((
@@ -448,6 +478,7 @@ class ThreadConsoleQueue(ConsoleInterface):
                 "description": description,
                 "total": total,
                 "finished_text": finished_text,
+                "failure_text": failure_text,
                 "consistent_id": consistent_id,
             },
         ))
@@ -488,6 +519,7 @@ class ThreadConsoleQueue(ConsoleInterface):
         description: str | None = None,
         visible: bool | None = None,
         refresh: bool = False,
+        run_state: ProgressStopState | None = None,
         **fields: Any,
     ) -> None:
         self.queue.put((
@@ -501,6 +533,7 @@ class ThreadConsoleQueue(ConsoleInterface):
                 "visible": visible,
                 "refresh": refresh,
                 "fields": fields,
+                "run_state": run_state,
             },
         ))
 
@@ -550,6 +583,7 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                         description=params.get("description"),
                         visible=params.get("visible"),
                         refresh=params.get("refresh", False),
+                        run_state=params.get("run_state"),
                         **params.get("fields", {}),
                     )
                 case "new_task":
@@ -559,6 +593,7 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                         description=params.get("description", ""),
                         total=params.get("total"),
                         finished_text=params.get("finished_text"),
+                        failure_text=params.get("failure_text"),
                     )
                     if not consist_id:
                         continue
