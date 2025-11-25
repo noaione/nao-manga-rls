@@ -71,8 +71,11 @@ class ProgressStopState(int, Enum):
     """Enum for progress stop states."""
 
     RUNNING = 0
+    """The task is still running."""
     COMPLETED = 1
+    """The task has completed successfully."""
     EARLY_STOP = 2
+    """The task was stopped early due to an error or interruption."""
 
 
 class TrackerBarColumn(ProgressColumn):

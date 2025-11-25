@@ -78,7 +78,7 @@ ALLOWED_TAG_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
 
 def _worker_initializer(log_queue: term.MessageQueue, log_level: int):
     """Initializer for worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
@@ -121,7 +121,6 @@ def threaded_worker(console: term.Console, threads: int):
             finally:
                 log_queue.put_nowait(STOP_SIGNAL)
                 listener.join()
-                pool.close()
 
 
 def assert_proc(stuff: IO[bytes] | None) -> None:

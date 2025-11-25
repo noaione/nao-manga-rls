@@ -81,6 +81,11 @@
                     "title": "Skip Color Images",
                     "type": "boolean"
                 },
+                "legacy_mode": {
+                    "default": false,
+                    "title": "Use the initial auto level algorithm",
+                    "type": "boolean"
+                },
                 "threads": {
                     "minimum": 1,
                     "title": "Processing Threads",
@@ -719,6 +724,16 @@
                     ],
                     "default": null,
                     "title": "Title of the Series"
+                },
+                "reverse": {
+                    "default": false,
+                    "title": "Reverse Renaming Order",
+                    "type": "boolean"
+                },
+                "spreads_aware": {
+                    "default": false,
+                    "title": "Spreads Aware Renaming",
+                    "type": "boolean"
                 }
             },
             "title": "nmanga Orchestrator - Simple Shift Renamer Action",
@@ -861,6 +876,11 @@
                     ],
                     "default": null,
                     "title": "Override Title"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Processing Threads",
+                    "type": "integer"
                 }
             },
             "title": "nmanga Orchestrator - Image Tagging Action",
