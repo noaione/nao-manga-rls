@@ -117,6 +117,7 @@ class ActionDenoise(BaseAction):
                 first_part = int(title_match.group("a"))  # We only care about this
                 if context.skip_action is not None and first_part in context.skip_action.pages:
                     perform_skip_action(file_path, output_dir, context.skip_action.action, context.terminal)
+                    current_index += 1
                     continue
 
             img_file = Image.open(file_path)
@@ -134,6 +135,7 @@ class ActionDenoise(BaseAction):
             img_file.close()
             output_image.close()
             current_index += 1
+        progress.update(task, advance=1)
         context.terminal.stop_progress(progress, f"Denoised {total_image} images.")
 
         # Update CWD
