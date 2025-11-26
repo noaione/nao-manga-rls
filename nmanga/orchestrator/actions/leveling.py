@@ -45,7 +45,10 @@ from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerCont
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
 
-__all__ = ("ActionAutolevel",)
+__all__ = (
+    "ActionAutolevel",
+    "ActionLevel",
+)
 
 
 @dataclass
@@ -302,3 +305,151 @@ class ActionAutolevel(BaseAction):
             "scipy": ToolsKind.PACKAGE,
             "numpy": ToolsKind.PACKAGE,
         }
+
+
+def _runner_manuallevel_threaded(
+    log_q: term.MessageOrInterface,
+    img_path: Path,
+    output_dir: Path,
+    action: "ActionLevel",
+    is_color: bool,
+    is_skipped_action: SkipActionKind | None = None,
+) -> ThreadedResult:
+    cnsl = term.with_thread_queue(log_q)
+    if is_skipped_action is not None:
+        perform_skip_action(img_path, output_dir, is_skipped_action, cnsl)
+        return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
+    if is_color and action.skip_color:
+        perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
+        return ThreadedResult.COPIED
+
+    img = Image.open(img_path)
+
+    dest_path = output_dir / f"{img_path.stem}.png"
+    if dest_path.exists():
+        cnsl.warning(f"Skipping existing file: {dest_path}")
+        return ThreadedResult.COPIED
+
+    if not is_color:
+        img = img.convert("L")
+    gamma_correct = gamma_correction(action.black_level)
+    adjusted_img = apply_levels(
+        img,
+        black_point=action.black_level,
+        white_point=action.white_level,
+        gamma=gamma_correct,
+    )
+
+    adjusted_img.save(dest_path, format="PNG")
+    img.close()
+    adjusted_img.close()
+    return ThreadedResult.PROCESSED
+
+
+def _runner_manualevel_threaded_star(
+    args: tuple[term.MessageQueue, Path, Path, "ActionLevel", bool, SkipActionKind | None],
+) -> ThreadedResult:
+    return _runner_manuallevel_threaded(*args)
+
+
+class ActionLevel(BaseAction):
+    """
+    Manually level all images in a volume with Pillow
+    """
+
+    kind: Literal[ActionKind.LEVEL] = Field(ActionKind.LEVEL, title="Level Images Action")
+    """The kind of action"""
+    base_path: str = Field("leveled", title="Output Base Path")
+    """The base path to save the leveled images to"""
+    black_level: int = Field(ge=0, le=255, title="Black Level")
+    """The black level to set for all images"""
+    white_level: int = Field(255, ge=0, le=255, title="White Level")
+    """The white level to set for all images"""
+    skip_color: bool = Field(False, title="Skip Color Images")
+    """Skip color images when auto leveling, only level half-tones/b&w images"""
+    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    """The number of threads to use for processing"""
+
+    def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
+        """
+        Run the action on a volume
+
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        """
+
+        # Prepare
+        output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
+
+        if context.dry_run:
+            context.terminal.info(f"- Output Base Path: {self.base_path}")
+            context.terminal.info(f"- Black Level: {self.black_level}")
+            context.terminal.info(f"- White Level: {self.white_level}")
+            context.terminal.info(f"- Skip Color Images: {self.skip_color}")
+            context.terminal.info(f"- Processing Threads: {self.threads}")
+            context.update_cwd(output_dir)
+            return
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        page_re = RegexCollection.page_re()
+
+        context.terminal.info(f"Processing {context.current_dir} with level...")
+        all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
+        total_images = len(all_images)
+        all_images.sort(key=lambda x: x.stem)
+
+        # Do pre-processing
+        images_complete: list[tuple[Path, bool, SkipActionKind | None]] = []
+        for image in all_images:
+            img_match = page_re.match(image.stem)
+            is_color = False
+            is_skip_action = None
+
+            if img_match is not None:
+                p01 = int(img_match.group("a"))
+                is_color = p01 in volume.colors
+                if context.skip_action is not None and p01 in context.skip_action.pages:
+                    is_skip_action = context.skip_action.action
+
+            images_complete.append((image, is_color, is_skip_action))
+
+        results: list[ThreadedResult] = []
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Leveling images...", finished_text="Leveled images", total=total_images)
+        if self.threads > 1:
+            context.terminal.info(f"Using {self.threads} CPU threads for processing.")
+            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
+                for result in pool.imap_unordered(
+                    _runner_manualevel_threaded_star,
+                    [
+                        (log_q, image, output_dir, self, is_color, is_skip_action)
+                        for image, is_color, is_skip_action in images_complete
+                    ],
+                ):
+                    results.append(result)
+                    progress.update(task, advance=1)
+        else:
+            for image, is_color, is_skip_action in images_complete:
+                results.append(
+                    _runner_manuallevel_threaded(context.terminal, image, output_dir, self, is_color, is_skip_action)
+                )
+                progress.update(task, advance=1)
+
+        context.terminal.stop_progress(progress, f"Processed {total_images} images with level in {context.current_dir}")
+        autolevel_count = sum(1 for res in results if res == ThreadedResult.PROCESSED)
+        copied_count = sum(1 for res in results if res == ThreadedResult.COPIED)
+        grayscaled_count = sum(1 for res in results if res == ThreadedResult.GRAYSCALED)
+        ignored_count = sum(1 for res in results if res == ThreadedResult.IGNORED)
+        if copied_count > 0:
+            context.terminal.info(f" Copied {copied_count} images without level.")
+        if autolevel_count > 0:
+            context.terminal.info(f" Leveled {autolevel_count} images.")
+        if grayscaled_count > 0:
+            context.terminal.info(f" Grayscaled {grayscaled_count} images.")
+        if ignored_count > 0:
+            context.terminal.info(f" Ignored {ignored_count} images.")
+
+        # Update CWD
+        context.update_cwd(output_dir)

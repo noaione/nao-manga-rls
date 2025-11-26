@@ -29,6 +29,7 @@ __all__ = (
     "ActionDenoise",
     "ActionInterrupt",
     "ActionKind",
+    "ActionLevel",
     "ActionMoveColor",
     "ActionOptimize",
     "ActionPack",

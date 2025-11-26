@@ -29,6 +29,7 @@ __all__ = (
     "ActionDenoise",
     "ActionInterrupt",
     "ActionKind",
+    "ActionLevel",
     "ActionMoveColor",
     "ActionOptimize",
     "ActionPack",
@@ -50,6 +51,7 @@ ActionType: TypeAlias = (
     | ActionRename
     | ActionDenoise
     | ActionAutolevel
+    | ActionLevel
     | ActionPosterize
     | ActionOptimize
     | ActionTagging

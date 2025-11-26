@@ -124,6 +124,8 @@ class ActionKind(str, Enum):
     """Denoise all images in a volume with denoise-trt"""
     AUTOLEVEL = "autolevel"
     """Auto level all images with Pillow"""
+    LEVEL = "level"
+    """Level all images with Pillow, use this if you want to provide single level values"""
     POSTERIZE = "posterize"
     """Posterize all images with imagemagick or Pillow"""
     OPTIMIZE = "optimize"

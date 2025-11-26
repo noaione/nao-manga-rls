@@ -326,6 +326,85 @@
             "title": "nmanga Orchestrator - Interrupt Action",
             "type": "object"
         },
+        "ActionLevel": {
+            "description": "Manually level all images in a volume with Pillow",
+            "properties": {
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
+                },
+                "kind": {
+                    "const": "level",
+                    "default": "level",
+                    "title": "Level Images Action",
+                    "type": "string"
+                },
+                "base_path": {
+                    "default": "leveled",
+                    "title": "Output Base Path",
+                    "type": "string"
+                },
+                "black_level": {
+                    "maximum": 255,
+                    "minimum": 0,
+                    "title": "Black Level",
+                    "type": "integer"
+                },
+                "white_level": {
+                    "default": 255,
+                    "maximum": 255,
+                    "minimum": 0,
+                    "title": "White Level",
+                    "type": "integer"
+                },
+                "skip_color": {
+                    "default": false,
+                    "title": "Skip Color Images",
+                    "type": "boolean"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Processing Threads",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "black_level"
+            ],
+            "title": "ActionLevel",
+            "type": "object"
+        },
         "ActionMoveColor": {
             "additionalProperties": false,
             "description": "Action to move the tagged color images to a separate folder\n\nEverything would be derived from the main config so they are not included here.",
@@ -1417,6 +1496,7 @@
                         "color_jpegify": "#/$defs/ActionColorJpegify",
                         "denoise": "#/$defs/ActionDenoise",
                         "interrupt": "#/$defs/ActionInterrupt",
+                        "level": "#/$defs/ActionLevel",
                         "move_color": "#/$defs/ActionMoveColor",
                         "optimize": "#/$defs/ActionOptimize",
                         "pack": "#/$defs/ActionPack",
@@ -1443,6 +1523,9 @@
                     },
                     {
                         "$ref": "#/$defs/ActionAutolevel"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionLevel"
                     },
                     {
                         "$ref": "#/$defs/ActionPosterize"
