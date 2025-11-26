@@ -86,6 +86,11 @@
                     "title": "Use the initial auto level algorithm",
                     "type": "boolean"
                 },
+                "dump_stats": {
+                    "default": false,
+                    "title": "Dump Leveling Stats",
+                    "type": "boolean"
+                },
                 "threads": {
                     "minimum": 1,
                     "title": "Processing Threads",

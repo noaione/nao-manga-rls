@@ -24,13 +24,17 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import json
 import shutil
+from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from PIL import Image
 from pydantic import ConfigDict, Field
+
+from nmanga.utils import secure_filename
 
 from ... import file_handler, term
 from ...autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
@@ -44,6 +48,33 @@ if TYPE_CHECKING:
 __all__ = ("ActionAutolevel",)
 
 
+@dataclass
+class AutolevelResult:
+    image: str
+    black_level: int
+    white_level: int
+    status: ThreadedResult
+    force_gray: bool = False
+
+    @staticmethod
+    def from_threaded_result(image: str, status: ThreadedResult) -> AutolevelResult:
+        return AutolevelResult(image=image, black_level=-1, white_level=-1, status=status)
+
+    def to_json(self) -> dict:
+        if self.black_level == -1 and self.white_level == -1:
+            return {
+                "image": self.image,
+                "status": self.status.value,
+            }
+        return {
+            "image": self.image,
+            "status": self.status.value,
+            "black_level": self.black_level,
+            "white_level": self.white_level,
+            "force_gray": self.force_gray,
+        }
+
+
 def _runner_autolevel2_threaded(
     log_q: term.MessageOrInterface,
     img_path: Path,
@@ -51,14 +82,17 @@ def _runner_autolevel2_threaded(
     action: "ActionAutolevel",
     is_color: bool,
     is_skipped_action: SkipActionKind | None = None,
-) -> ThreadedResult:
+) -> AutolevelResult:
     cnsl = term.with_thread_queue(log_q)
     if is_skipped_action is not None:
         perform_skip_action(img_path, output_dir, is_skipped_action, cnsl)
-        return ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED
+        return AutolevelResult.from_threaded_result(
+            img_path.name,
+            ThreadedResult.COPIED if is_skipped_action != SkipActionKind.IGNORE else ThreadedResult.IGNORED,
+        )
     if is_color and action.skip_color:
         perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
-        return ThreadedResult.COPIED
+        return AutolevelResult.from_threaded_result(img_path.name, ThreadedResult.COPIED)
 
     img = Image.open(img_path)
     if action.legacy_mode:
@@ -83,20 +117,20 @@ def _runner_autolevel2_threaded(
             img = img.convert("L")
             img.save(dest_path.with_suffix(".png"), format="PNG")
             img.close()
-            return ThreadedResult.GRAYSCALED
+            return AutolevelResult(img_path.name, black_level, white_level, ThreadedResult.GRAYSCALED)
 
         img.close()
 
         if dest_path.exists():
             cnsl.warning(f"Skipping existing file: {dest_path}")
-            return ThreadedResult.COPIED
+            return AutolevelResult.from_threaded_result(img_path.name, ThreadedResult.COPIED)
         shutil.copy2(img_path, dest_path)
-        return ThreadedResult.COPIED
+        return AutolevelResult.from_threaded_result(img_path.name, ThreadedResult.COPIED)
 
     dest_path = output_dir / f"{img_path.stem}.png"
     if dest_path.exists():
         cnsl.warning(f"Skipping existing file: {dest_path}")
-        return ThreadedResult.COPIED
+        return AutolevelResult.from_threaded_result(img_path.name, ThreadedResult.COPIED)
 
     if not is_color:
         img = img.convert("L")
@@ -111,12 +145,12 @@ def _runner_autolevel2_threaded(
     adjusted_img.save(dest_path, format="PNG")
     img.close()
     adjusted_img.close()
-    return ThreadedResult.PROCESSED
+    return AutolevelResult(img_path.name, black_level, white_level, ThreadedResult.PROCESSED)
 
 
 def _runner_autolevel2_threaded_star(
     args: tuple[term.MessageQueue, Path, Path, "ActionAutolevel", bool, SkipActionKind | None],
-) -> ThreadedResult:
+) -> AutolevelResult:
     return _runner_autolevel2_threaded(*args)
 
 
@@ -152,6 +186,8 @@ class ActionAutolevel(BaseAction):
     """Skip color images when auto leveling, only level half-tones/b&w images"""
     legacy_mode: bool = Field(False, title="Use the initial auto level algorithm")
     """Whether to use the initial auto level algorithm (might or not might be better)"""
+    dump_stats: bool = Field(False, title="Dump Leveling Stats")
+    """Whether to dump leveling stats to a JSON file"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
@@ -174,6 +210,8 @@ class ActionAutolevel(BaseAction):
             context.terminal.info(f"- Minimum Pixels Peak Percentage: {self.min_peak_pct}")
             context.terminal.info(f"- Skip White Levels During Peak Finding: {self.skip_white}")
             context.terminal.info(f"- Skip Color Images: {self.skip_color}")
+            context.terminal.info(f"- Use Legacy Algorithm: {'Yes' if self.legacy_mode else 'No'}")
+            context.terminal.info(f"- Dump Stats: {'Yes' if self.dump_stats else 'No'}")
             context.terminal.info(f"- Processing Threads: {self.threads}")
             context.update_cwd(output_dir)
             return
@@ -202,7 +240,7 @@ class ActionAutolevel(BaseAction):
 
             images_complete.append((image, is_color, is_skip_action))
 
-        results: list[ThreadedResult] = []
+        results: list[AutolevelResult] = []
         progress = context.terminal.make_progress()
         task = progress.add_task("Auto-leveling images...", finished_text="Auto-leveled images", total=total_images)
         if self.threads > 1:
@@ -227,10 +265,10 @@ class ActionAutolevel(BaseAction):
         context.terminal.stop_progress(
             progress, f"Processed {total_images} images with autolevel in {context.current_dir}"
         )
-        autolevel_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
-        copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
-        grayscaled_count = sum(1 for result in results if result == ThreadedResult.GRAYSCALED)
-        ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
+        autolevel_count = sum(1 for res in results if res.status == ThreadedResult.PROCESSED)
+        copied_count = sum(1 for res in results if res.status == ThreadedResult.COPIED)
+        grayscaled_count = sum(1 for res in results if res.status == ThreadedResult.GRAYSCALED)
+        ignored_count = sum(1 for res in results if res.status == ThreadedResult.IGNORED)
         if copied_count > 0:
             context.terminal.info(f" Copied {copied_count} images without autolevel.")
         if autolevel_count > 0:
@@ -240,6 +278,16 @@ class ActionAutolevel(BaseAction):
         if ignored_count > 0:
             context.terminal.info(f" Ignored {ignored_count} images.")
 
+        # Dump stats if needed
+        if self.dump_stats:
+            stats_path = output_dir / secure_filename(volume.path + ".autolevel.json")
+            with stats_path.open("w", encoding="utf-8") as stats_file:
+                json.dump(
+                    [res.to_json() for res in results],
+                    stats_file,
+                    indent=4,
+                    ensure_ascii=False,
+                )
         # Update CWD
         context.update_cwd(output_dir)
 
