@@ -43,6 +43,7 @@ from ..autolevel import (
     apply_levels,
     create_magick_params,
     find_local_peak,
+    find_local_peak_legacy,
     gamma_correction,
 )
 from ..common import threaded_worker
@@ -102,15 +103,20 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
 
 
 def _find_local_peak_magick_wrapper(
-    img_path: Path, upper_limit: int, peak_min_pct: float, skip_white: bool
+    img_path: Path, upper_limit: int, peak_min_pct: float, skip_white: bool, is_legacy: bool
 ) -> tuple[int, int, Path, bool]:
-    black_level, white_level, force_gray = find_local_peak(
-        img_path, upper_limit=upper_limit, peak_percentage=peak_min_pct, skip_white_check=skip_white
-    )
+    if not is_legacy:
+        black_level, white_level, force_gray = find_local_peak(
+            img_path, upper_limit=upper_limit, peak_percentage=peak_min_pct, skip_white_check=skip_white
+        )
+    else:
+        black_level, white_level, force_gray = find_local_peak_legacy(
+            img_path, upper_limit=upper_limit, skip_white_peaks=skip_white
+        )
     return black_level, white_level, img_path, force_gray
 
 
-def _find_local_peak_magick_wrapper_star(args: tuple[Path, int, float, bool]) -> tuple[int, int, Path, bool]:
+def _find_local_peak_magick_wrapper_star(args: tuple[Path, int, float, bool, bool]) -> tuple[int, int, Path, bool]:
     return _find_local_peak_magick_wrapper(*args)
 
 
@@ -164,6 +170,12 @@ def _find_local_peak_magick_wrapper_star(args: tuple[Path, int, float, bool]) ->
     default=False,
     help="Do not adjust white level, only adjust black level",
 )
+@click.option(
+    "--legacy",
+    is_flag=True,
+    default=False,
+    help="Use legacy autolevel analysis",
+)
 @options.threads
 @options.magick_path
 @time_program
@@ -175,6 +187,7 @@ def autolevel(
     peak_offset: int,
     image_fmt: str,
     no_white: bool,
+    legacy: bool,
     threads: int,
     magick_path: str,
 ):  # pragma: no cover
@@ -212,13 +225,13 @@ def autolevel(
         with threaded_worker(console, threads) as (pool, _):
             for result in pool.imap_unordered(
                 _find_local_peak_magick_wrapper_star,
-                ((file, upper_limit, peak_min_pct, no_white) for file in all_files),
+                ((file, upper_limit, peak_min_pct, no_white, legacy) for file in all_files),
             ):
                 results.append(result)
                 progress.update(task_calculate, advance=1)
     else:
         for file in all_files:
-            results.append(_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white))
+            results.append(_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white, legacy))
             progress.update(task_calculate, advance=1)
     progress.update(task_calculate, completed=len(all_files))
 
@@ -324,12 +337,15 @@ class Autolevel2Config:
 
 
 def _autolevel2_wrapper(
-    log_q: term.MessageOrInterface, img_path: Path, dest_output: Path, config: Autolevel2Config
+    log_q: term.MessageOrInterface, img_path: Path, dest_output: Path, config: Autolevel2Config, is_legacy: bool
 ) -> AutoLevelResult:
     img = Image.open(img_path)
-    black_level, white_level, _ = find_local_peak(
-        img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
-    )
+    if not is_legacy:
+        black_level, white_level, _ = find_local_peak(
+            img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
+        )
+    else:
+        black_level, white_level, _ = find_local_peak_legacy(img, upper_limit=60, skip_white_peaks=config.no_white)
 
     cnsl = term.with_thread_queue(log_q)
 
@@ -384,7 +400,7 @@ def _autolevel2_wrapper(
     return AutoLevelResult.PROCESSED
 
 
-def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autolevel2Config]) -> AutoLevelResult:
+def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autolevel2Config, bool]) -> AutoLevelResult:
     return _autolevel2_wrapper(*args)
 
 
@@ -454,6 +470,12 @@ def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autoleve
     default=False,
     help="Do not adjust white level, only adjust black level",
 )
+@click.option(
+    "--legacy",
+    is_flag=True,
+    default=False,
+    help="Use legacy autolevel analysis",
+)
 @options.threads
 @time_program
 def autolevel2(
@@ -466,6 +488,7 @@ def autolevel2(
     keep_colorspace: bool,
     image_fmt: str,
     no_white: bool,
+    legacy: bool,
     threads: int,
 ):  # pragma: no cover
     if not path_or_archive.is_dir():
@@ -497,13 +520,14 @@ def autolevel2(
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as (pool, log_q):
             for result in pool.imap_unordered(
-                _autolevel2_wrapper_star, ((log_q, img_path, dest_output, full_config) for img_path in all_files)
+                _autolevel2_wrapper_star,
+                ((log_q, img_path, dest_output, full_config, legacy) for img_path in all_files),
             ):
                 results.append(result)
                 progress.update(task, advance=1)
     else:
         for img_path in all_files:
-            results.append(_autolevel2_wrapper(console, img_path, dest_output, full_config))
+            results.append(_autolevel2_wrapper(console, img_path, dest_output, full_config, legacy))
             progress.update(task, advance=1)
 
     console.stop_progress(progress, f"Processed {total_files} images.")
@@ -632,11 +656,16 @@ class AutolevelAnalyzeResult(TypedDict):
     force_gray: bool
 
 
-def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config) -> AutolevelAnalyzeResult:
+def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config, is_legacy: bool) -> AutolevelAnalyzeResult:
     img = Image.open(img_path)
-    black_level, white_level, force_gray = find_local_peak(
-        img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
-    )
+    if not is_legacy:
+        black_level, white_level, force_gray = find_local_peak(
+            img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
+        )
+    else:
+        black_level, white_level, force_gray = find_local_peak_legacy(
+            img, upper_limit=60, skip_white_peaks=config.no_white
+        )
     img.close()
     gamma_correct = gamma_correction(black_level)
     return {
@@ -648,7 +677,7 @@ def _analyze_levels_wrapper(img_path: Path, config: Autolevel2Config) -> Autolev
     }
 
 
-def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config]) -> AutolevelAnalyzeResult:
+def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config, bool]) -> AutolevelAnalyzeResult:
     return _analyze_levels_wrapper(*args)
 
 
@@ -692,6 +721,12 @@ def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config]) -> Autoleve
     default=False,
     help="Do not adjust white level, only adjust black level",
 )
+@click.option(
+    "--legacy",
+    is_flag=True,
+    default=False,
+    help="Use legacy autolevel analysis",
+)
 @options.threads
 @time_program
 def analyze_level(
@@ -700,6 +735,7 @@ def analyze_level(
     peak_min_pct: float,
     peak_offset: int,
     no_white: bool,
+    legacy: bool,
     threads: int,
 ):  # pragma: no cover
     """
@@ -733,14 +769,14 @@ def analyze_level(
 
     if threads <= 1:
         for img_path in all_files:
-            results.append(_analyze_levels_wrapper(img_path, full_config))
+            results.append(_analyze_levels_wrapper(img_path, full_config, legacy))
             progress.update(task, advance=1)
     else:
         console.info(f"Using {threads} CPU threads for processing.")
         with threaded_worker(console, threads) as (pool, _):
             for result in pool.imap_unordered(
                 _analyze_level_wrapper_star,
-                ((img_path, full_config) for img_path in all_files),
+                ((img_path, full_config, legacy) for img_path in all_files),
             ):
                 results.append(result)
                 progress.update(task, advance=1)
