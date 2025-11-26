@@ -222,7 +222,9 @@ def find_local_peak_legacy(
         if (palette is not None) and is_grayscale_palette(palette):
             force_gray = True
 
-    img_array = NumpyLib.array(image)  # pyright: ignore[reportOptionalMemberAccess]
+    gray_img = image.convert("L")  # force grayscale
+
+    img_array = NumpyLib.array(gray_img)  # pyright: ignore[reportOptionalMemberAccess]
     hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 255))  # pyright: ignore[reportOptionalMemberAccess]
 
     width = NumpyLib.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess]

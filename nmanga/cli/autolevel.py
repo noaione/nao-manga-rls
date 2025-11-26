@@ -745,6 +745,7 @@ def analyze_level(
                 results.append(result)
                 progress.update(task, advance=1)
 
+    results.sort(key=lambda x: x["image"])
     console.stop_progress(progress, f"Analyzed {total_files} images peak levels.")
     complete_name = f"{path_or_archive.name}_autolevel.json"
     dump_path = Path.cwd() / complete_name
