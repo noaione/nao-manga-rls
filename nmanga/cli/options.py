@@ -156,6 +156,15 @@ archive_file = click.argument(
     required=True,
     type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
 )
+recursive = click.option(
+    "-r",
+    "--recursive",
+    "recursive",
+    is_flag=True,
+    default=False,
+    help="Recursively lookup in subdirectories (only when a folder is given)",
+    panel="Input Options",
+)
 output_mode = click.option(
     "-m",
     "--mode",

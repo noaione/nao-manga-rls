@@ -57,14 +57,7 @@ def lookup_group():
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive()
-@click.option(
-    "-r",
-    "--recursive",
-    "recursive",
-    is_flag=True,
-    default=False,
-    help="Recursively lookup in subdirectories (only when a folder is given)",
-)
+@options.recursive
 @time_program
 def lookup_imagesize(path_or_archive: Path, recursive: bool):
     """
