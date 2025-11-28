@@ -70,6 +70,16 @@ def orchestractor():
 @options.rls_credit
 @options.rls_email
 @options.use_bracket_type
+@options.manga_volume
+@click.option(
+    "-mq",
+    "--quality",
+    "image_quality",
+    type=click.Choice(["LQ", "HQ"]),
+    default=None,
+    help="Image quality of this release.",
+    panel="Release Options",
+)
 @check_config_first
 @time_program
 def orchestrator_generate(
@@ -79,10 +89,35 @@ def orchestrator_generate(
     rls_credit: str,
     rls_email: str,
     bracket_type: Literal["square", "round", "curly"],
+    manga_volume: int | float | None,
+    image_quality: Literal["LQ", "HQ"] | None,
 ):
     if output_file.exists():
         console.error(f"{output_file} already exists, please remove it first")
         raise click.Abort()
+
+    generated_volumes = []
+    if manga_volume is not None:
+        if isinstance(manga_volume, float):
+            raise click.BadParameter("Volume number cannot be a float", param_hint="manga_volume")
+        for vol_num in range(1, manga_volume + 1):
+            generated_volumes.append(
+                VolumeConfig(
+                    number=vol_num,
+                    path=f"v{vol_num:02d}",
+                    chapters=[],
+                    quality=image_quality,
+                )  # type: ignore
+            )
+    else:
+        generated_volumes.append(
+            VolumeConfig(
+                number=1,
+                path="v01",
+                chapters=[],
+                quality=image_quality,
+            )  # type: ignore
+        )
 
     config = OrchestratorConfig(
         title=manga_title,
@@ -91,13 +126,7 @@ def orchestrator_generate(
         credit=rls_credit,
         email=rls_email,
         bracket_type=bracket_type,
-        volumes=[
-            VolumeConfig(
-                number=1,
-                path="v01",
-                chapters=[],
-            )  # type: ignore
-        ],
+        volumes=generated_volumes,
         actions=[
             # Simple shift name
             ActionShiftName(start=0),  # type: ignore
