@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import RegexCollection, threaded_worker
+from ...common import RegexCollection, lowest_or, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
@@ -211,23 +211,13 @@ class ActionColorJpegify(BaseAction):
         progress = context.terminal.make_progress()
         task = progress.add_task("JPEGifying images...", finished_text="JPEGified images", total=total_images)
         results: list[ThreadedResult] = []
-        if self.threads > 1:
-            context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
-                for result in pool.imap_unordered(
-                    _runner_jpegify_threaded_star,
-                    [
-                        (log_q, image, output_dir, cjpegli, quality, skip_action)
-                        for image, skip_action in image_candidates
-                    ],
-                ):
-                    results.append(result)
-                    progress.update(task, advance=1)
-        else:
-            for image, skip_action in image_candidates:
-                results.append(
-                    _runner_jpegify_threaded(context.terminal, image, output_dir, cjpegli, quality, skip_action)
-                )
+        context.terminal.info(f"Using {self.threads} CPU threads for processing.")
+        with threaded_worker(context.terminal, lowest_or(self.threads, image_candidates)) as (pool, log_q):
+            for result in pool.imap_unordered(
+                _runner_jpegify_threaded_star,
+                [(log_q, image, output_dir, cjpegli, quality, skip_action) for image, skip_action in image_candidates],
+            ):
+                results.append(result)
                 progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Converted {total_images} images to JPEG.")

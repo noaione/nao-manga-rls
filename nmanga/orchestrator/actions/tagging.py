@@ -38,6 +38,7 @@ from ...common import (
     ALLOWED_TAG_EXTENSIONS,
     format_archive_filename,
     format_volume_text,
+    lowest_or,
     make_metadata_command,
     threaded_worker,
 )
@@ -135,17 +136,12 @@ class ActionTagging(BaseAction):
 
         progress = context.terminal.make_progress()
         task = progress.add_task("Tagging images...", finished_text="Tagged images", total=total_images)
-        if self.threads > 1:
-            context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
-                for _ in pool.imap_unordered(
-                    _runner_tagging_threaded_star,
-                    [(log_q, exiftool, image, archive_filename, orchestrator.email) for image in all_images],
-                ):
-                    progress.update(task, advance=1)
-        else:
-            for image in all_images:
-                _runner_tagging_threaded(context.terminal, exiftool, image, archive_filename, orchestrator.email)
+        context.terminal.info(f"Using {self.threads} CPU threads for processing.")
+        with threaded_worker(context.terminal, lowest_or(self.threads, all_images)) as (pool, log_q):
+            for _ in pool.imap_unordered(
+                _runner_tagging_threaded_star,
+                [(log_q, exiftool, image, archive_filename, orchestrator.email) for image in all_images],
+            ):
                 progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Finished tagging images in {context.current_dir}")

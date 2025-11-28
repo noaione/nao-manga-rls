@@ -34,7 +34,7 @@ import rich_click as click
 from click.exceptions import Exit
 
 from .. import file_handler, term
-from ..common import optimize_images, threaded_worker
+from ..common import lowest_or, optimize_images, threaded_worker
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_cjpegli, test_or_find_pingo
@@ -164,17 +164,12 @@ def image_jpegify(
     progress = console.make_progress()
     task = progress.add_task("Converting images...", finished_text="Converted images", total=total_images)
 
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, log_q):
-            for _ in pool.imap_unordered(
-                _wrapper_jpegify_threaded_star,
-                ((log_q, image, dest_output, cjpegli_exe, quality) for image in image_candidates),
-            ):
-                progress.update(task, advance=1)
-    else:
-        for image in image_candidates:
-            _wrapper_jpegify_threaded(console, image, dest_output, cjpegli_exe, quality)
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, image_candidates)) as (pool, log_q):
+        for _ in pool.imap_unordered(
+            _wrapper_jpegify_threaded_star,
+            ((log_q, image, dest_output, cjpegli_exe, quality) for image in image_candidates),
+        ):
             progress.update(task, advance=1)
     console.stop_progress(progress, f"Converted {total_images} images to JPEG.")
 

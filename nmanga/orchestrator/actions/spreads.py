@@ -33,7 +33,7 @@ from PIL import Image
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import RegexCollection, threaded_worker
+from ...common import RegexCollection, lowest_or, threaded_worker
 from ...spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
@@ -190,22 +190,15 @@ class ActionSpreads(BaseAction):
 
         progress = context.terminal.make_progress()
         task = progress.add_task("Joining spreads...", finished_text="Joined spreads", total=total_match_spreads)
-        if self.threads > 1:
-            context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
-                for _ in pool.imap_unordered(
-                    _runner_image_spreads_threaded_star,
-                    [
-                        (log_q, context.current_dir, spread, images, cast(str, imagick), self)
-                        for spread, images in exported_images.items()
-                    ],
-                ):
-                    progress.update(task, advance=1)
-        else:
-            for spread, images in exported_images.items():
-                _runner_image_spreads_threaded(
-                    context.terminal, context.current_dir, spread, images, cast(str, imagick), self
-                )
+        context.terminal.info(f"Using {self.threads} CPU threads for processing.")
+        with threaded_worker(context.terminal, lowest_or(self.threads, exported_images)) as (pool, log_q):
+            for _ in pool.imap_unordered(
+                _runner_image_spreads_threaded_star,
+                [
+                    (log_q, context.current_dir, spread, images, cast(str, imagick), self)
+                    for spread, images in exported_images.items()
+                ],
+            ):
                 progress.update(task, advance=1)
 
         task = progress.tasks[task]

@@ -38,7 +38,7 @@ from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
-from ...common import RegexCollection, threaded_worker
+from ...common import RegexCollection, lowest_or, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
 
@@ -163,25 +163,16 @@ class ActionPosterize(BaseAction):
         results: list[ThreadedResult] = []
         progress = context.terminal.make_progress()
         task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_images)
-        if self.threads > 1:
-            context.terminal.info(f"Using {self.threads} CPU threads for processing.")
-            with threaded_worker(context.terminal, self.threads) as (pool, log_q):
-                for result in pool.imap_unordered(
-                    _runner_posterize_threaded_star,
-                    [
-                        (log_q, image, output_dir, self, imagick, is_color, is_skip_action)
-                        for image, is_color, is_skip_action in images_complete
-                    ],
-                ):
-                    results.append(result)
-                    progress.update(task, advance=1)
-        else:
-            for image, is_color, is_skip_action in images_complete:
-                results.append(
-                    _runner_posterize_threaded(
-                        context.terminal, image, output_dir, self, imagick, is_color, is_skip_action
-                    )
-                )
+        context.terminal.info(f"Using {self.threads} CPU threads for processing.")
+        with threaded_worker(context.terminal, lowest_or(self.threads, images_complete)) as (pool, log_q):
+            for result in pool.imap_unordered(
+                _runner_posterize_threaded_star,
+                [
+                    (log_q, image, output_dir, self, imagick, is_color, is_skip_action)
+                    for image, is_color, is_skip_action in images_complete
+                ],
+            ):
+                results.append(result)
                 progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Posterized {total_images} images in {context.current_dir}")

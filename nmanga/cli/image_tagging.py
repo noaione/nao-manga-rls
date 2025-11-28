@@ -41,6 +41,7 @@ from ..common import (
     ALLOWED_TAG_EXTENSIONS,
     format_archive_filename,
     format_volume_text,
+    lowest_or,
     make_metadata_command,
     threaded_worker,
 )
@@ -165,17 +166,12 @@ def image_tagging(
 
     task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, log_q):
-            for _ in pool.imap_unordered(
-                _threaded_tagging_star,
-                ((log_q, exiftool_exe, image, archive_filename, rls_email) for image in precollect_images),
-            ):
-                progress.update(task, advance=1)
-    else:
-        for image_path in precollect_images:
-            _threaded_tagging(console, exiftool_exe, image_path, archive_filename, rls_email)
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
+        for _ in pool.imap_unordered(
+            _threaded_tagging_star,
+            ((log_q, exiftool_exe, image, archive_filename, rls_email) for image in precollect_images),
+        ):
             progress.update(task, advance=1)
     console.stop_progress(progress, "Tagged all possible images with exif metadata.")
 
@@ -229,16 +225,11 @@ def image_tagging_raw(
 
     task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, log_q):
-            for _ in pool.imap_unordered(
-                _threaded_tagging_star,
-                ((log_q, exiftool_exe, image, manga_title, rls_email) for image in precollect_images),
-            ):
-                progress.update(task, advance=1)
-    else:
-        for image_path in precollect_images:
-            _threaded_tagging(console, exiftool_exe, image_path, manga_title, rls_email)
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
+        for _ in pool.imap_unordered(
+            _threaded_tagging_star,
+            ((log_q, exiftool_exe, image, manga_title, rls_email) for image in precollect_images),
+        ):
             progress.update(task, advance=1)
     console.stop_progress(progress, "Tagged all possible images with exif metadata.")

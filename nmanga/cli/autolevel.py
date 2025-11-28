@@ -46,7 +46,7 @@ from ..autolevel import (
     find_local_peak_legacy,
     gamma_correction,
 )
-from ..common import threaded_worker
+from ..common import lowest_or, threaded_worker
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -220,18 +220,13 @@ def autolevel(
     task_calculate = progress.add_task("Analzying images...", finished_text="Analzyed images", total=len(all_files))
 
     results: list[tuple[int, int, Path, bool]] = []
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, _):
-            for result in pool.imap_unordered(
-                _find_local_peak_magick_wrapper_star,
-                ((file, upper_limit, peak_min_pct, no_white, legacy) for file in all_files),
-            ):
-                results.append(result)
-                progress.update(task_calculate, advance=1)
-    else:
-        for file in all_files:
-            results.append(_find_local_peak_magick_wrapper(file, upper_limit, peak_min_pct, no_white, legacy))
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, _):
+        for result in pool.imap_unordered(
+            _find_local_peak_magick_wrapper_star,
+            ((file, upper_limit, peak_min_pct, no_white, legacy) for file in all_files),
+        ):
+            results.append(result)
             progress.update(task_calculate, advance=1)
     progress.update(task_calculate, completed=len(all_files))
 
@@ -313,13 +308,9 @@ def autolevel(
     progress.update(task_copy, completed=len(to_be_copied))
 
     task_proc = progress.add_task("Auto-leveling images...", finished_text="Auto-leveled images", total=len(commands))
-    if threads > 1:
-        with threaded_worker(console, threads) as (pool, log_q):
-            for _ in pool.imap_unordered(_autolevel_exec_star, [(log_q, cmd) for cmd in commands]):
-                progress.update(task_proc, advance=1)
-    else:
-        for command in commands:
-            _autolevel_exec(console, command)
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, commands)) as (pool, log_q):
+        for _ in pool.imap_unordered(_autolevel_exec_star, [(log_q, cmd) for cmd in commands]):
             progress.update(task_proc, advance=1)
 
     console.stop_progress(progress, f"Auto-leveled {len(commands)} images.")
@@ -516,18 +507,13 @@ def autolevel2(
     progress = console.make_progress()
     task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
 
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, log_q):
-            for result in pool.imap_unordered(
-                _autolevel2_wrapper_star,
-                ((log_q, img_path, dest_output, full_config, legacy) for img_path in all_files),
-            ):
-                results.append(result)
-                progress.update(task, advance=1)
-    else:
-        for img_path in all_files:
-            results.append(_autolevel2_wrapper(console, img_path, dest_output, full_config, legacy))
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+        for result in pool.imap_unordered(
+            _autolevel2_wrapper_star,
+            ((log_q, img_path, dest_output, full_config, legacy) for img_path in all_files),
+        ):
+            results.append(result)
             progress.update(task, advance=1)
 
     console.stop_progress(progress, f"Processed {total_files} images.")
@@ -627,14 +613,9 @@ def force_gray(
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     task_proc = progress.add_task("Processing images...", finished_text="Processed images", total=len(commands))
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, log_q):
-            for _ in pool.imap_unordered(_forcegray_exec_star, [(log_q, cmd) for cmd in commands]):
-                progress.update(task_proc, advance=1)
-    else:
-        for command in commands:
-            _forcegray_exec(console, command)
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+        for _ in pool.imap_unordered(_forcegray_exec_star, [(log_q, cmd) for cmd in commands]):
             progress.update(task_proc, advance=1)
 
     console.stop_progress(progress, f"Processed {len(commands)} images to grayscale.")
@@ -767,22 +748,18 @@ def analyze_level(
     progress = console.make_progress()
     task = progress.add_task("Analzying images...", finished_text="Analyzed images", total=total_files)
 
-    if threads <= 1:
-        for img_path in all_files:
-            results.append(_analyze_levels_wrapper(img_path, full_config, legacy))
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, _):
+        for result in pool.imap_unordered(
+            _analyze_level_wrapper_star,
+            ((img_path, full_config, legacy) for img_path in all_files),
+        ):
+            results.append(result)
             progress.update(task, advance=1)
-    else:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, _):
-            for result in pool.imap_unordered(
-                _analyze_level_wrapper_star,
-                ((img_path, full_config, legacy) for img_path in all_files),
-            ):
-                results.append(result)
-                progress.update(task, advance=1)
+
+    console.stop_progress(progress, f"Analyzed {total_files} images peak levels.")
 
     results.sort(key=lambda x: x["image"])
-    console.stop_progress(progress, f"Analyzed {total_files} images peak levels.")
     complete_name = f"{path_or_archive.name}_autolevel.json"
     dump_path = Path.cwd() / complete_name
     dumped_data = json.dumps(results, indent=4)

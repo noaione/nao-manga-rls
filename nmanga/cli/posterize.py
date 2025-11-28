@@ -33,8 +33,6 @@ from pathlib import Path
 import rich_click as click
 from PIL import Image
 
-from nmanga.common import threaded_worker
-
 from .. import file_handler, term
 from ..autolevel import (
     analyze_gray_shades,
@@ -43,6 +41,7 @@ from ..autolevel import (
     posterize_image_by_bits,
     posterize_image_by_shades,
 )
+from ..common import lowest_or, threaded_worker
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -113,17 +112,12 @@ def posterize_simple(
     task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
 
     dest_output.mkdir(parents=True, exist_ok=True)
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, _):
-            for _ in pool.imap_unordered(
-                _posterize_simple_wrapper_star,
-                [(img_path, dest_output, num_bits) for img_path in all_files],
-            ):
-                progress.update(task, advance=1)
-    else:
-        for img_path in all_files:
-            _posterize_simple_wrapper(img_path, dest_output, num_bits)
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, _):
+        for _ in pool.imap_unordered(
+            _posterize_simple_wrapper_star,
+            [(img_path, dest_output, num_bits) for img_path in all_files],
+        ):
             progress.update(task, advance=1)
 
     console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.")
@@ -222,19 +216,15 @@ def auto_posterize(
     progress = console.make_progress()
     taks = progress.add_task("Auto-posterizing images...", finished_text="Auto-posterized images", total=total_files)
     dest_output.mkdir(parents=True, exist_ok=True)
+
     results: list[PosterizedResult] = []
-    if threads > 1:
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, threads) as (pool, log_q):
-            for result in pool.imap_unordered(
-                _autoposterize_wrapper_star,
-                [(log_q, img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
-            ):
-                results.append(result)
-                progress.update(taks, advance=1)
-    else:
-        for img_path in all_files:
-            results.append(_autoposterize_wrapper(console, img_path, dest_output, threshold_pct, use_palette_mode))
+    console.info(f"Using {threads} CPU threads for processing.")
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+        for result in pool.imap_unordered(
+            _autoposterize_wrapper_star,
+            [(log_q, img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
+        ):
+            results.append(result)
             progress.update(taks, advance=1)
 
     console.stop_progress(progress, f"Auto-posterized {total_files} images.")

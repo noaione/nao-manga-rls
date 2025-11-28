@@ -33,8 +33,9 @@ import subprocess as sp
 import threading
 import traceback
 from contextlib import contextmanager
+from multiprocessing.pool import Pool as MpPool
 from pathlib import Path
-from typing import IO, Match, Pattern, cast, overload
+from typing import IO, Any, Generator, Iterable, Match, Pattern, cast, overload
 
 from . import config, term, utils
 from ._ntypes import STOP_SIGNAL
@@ -55,6 +56,7 @@ __all__ = (
     "inject_metadata",
     "inquire_chapter_ranges",
     "is_pingo_alpha",
+    "lowest_or",
     "make_metadata_command",
     "optimize_images",
     "run_pingo_and_verify",
@@ -88,9 +90,26 @@ def _worker_initializer(log_queue: term.MessageQueue, log_level: int):
     root_logger.setLevel(log_level)
 
 
+class FakePool:
+    """A fake pool that executes tasks serially."""
+
+    def imap_unordered(self, func, iterable):
+        """Single threaded imap_unordered implementation."""
+        for item in iterable:
+            yield func(item)
+
+
 @contextmanager
-def threaded_worker(console: term.Console, threads: int):
-    """Initialize worker processes to handle keyboard interrupts properly."""
+def threaded_worker(
+    console: term.Console, threads: int
+) -> Generator[tuple[MpPool | FakePool, term.MessageQueue], None, None]:
+    """
+    Initialize a "smart" worker pool with:
+    - logging queue handler
+    - keyboard interrupt handling
+    - automatically executes code serially if threads is set to 1
+    """
+
     with mp.Manager() as manager:
         log_queue = manager.Queue()
         root_logger = logging.getLogger()
@@ -102,25 +121,65 @@ def threaded_worker(console: term.Console, threads: int):
         )
         listener.start()
 
-        with mp.Pool(
-            processes=threads, initializer=_worker_initializer, initargs=(log_queue, root_logger.level)
-        ) as pool:
+        # When threads is 1, we don't need to create a pool
+        if threads > 1:
+            with mp.Pool(
+                processes=threads, initializer=_worker_initializer, initargs=(log_queue, root_logger.level)
+            ) as pool:
+                try:
+                    yield pool, log_queue
+                except KeyboardInterrupt as ke:
+                    console.warning("Process interrupted by user, terminating workers...")
+                    pool.terminate()
+                    pool.join()
+                    raise RuntimeError("Process interrupted by user.") from ke
+                except Exception as e:
+                    console.error(f"An error occurred: {e}, terminating workers...")
+                    traceback.print_exc()
+                    pool.terminate()
+                    pool.join()
+                    raise e
+                finally:
+                    log_queue.put_nowait(STOP_SIGNAL)
+                    listener.join()
+        else:
             try:
-                yield pool, log_queue
+                # Still use logging queue even on single thread for consistency
+                yield FakePool(), log_queue
             except KeyboardInterrupt as ke:
                 console.warning("Process interrupted by user, terminating workers...")
-                pool.terminate()
-                pool.join()
                 raise RuntimeError("Process interrupted by user.") from ke
-            except Exception as e:
-                console.error(f"An error occurred: {e}, terminating workers...")
-                traceback.print_exc()
-                pool.terminate()
-                pool.join()
-                raise e
             finally:
                 log_queue.put_nowait(STOP_SIGNAL)
                 listener.join()
+
+
+def get_sized(obj: Any) -> int | None:
+    """Check if an object is iterable."""
+    try:
+        return len(obj)
+    except TypeError:
+        return False
+
+
+def lowest_or(base: int | Iterable[Any], others: int | Iterable[Any]) -> int:
+    """Get the lowest value between base and others."""
+    # Check if iterable or len-able
+    if base_len := get_sized(base):
+        base_value = base_len
+    elif isinstance(base, int):
+        base_value = base
+    else:
+        raise TypeError("Base must be an int or iterable/sized.")
+
+    if other_len := get_sized(others):
+        other_value = other_len
+    elif isinstance(others, int):
+        other_value = others
+    else:
+        raise TypeError("Others must be an int or iterable/sized.")
+
+    return min(base_value, other_value)
 
 
 def assert_proc(stuff: IO[bytes] | None) -> None:
