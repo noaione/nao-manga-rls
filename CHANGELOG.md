@@ -344,7 +344,10 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Implemented threaded tagging for better performance
 - Use `rich` progress bar for better progress display
 - Implement better support for outputing to STDOUT/STDERR in threaded functions
-- Add `--recursive` option to `nmanga denoise-trt` and `nmanga autolevel2` command to process all directories inside a given folder
+- Add `--recursive` option to the following commands:
+  - `nmanga denoise-trt`
+  - `nmanga autolevel2`
+  - `nmanga jpegify`
 
 **Changes**
 - Improve manual split filename matcher

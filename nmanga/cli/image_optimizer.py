@@ -125,6 +125,7 @@ def _wrapper_jpegify_threaded_star(
 @options.dest_output(optional=False)
 @options.cjpegli_path
 @options.threads
+@options.recursive
 @check_config_first
 @time_program
 def image_jpegify(
@@ -133,6 +134,7 @@ def image_jpegify(
     dest_output: Path,
     cjpegli_path: str,
     threads: int,
+    recursive: bool,
 ):  # pragma: no cover
     """
     Convert images to JPEG to save space
@@ -152,26 +154,43 @@ def image_jpegify(
 
     console.info(f"Using cjpegli at {cjpegli_exe}")
 
-    image_candidates: list[Path] = [
-        img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)
-    ]
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to denoise.")
 
-    dest_output.mkdir(parents=True, exist_ok=True)
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        image_candidates: list[Path] = [
+            img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(path_real)
+        ]
 
-    total_images = len(image_candidates)
-    quality = max(0, min(100, jpeg_quality))
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
 
-    progress = console.make_progress()
-    task = progress.add_task("Converting images...", finished_text="Converted images", total=total_images)
+        total_images = len(image_candidates)
+        quality = max(0, min(100, jpeg_quality))
 
-    console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, image_candidates)) as (pool, log_q):
-        for _ in pool.imap_unordered(
-            _wrapper_jpegify_threaded_star,
-            ((log_q, image, dest_output, cjpegli_exe, quality) for image in image_candidates),
-        ):
-            progress.update(task, advance=1)
-    console.stop_progress(progress, f"Converted {total_images} images to JPEG.")
+        progress = console.make_progress()
+        task = progress.add_task("Converting images...", finished_text="Converted images", total=total_images)
+
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, image_candidates)) as (pool, log_q):
+            for _ in pool.imap_unordered(
+                _wrapper_jpegify_threaded_star,
+                ((log_q, image, real_output, cjpegli_exe, quality) for image in image_candidates),
+            ):
+                progress.update(task, advance=1)
+        console.stop_progress(progress, f"Converted {total_images} images to JPEG.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
 
 
 @click.command(
