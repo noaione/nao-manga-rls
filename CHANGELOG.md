@@ -344,6 +344,7 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Implemented threaded tagging for better performance
 - Use `rich` progress bar for better progress display
 - Implement better support for outputing to STDOUT/STDERR in threaded functions
+- Add `--recursive` option to `nmanga denoise-trt` command to process all directories inside a given folder
 
 **Changes**
 - Improve manual split filename matcher
@@ -354,3 +355,4 @@ Rewritten every thing as a module with `nmanga` namespace.
   - Use `-cl/--compression-level` option in `nmanga pack` and `nmanga packepub`
   - Alternatively, use `compress_level` in the `pack` orchestrator action
 - Move from standard `click` to `rich-click` for better CLI experience
+- Make threaded worker run function serially when threads is set to 1 to avoid overhead

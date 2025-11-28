@@ -247,13 +247,15 @@ def collect_image(path_or_archive: Path):
         yield from collect_image_from_folder(path_or_archive)
 
 
-def collect_all_comics(folder: Path):
-    for file in folder.glob("*.cb[z|r|7]"):
-        if is_archive(file):
-            yield file
+def collect_all_comics(folder: Path, *, dir_only: bool = False) -> Generator[Path, None, None]:
     for thing in folder.iterdir():
         if thing.is_dir():
             yield thing
+    if dir_only:
+        return
+    for file in folder.glob("*.cb[z|r|7]"):
+        if is_archive(file):
+            yield file
 
 
 AccessorType: TypeAlias = zipfile.ZipFile | rarfile.RarFile | py7zr.SevenZipFile | tarfile.TarFile | Path

@@ -393,6 +393,7 @@ def identify_denoise_candidates(
     show_default=True,
     help="The background color to use for padding",
 )
+@options.recursive
 @check_config_first
 @time_program
 def denoiser_trt(
@@ -404,6 +405,7 @@ def denoiser_trt(
     tile_size: int,
     contrast_stretch: bool,
     background: Literal["black", "white"],
+    recursive: bool,
 ):
     """
     Denoise all images using TensorRT/ONNX Runtime (Experimental)
@@ -418,34 +420,54 @@ def denoiser_trt(
             param_hint="path_or_archive",
         )
 
-    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to denoise.")
+
+    if not candidates and recursive:
+        console.warning("No valid folders found to denoise.")
+        return 1
 
     # Try importing stuff here
     console.info(f"Loading model: {model_path.name}...")
     sess = prepare_model_runtime(model_path, device_id, console.debugged)
     console.info(f"Using device ID: {device_id}")
 
-    total_files = len(all_files)
-    dest_output.mkdir(parents=True, exist_ok=True)
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
 
-    progress = console.make_progress()
-    task = console.make_task(progress, "Denoising images...", total=total_files)
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
 
-    for image_file in all_files:
-        output_path = dest_output / f"{image_file.stem}.png"
+        progress = console.make_progress()
+        task = console.make_task(progress, "Denoising images...", total=total_files)
 
-        img_file = Image.open(image_file)
-        output_image = denoise_single_image(
-            img_file,
-            sess,
-            batch_size=batch_size,
-            tile_size=tile_size,
-            contrast_stretch=contrast_stretch,
-            background=background,
-        )
+        for image_file in all_files:
+            output_path = real_output / f"{image_file.stem}.png"
 
-        output_image.save(output_path, format="PNG")
-        img_file.close()
-        output_image.close()
-        progress.update(task, advance=1)
-    console.stop_progress(progress, f"Denoised all {total_files} images.")
+            img_file = Image.open(image_file)
+            output_image = denoise_single_image(
+                img_file,
+                sess,
+                batch_size=batch_size,
+                tile_size=tile_size,
+                contrast_stretch=contrast_stretch,
+                background=background,
+            )
+
+            output_image.save(output_path, format="PNG")
+            img_file.close()
+            output_image.close()
+            progress.update(task, advance=1)
+        console.stop_progress(progress, f"Denoised all {total_files} images.")
+    return 0
