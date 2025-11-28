@@ -468,6 +468,7 @@ def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autoleve
     help="Use legacy autolevel analysis",
 )
 @options.threads
+@options.recursive
 @time_program
 def autolevel2(
     path_or_archive: Path,
@@ -481,6 +482,7 @@ def autolevel2(
     no_white: bool,
     legacy: bool,
     threads: int,
+    recursive: bool,
 ):  # pragma: no cover
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -488,45 +490,67 @@ def autolevel2(
             param_hint="path_or_archive",
         )
 
-    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
-    total_files = len(all_files)
-    console.info(f"Found {total_files} files in the directory.")
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to denoise.")
 
-    full_config = Autolevel2Config(
-        upper_limit=upper_limit,
-        peak_offset=peak_offset,
-        peak_min_pct=peak_min_pct,
-        force_gray=force_gray,
-        keep_colorspace=keep_colorspace,
-        image_fmt=image_fmt,
-        no_white=no_white,
-    )
+    if not candidates and recursive:
+        console.warning("No valid folders found to denoise.")
+        return 1
 
-    dest_output.mkdir(parents=True, exist_ok=True)
-    results: list[AutoLevelResult] = []
-    progress = console.make_progress()
-    task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
+        console.info(f"Found {total_files} files in the directory.")
 
-    console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
-        for result in pool.imap_unordered(
-            _autolevel2_wrapper_star,
-            ((log_q, img_path, dest_output, full_config, legacy) for img_path in all_files),
-        ):
-            results.append(result)
-            progress.update(task, advance=1)
+        full_config = Autolevel2Config(
+            upper_limit=upper_limit,
+            peak_offset=peak_offset,
+            peak_min_pct=peak_min_pct,
+            force_gray=force_gray,
+            keep_colorspace=keep_colorspace,
+            image_fmt=image_fmt,
+            no_white=no_white,
+        )
 
-    console.stop_progress(progress, f"Processed {total_files} images.")
-    autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
-    copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
-    grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
 
-    if copied_count > 0:
-        console.info(f"Copied {copied_count} images without autolevel.")
-    if autolevel_count > 0:
-        console.info(f"Autoleveled {autolevel_count} images.")
-    if grayscaled_count > 0:
-        console.info(f"Grayscaled {grayscaled_count} images.")
+        results: list[AutoLevelResult] = []
+        progress = console.make_progress()
+        task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
+
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+            for result in pool.imap_unordered(
+                _autolevel2_wrapper_star,
+                ((log_q, img_path, real_output, full_config, legacy) for img_path in all_files),
+            ):
+                results.append(result)
+                progress.update(task, advance=1)
+
+        console.stop_progress(progress, f"Processed {total_files} images.")
+        autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
+        grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
+
+        if copied_count > 0:
+            console.info(f"Copied {copied_count} images without autolevel.")
+        if autolevel_count > 0:
+            console.info(f"Autoleveled {autolevel_count} images.")
+        if grayscaled_count > 0:
+            console.info(f"Grayscaled {grayscaled_count} images.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
 
 
 def _forcegray_exec(log_q: term.MessageOrInterface, command: list[str]) -> None:

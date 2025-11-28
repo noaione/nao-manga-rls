@@ -470,4 +470,6 @@ def denoiser_trt(
             output_image.close()
             progress.update(task, advance=1)
         console.stop_progress(progress, f"Denoised all {total_files} images.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
     return 0
