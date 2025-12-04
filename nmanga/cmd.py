@@ -103,8 +103,8 @@ help_config = click.RichHelpConfiguration(
 )
 
 
-def cleanup():
-    if current_process().name != "MainProcess":
+def cleanup(is_root: bool = True):
+    if not is_root:
         return
     console.stop_current_progress(skip_total=True)
     console.stop_status()
@@ -112,8 +112,10 @@ def cleanup():
 
 
 def abort_signal(*_) -> NoReturn:
-    cleanup()
-    console.console.print("[bold red]Aborted![/bold red]")
+    is_root = current_process().name == "MainProcess"
+    cleanup(is_root=is_root)
+    if is_root:
+        console.console.print("[bold red]Aborted![/bold red]")
     sys.exit(130)
 
 

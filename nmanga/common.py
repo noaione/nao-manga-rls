@@ -80,7 +80,7 @@ ALLOWED_TAG_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tiff", "avif", "jxl"]
 
 def _worker_initializer(log_queue: term.MessageQueue, log_level: int):
     """Initializer for worker processes to handle keyboard interrupts properly."""
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGABRT, signal.SIG_DFL)
 
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
