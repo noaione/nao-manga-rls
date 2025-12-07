@@ -654,17 +654,33 @@
                     "type": "string"
                 },
                 "bpc": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "const": "auto",
+                            "type": "string"
+                        }
+                    ],
                     "default": 4,
                     "examples": [
                         1,
                         2,
                         4,
-                        8
+                        8,
+                        "auto"
                     ],
-                    "maximum": 8,
-                    "minimum": 1,
-                    "title": "Bits Per Channel",
-                    "type": "integer"
+                    "ge": 1,
+                    "le": 8,
+                    "title": "Bits Per Channel"
+                },
+                "threshold": {
+                    "default": 0.01,
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "title": "Threshold for Auto bitdepth",
+                    "type": "number"
                 },
                 "pillow": {
                     "default": false,

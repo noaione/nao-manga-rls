@@ -24,9 +24,10 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import math
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from PIL import Image
 from pydantic import ConfigDict, Field
@@ -35,6 +36,8 @@ from nmanga.orchestrator.actions._base import ToolsKind
 
 from ... import file_handler, term
 from ...autolevel import (
+    analyze_gray_shades,
+    npow2,
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
@@ -46,6 +49,27 @@ if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionPosterize",)
+
+
+def _detect_auto_bpc(img: Image.Image, threshold: float) -> int:
+    """
+    Detect the best bits per channel for posterization automatically.
+
+    :param img: The image to analyze
+    :return: The detected bits per channel
+    """
+
+    image = img.convert("L")  # Convert to grayscale for analysis
+    results = analyze_gray_shades(image, threshold=threshold)
+
+    num_shades = len(results)
+    if len(results) <= 1:
+        return 1  # If only 1 shade, return 1 bpc
+
+    raw_bpc = math.ceil(math.log2(num_shades))
+    bpc = npow2(raw_bpc)
+
+    return bpc
 
 
 def _runner_posterize_threaded(
@@ -71,11 +95,31 @@ def _runner_posterize_threaded(
         return ThreadedResult.COPIED
 
     if imagick is not None:
-        posterize_image_with_imagemagick(img_path, output_dir=output_dir, num_bits=action.bpc, magick_path=imagick)
+        real_bpc = action.bpc
+        if action.bpc == "auto":
+            img = Image.open(img_path)
+            real_bpc = _detect_auto_bpc(img, threshold=action.threshold)
+            img.close()
+
+        if real_bpc == 8:  # If 8 bpc, no need to posterize, kinda useless
+            perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
+            return ThreadedResult.COPIED
+
+        posterize_image_with_imagemagick(
+            img_path, output_dir=output_dir, num_bits=cast(int, real_bpc), magick_path=imagick
+        )
         return ThreadedResult.PROCESSED
     else:
         img = Image.open(img_path)
-        quant = posterize_image_by_bits(img, num_bits=action.bpc)
+        real_bpc = action.bpc
+        if action.bpc == "auto":
+            real_bpc = _detect_auto_bpc(img, threshold=action.threshold)
+
+        if real_bpc == 8:  # If 8 bpc, no need to posterize, kinda useless
+            perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
+            return ThreadedResult.COPIED
+
+        quant = posterize_image_by_bits(img, num_bits=cast(int, real_bpc))
         quant.save(dest_path, format="PNG")
         img.close()
         quant.close()
@@ -104,8 +148,10 @@ class ActionPosterize(BaseAction):
     """The kind of action"""
     base_path: str = Field("posterized", title="Output Base Path")
     """The base path to save the posterized images to"""
-    bpc: int = Field(4, ge=1, le=8, title="Bits Per Channel", examples=[1, 2, 4, 8])
+    bpc: int | Literal["auto"] = Field(4, ge=1, le=8, title="Bits Per Channel", examples=[1, 2, 4, 8, "auto"])
     """The number of bitdepth to reduce the image to"""
+    threshold: float = Field(0.01, ge=0.0, le=1.0, title="Threshold for Auto bitdepth")
+    """The threshold to use when detecting bitdepth automatically"""
     pillow: bool = Field(False, title="Use Python Pillow")
     """Whether to use Pillow for posterizing instead of ImageMagick"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
