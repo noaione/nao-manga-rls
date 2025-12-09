@@ -77,6 +77,42 @@ def get_data_dir() -> Path:
     return cache_dir
 
 
+def get_model_scale_factor(session: "InferenceSession", *, tile_size: int | None) -> int:
+    import numpy as np
+
+    # Detect scale using small input and output shapes
+    inp = session.get_inputs()[0]
+    out = session.get_outputs()[0]
+
+    maybe_tile_size = inp.shape[-1]
+    maybe_output_size = out.shape[-1]
+
+    if isinstance(maybe_tile_size, int) and isinstance(maybe_output_size, int):
+        return maybe_output_size // maybe_tile_size  # Fast path if both sizes are known
+
+    real_tile_size = tile_size if tile_size is not None else maybe_tile_size
+    if not isinstance(real_tile_size, int):
+        real_tile_size = 64  # Fallback tile size
+
+    shapes = []
+    for dim in inp.shape:
+        if isinstance(dim, int):
+            shapes.append(dim)
+        else:
+            if dim == "width" or dim == "height":
+                shapes.append(real_tile_size)
+            else:
+                shapes.append(1 if dim == "batch_size" else 3)
+
+    x = np.zeros(shapes, dtype=np.float32)
+    input_name = inp.name
+    output_name = out.name
+
+    out = session.run([output_name], {input_name: x})
+    scale_height = np.array(out[0]).shape[-1]
+    return scale_height // real_tile_size
+
+
 def prepare_model_runtime(model_path: Path, device_id: int = 0, is_verbose: bool = False) -> "InferenceSession":
     import onnxruntime as ort  # type: ignore
 
@@ -113,11 +149,14 @@ def prepare_model_runtime(model_path: Path, device_id: int = 0, is_verbose: bool
     ort.set_default_logger_verbosity(verb_level)
 
     sess_opt = ort.SessionOptions()
-    return ort.InferenceSession(
+    session = ort.InferenceSession(
         model_path,
         sess_options=sess_opt,
         providers=providers,
     )
+    scale_factor = get_model_scale_factor(session, tile_size=None)
+    session.scale_factor = scale_factor  # type: ignore
+    return session
 
 
 def get_model_information(model_path: Path) -> tuple[str, int]:
@@ -230,7 +269,10 @@ def prepare_model_runtime_builders(
         ]
 
     sess_opt = ort.SessionOptions()
-    return ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
+    session: "InferenceSession" = ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
+    scale_factor = get_model_scale_factor(session, tile_size=tile_size)
+    session.scale_factor = scale_factor  # type: ignore
+    return session
 
 
 def denoise_single_image(
@@ -247,9 +289,9 @@ def denoise_single_image(
     from einops import rearrange  # type: ignore
 
     # Calculate upscale scale from model input and output shapes
-    upscale_scale = int(model.get_outputs()[0].shape[2] // model.get_inputs()[0].shape[2])
-    if upscale_scale not in (1, 2, 4):
-        raise ValueError(f"Unsupported upscale scale: {upscale_scale}")
+    scale_factor = getattr(model, "scale_factor", None)
+    if not isinstance(scale_factor, int):
+        raise ValueError("Model scale factor is not set. Ensure the model was prepared correctly.")
     input_channel_count: int = model.get_inputs()[0].shape[1]
     is_grayscale = bool(input_channel_count == 1)
 
@@ -318,9 +360,9 @@ def denoise_single_image(
     # Concatenate the results from all batches into a single array
     tiled_output_image = np.concatenate(all_output_chunks, axis=0)
 
-    if upscale_scale > 1:
-        image_height = image_height * upscale_scale
-        image_width = image_width * upscale_scale
+    if scale_factor > 1:
+        image_height = image_height * scale_factor
+        image_width = image_width * scale_factor
 
     # Reshape it back to the input
     reconstructed_image_with_pad = rearrange(
