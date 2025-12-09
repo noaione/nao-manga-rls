@@ -54,7 +54,7 @@ from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
-from .cli.upscaler import upscale_tiled
+from .cli.upscaler import export_to_onnx, upscale_trt
 from .term import get_console
 
 console = get_console()
@@ -162,7 +162,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="ML Processing",
     help="Commands for processing images using Machine Learning models",
-    commands=["denoise", "denoise-trt", "upscale-tiled"],
+    commands=["denoise", "denoise-trt", "upscale-trt", "to-onnx"],
 )
 @click.command_panel(
     name="Other Tooling",
@@ -256,7 +256,8 @@ main.add_command(auto_posterize)
 main.add_command(analyze_shades)
 main.add_command(denoiser)
 main.add_command(denoiser_trt)
-main.add_command(upscale_tiled)
+main.add_command(upscale_trt)
+main.add_command(export_to_onnx)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 main.add_command(pdf_manager)

@@ -2,6 +2,7 @@
 MIT License
 
 Copyright (c) 2022-present noaione
+Copyright (c) 2025-present anon
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +25,13 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
+import logging
 import sys
+import warnings
+from enum import Enum
+from hashlib import md5
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -34,9 +41,59 @@ if TYPE_CHECKING:
     from onnxruntime import InferenceSession  # type: ignore
 
 __all__ = (
+    "MLDataType",
+    "UpscalingSize",
     "denoise_single_image",
     "prepare_model_runtime",
+    "prepare_model_runtime_builders",
 )
+
+logger = logging.getLogger(__name__)
+
+
+class UpscalingSize(int, Enum):
+    x1 = 1
+    x2 = 2
+    x4 = 4
+
+    @classmethod
+    def from_int(cls, size_int: int) -> UpscalingSize:
+        if size_int == 1:
+            return cls.x1
+        elif size_int == 2:
+            return cls.x2
+        elif size_int == 4:
+            return cls.x4
+        else:
+            raise ValueError(f"Unknown UpscalingSize integer: {size_int}")
+
+
+class MLDataType(int, Enum):
+    FP32 = 1
+    FP16 = 2
+    BF16 = 3
+
+    @classmethod
+    def from_str(cls, type_str: str) -> MLDataType:
+        type_str = type_str.lower()
+        if type_str == "fp32":
+            return cls.FP32
+        elif type_str == "fp16":
+            return cls.FP16
+        elif type_str == "bf16":
+            return cls.BF16
+        else:
+            raise ValueError(f"Unknown MLDataType string: {type_str}")
+
+
+def get_data_dir() -> Path:
+    # Should use APPDATA on Windows, XDG_CACHE_HOME on Linux, etc. but for simplicity just use home/.cache
+    if sys.platform == "win32":
+        cache_dir = Path.home() / "AppData" / "Local" / "nmanga"
+    else:
+        cache_dir = Path.home() / ".cache" / "nmanga"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 def prepare_model_runtime(model_path: Path, device_id: int = 0, is_verbose: bool = False) -> "InferenceSession":
@@ -82,35 +139,156 @@ def prepare_model_runtime(model_path: Path, device_id: int = 0, is_verbose: bool
     )
 
 
+def get_model_information(model_path: Path) -> tuple[str, int]:
+    try:
+        import onnx
+    except ImportError:
+        warnings.warn(
+            "onnx is not installed, cannot determine model input name. "
+            "Defaulting to 'input'. Install onnx to enable proper model input name detection.",
+            ImportWarning,
+            stacklevel=2,
+        )
+        return "input", 3  # Default input name and channel count
+
+    model = onnx.load(str(model_path))
+    # input channel count
+    if len(model.graph.input) != 1:
+        raise ValueError("Model has multiple inputs, cannot determine input name.")
+    model_channel_count = model.graph.input[0].type.tensor_type.shape.dim[1].dim_value
+    return model.graph.input[0].name, model_channel_count
+
+
+def prepare_model_runtime_builders(
+    model_path: Path,
+    *,
+    device_id: int = 0,
+    is_verbose: bool = False,
+    tile_size: int | None = None,
+    batch_size: int = 64,
+    data_type: MLDataType = MLDataType.FP16,
+) -> "InferenceSession":
+    import onnxruntime as ort  # type: ignore
+
+    is_torch_available = importlib.util.find_spec("torch")
+    if is_torch_available is not None:
+        import torch  # type: ignore
+    is_tensorrt_available = importlib.util.find_spec("tensorrt")
+    if is_tensorrt_available is not None:
+        import tensorrt  # type: ignore  # noqa: F401
+
+    data_dir = get_data_dir()
+    cache_dir = data_dir / "trt_engines"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
+    cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
+
+    memory_limit = (
+        int(
+            torch.cuda.get_device_properties(device_id).total_memory * 0.75  # type: ignore
+        )
+        if is_torch_available
+        else 2 * (1024**3)
+    )  # 2GB or 75% of GPU memory
+
+    trt_ep_config = {
+        "device_id": device_id,
+        "trt_fp16_enable": data_type == MLDataType.FP16,
+        "trt_bf16_enable": data_type == MLDataType.BF16,
+        "trt_sparsity_enable": True,
+        "trt_max_workspace_size": memory_limit,
+        "trt_engine_cache_enable": True,
+        "trt_engine_cache_path": "trt_engines",
+        "trt_engine_cache_prefix": cache_prefix,
+        "trt_build_heuristics_enable": True,
+        "trt_context_memory_sharing_enable": True,
+        "trt_dump_ep_context_model": True,
+        "trt_ep_context_file_path": str(data_dir),
+        "trt_detailed_build_log": True if is_verbose else False,
+    }
+
+    model_input, model_channel_count = get_model_information(model_path)
+    if tile_size is not None:
+        trt_ep_config["trt_profile_min_shapes"] = f"{model_input}:1x{model_channel_count}x{tile_size}x{tile_size}"
+        trt_ep_config["trt_profile_max_shapes"] = (
+            f"{model_input}:{batch_size}x{model_channel_count}x{tile_size}x{tile_size}"
+        )
+        trt_ep_config["trt_profile_opt_shapes"] = (
+            f"{model_input}:{batch_size}x{model_channel_count}x{tile_size}x{tile_size}"
+        )
+    if sys.platform != "darwin":
+        providers = [
+            ("TensorrtExecutionProvider", trt_ep_config),
+            (
+                "CUDAExecutionProvider",
+                {
+                    "device_id": 0,
+                    "arena_extend_strategy": "kNextPowerOfTwo",
+                    "gpu_mem_limit": memory_limit,
+                    "cudnn_conv_algo_search": "EXHAUSTIVE",
+                    "do_copy_in_default_stream": True,
+                    "cudnn_conv_use_max_workspace": True,
+                    "prefer_nhwc": True,
+                },
+            ),
+        ]
+    else:
+        providers = [
+            (
+                "CoreMLExecutionProvider",
+                {
+                    "ModelFormat": "MLProgram",
+                    "MLComputeUnits": "ALL",
+                    "RequireStaticInputShapes": "1",
+                    "EnableOnSubgraphs": "1",
+                    "ModelCacheDirectory": str(cache_dir),
+                    "SpecializationStrategy": "FastPrediction",
+                },
+            ),
+        ]
+
+    sess_opt = ort.SessionOptions()
+    return ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
+
+
 def denoise_single_image(
     input_image: Image.Image,
     model: "InferenceSession",
     *,
     batch_size: int = 64,
-    tile_size: int = 132,
+    tile_size: int = 128,
     contrast_stretch: bool = False,
     background: Literal["white", "black"] = "black",
+    scale: UpscalingSize = UpscalingSize.x1,
+    use_fp32: bool = False,
 ) -> Image.Image:
     import numpy as np  # type: ignore
     from einops import rearrange  # type: ignore
 
-    orig_img_mode = input_image.mode
-    orig_palette = input_image.palette
+    input_channel_count: int = model.get_inputs()[0].shape[1]
+    is_grayscale = bool(input_channel_count == 1)
 
-    img = input_image.convert("RGB")
-    source_width, source_height = img.size
+    orig_img_mode = input_image.mode
+    orig_img_palette = input_image.palette
+    img = input_image.convert("RGB") if not is_grayscale else input_image.convert("L")
+    image_width, image_height = img.size
     # compute the new canvas size
-    tile_count_height = int(np.ceil((source_height / tile_size)))
-    tile_count_width = int(np.ceil((source_width / tile_size)))
+    tile_count_height = int(np.ceil((image_height / tile_size)))
+    tile_count_width = int(np.ceil((image_width / tile_size)))
 
     padded_height = int(tile_count_height * tile_size)
     padded_width = int(tile_count_width * tile_size)
+    # Create a new image with the instructed background and paste the old one into it.
+    # A white background helps with contrast stretching (can lead to reversing CMYK shift).
     background_tuple = (0, 0, 0) if background == "black" else (255, 255, 255)
-
-    new_padded_image = Image.new("RGB", (padded_width, padded_height), background_tuple)
-    new_padded_image.paste(img, (0, 0))
-
-    # Pre-process
+    new_padded_image = Image.new(
+        ("RGB" if not is_grayscale else "L"),
+        (padded_width, padded_height),
+        background_tuple if not is_grayscale else background_tuple[0],
+    )
+    new_padded_image.paste(img, (0, 0))  # Paste at (0, 0) position
+    # Pre-Processing
     image_array = np.array(new_padded_image)
     # contrast stretching: scaling the image based on its own darkest and brightest pixels.
     # For example, a very dark photo (e.g., pixel values from 10 to 50) and a very bright photo (e.g., values
@@ -119,39 +297,48 @@ def denoise_single_image(
     # background to reverse CMYK shift in rare (color) images.
     # Not desirable in general so the alternative path should be taken in the vast majority of cases.
     # See also: https://en.wikipedia.org/wiki/Normalization_(image_processing)#Contrast_Stretching_for_Image_Enhancement
-    if contrast_stretch:
-        image_array = (image_array - np.min(image_array)) / np.ptp(image_array)
-    else:
-        image_array = image_array / 255.0
-    # Casting to FP16 since we use FP16 quantized models wherever possible
-    image_array = image_array.astype(np.float16)
+    image_array = (
+        image_array / 255.0 if not contrast_stretch else (image_array - np.min(image_array)) / np.ptp(image_array)
+    )
+    # The model's engine is being created expecting FP32 input if it is using TensorRT, therefore adjusting accordingly.
+    image_array = image_array.astype(np.float32) if use_fp32 else image_array.astype(np.float16)
     # Rearranging (Width, Height, Channel) -> (Channel, Width, Height) to match the expected input shape
     image_array = rearrange(image_array, "w h c -> c w h")
 
-    padded_tiles = rearrange(
+    # Cut into tiles
+    padded_image_tiles = rearrange(
         image_array,
         "c (h th) (w tw) -> (h w) c th tw",
         th=tile_size,
         tw=tile_size,
     )
-
+    # Defining maximum batch size and getting input and output names
     input_name = model.get_inputs()[0].name
     output_name = model.get_outputs()[0].name
 
+    # Creating an empty list to store all chunks
     all_output_chunks = []
-    num_chunks = padded_tiles.shape[0]
+    num_chunks = padded_image_tiles.shape[0]
 
+    # Looping through all chunks in batches of max_batch_size
     for i in range(0, num_chunks, batch_size):
-        batch_of_chunks = padded_tiles[i : (i + batch_size if i + batch_size < num_chunks else num_chunks)]
+        # Create a batch of chunks, ensuring not to go out of bounds
+        batch_of_chunks = padded_image_tiles[i : min(i + batch_size, num_chunks)]
 
-        # infer
+        # Run inference on the current batch
         model_output = model.run([output_name], {input_name: batch_of_chunks})
-        # append the output
+
+        # Store the output of the batch
         all_output_chunks.append(model_output[0])
 
-    # concat all chunks
+    # Concatenate the results from all batches into a single array
     tiled_output_image = np.concatenate(all_output_chunks, axis=0)
 
+    if scale > 1:
+        image_height = image_height * scale
+        image_width = image_width * scale
+
+    # Reshape it back to the input
     reconstructed_image_with_pad = rearrange(
         tiled_output_image,
         "(h w) c th tw -> (h th) (w tw) c",
@@ -159,27 +346,34 @@ def denoise_single_image(
         w=tile_count_width,
     )
 
-    # post process
+    # Post-processing
+    # See an explanation for image-specific normalization in the pre-processing section.
     if contrast_stretch:
-        postprocessed_array = reconstructed_image_with_pad.astype(np.float16)
+        postprocessed_array = (
+            reconstructed_image_with_pad.astype(np.float32)
+            if use_fp32
+            else reconstructed_image_with_pad.astype(np.float16)
+        )
         postprocessed_array = (postprocessed_array - np.min(postprocessed_array)) / np.ptp(postprocessed_array)
     else:
         postprocessed_array = np.clip(reconstructed_image_with_pad, 0.0, 1.0)
-
-    # scaling back to [0, 255] from [0.0, 1.0]
+    # Scaling back to [0,255] from [0.0, 1.0]
     postprocessed_array = postprocessed_array * 255.0
-
-    # rounding and cast back to uint8
+    # Rounding the array for better casting to uint8.
     postprocessed_array = np.round(postprocessed_array)
     postprocessed_array = postprocessed_array.astype(np.uint8)
     output_image = Image.fromarray(postprocessed_array)
 
-    output_image = output_image.crop((0, 0, source_width, source_height))
-    if orig_palette:
-        palette_image = Image.new("P", (1, 1))
-        palette_image.putpalette(orig_palette)
-        output_image = output_image.convert("RGB").quantize(palette=palette_image, dither=Image.Dither.NONE)
+    # Cropping the image from the overall canvas.
+    output_image = output_image.crop((0, 0, image_width, image_height))
+    if not is_grayscale:
+        if orig_img_palette:
+            palette_image = Image.new("P", (1, 1))
+            palette_image.putpalette(orig_img_palette)
+            output_image = output_image.convert(mode="RGB").quantize(palette=palette_image, dither=Image.Dither.NONE)
+        else:
+            output_image = output_image.convert(mode=orig_img_mode)
     else:
-        output_image = output_image.convert(orig_img_mode)
+        output_image = output_image.convert(mode="L")
 
     return output_image
