@@ -226,6 +226,11 @@ class ActionRescale(BaseAction):
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        if not context.current_dir.exists():
+            context.terminal.warning(f"Current directory {context.current_dir} does not exist, skipping rescale.")
+            context.update_cwd(output_dir)  # We still need to update CWD
+            return
+
         page_re = RegexCollection.page_re()
 
         context.terminal.info(f"Processing {context.current_dir} with posterizer...")

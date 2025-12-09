@@ -77,7 +77,11 @@ class ActionPack(BaseAction):
             context.terminal.info(f"- Compression Level: {self.compress_level}")
             return
 
-        source_dir = (self.source_dir or context.current_dir).resolve()
+        source_dir = self.source_dir or context.current_dir
+        if not source_dir.exists():
+            context.terminal.warning(f"Source directory {source_dir} does not exist, skipping packing.")
+            return
+        source_dir = source_dir.resolve()
         volume_text = format_volume_text(manga_volume=volume.number)
 
         context.terminal.info(f"Packing volume {volume.number} in {source_dir}...")

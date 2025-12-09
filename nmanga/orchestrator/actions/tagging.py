@@ -110,6 +110,10 @@ class ActionTagging(BaseAction):
             context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
             return
 
+        if not context.current_dir.exists():
+            context.terminal.warning(f"Current directory {context.current_dir} does not exist, skipping tagging.")
+            return
+
         exiftool = context.toolsets.get("exiftool")
         if exiftool is None:
             context.terminal.error("exiftool is required for image tagging, but not found!")

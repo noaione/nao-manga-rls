@@ -76,6 +76,10 @@ class ActionOptimize(BaseAction):
             context.terminal.error("Pingo is required for image optimization, but not found!")
             raise RuntimeError("Pingo not found in toolsets")
 
+        if not context.current_dir.exists():
+            context.terminal.warning(f"Current directory {context.current_dir} does not exist, skipping optimize.")
+            return
+
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
         context.terminal.status(f"Optimizing {total_images} images with pingo...")

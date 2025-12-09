@@ -177,8 +177,10 @@ class ActionColorJpegify(BaseAction):
             output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
             output_dir.mkdir(parents=True, exist_ok=True)
         source_dir = context.root_dir / Path(self.source_path) / Path(volume.path)
-        if not source_dir.exists() or not source_dir.is_dir():
+        if not source_dir.exists():
             context.terminal.warning(f"Source path {source_dir} does not exist or is not a directory, skipping...")
+            return
+        if not source_dir.is_dir():
             raise RuntimeError("Source path does not exist or is not a directory.")
 
         cjpegli = context.toolsets.get("cjpegli")

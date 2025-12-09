@@ -146,6 +146,10 @@ class ActionSpreads(BaseAction):
             context.terminal.warning(f"No spreads found for volume {volume.number}, skipping spreads action.")
             return
 
+        if not context.current_dir.exists():
+            context.terminal.warning(f"Current directory {context.current_dir} does not exist, skipping spread join.")
+            return
+
         imagick = context.toolsets.get("magick")
         if imagick is None and not self.pillow:
             context.terminal.error(

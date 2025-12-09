@@ -148,6 +148,13 @@ class ActionML(BaseAction):
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        if not context.current_dir.exists():
+            context.terminal.warning(
+                f"Current directory {context.current_dir} does not exist, skipping {self.action_name.run.lower()}."
+            )
+            context.update_cwd(output_dir)  # We still need to update CWD
+            return
+
         context.terminal.info(f"Loading {self.action_name.load} model from {self.model.name}...")
 
         page_re = RegexCollection.page_re()

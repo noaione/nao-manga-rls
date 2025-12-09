@@ -83,6 +83,12 @@ class ActionShiftName(BaseAction):
             context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
             return
 
+        if not context.current_dir.exists():
+            context.terminal.warning(
+                f"Current directory {context.current_dir} does not exist, skipping shift renaming."
+            )
+            return
+
         all_images: list[Path] = []
         for image_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             all_images.append(image_file.resolve())
@@ -147,6 +153,10 @@ class ActionRename(BaseAction):
         if context.dry_run:
             context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
             context.terminal.info(f"- Total {len(volume.chapters)} chapters would be used for renaming.")
+            return
+
+        if not context.current_dir.exists():
+            context.terminal.warning(f"Current directory {context.current_dir} does not exist, skipping renaming.")
             return
 
         cmx_re = RegexCollection.cmx_re()

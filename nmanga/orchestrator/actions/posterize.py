@@ -177,6 +177,11 @@ class ActionPosterize(BaseAction):
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        if not context.current_dir.exists():
+            context.terminal.warning(f"Current directory {context.current_dir} does not exist, skipping posterize.")
+            context.update_cwd(output_dir)  # We still need to update CWD
+            return
+
         imagick = context.toolsets.get("magick")
         if imagick is None and not self.pillow:
             context.terminal.error("ImageMagick is required for posterizing, but not found!")
