@@ -32,8 +32,6 @@ from typing import TYPE_CHECKING, Literal, cast
 from PIL import Image
 from pydantic import ConfigDict, Field
 
-from nmanga.orchestrator.actions._base import ToolsKind
-
 from ... import file_handler, term
 from ...autolevel import (
     analyze_gray_shades,
@@ -43,7 +41,7 @@ from ...autolevel import (
 )
 from ...common import RegexCollection, lowest_or, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
+from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig

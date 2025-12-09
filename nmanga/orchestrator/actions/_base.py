@@ -122,6 +122,10 @@ class ActionKind(str, Enum):
     """Rename all images in a volume, similar to `nmanga releases` command rename"""
     DENOISE = "denoise"
     """Denoise all images in a volume with denoise-trt"""
+    UPSCALE = "upscale"
+    """Upscale all images in a volume with upscale-trt"""
+    RESCALE = "rescale"
+    """Rescale all images in a volume with Pillow and cykooz.resizer"""
     AUTOLEVEL = "autolevel"
     """Auto level all images with Pillow"""
     LEVEL = "level"
@@ -140,6 +144,8 @@ class ActionKind(str, Enum):
     """Convert color images to JPEG format with cjpegli"""
     INTERRUPT = "interrupt"
     """Interrupt the action chain"""
+    CHANGE_CWD = "change_cwd"
+    """Change the current working directory"""
 
 
 class ToolsKind(str, Enum):

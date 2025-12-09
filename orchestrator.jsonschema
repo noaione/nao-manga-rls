@@ -100,6 +100,62 @@
             "title": "nmanga Orchestrator - Auto Level Images Action",
             "type": "object"
         },
+        "ActionChangeCwd": {
+            "additionalProperties": false,
+            "description": "Action to change the current working directory",
+            "properties": {
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
+                },
+                "kind": {
+                    "const": "change_cwd",
+                    "default": "change_cwd",
+                    "title": "Change Working Directory Action",
+                    "type": "string"
+                },
+                "directory": {
+                    "title": "Target Path",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "directory"
+            ],
+            "title": "nmanga Orchestrator - Change Working Directory Action",
+            "type": "object"
+        },
         "ActionColorJpegify": {
             "additionalProperties": false,
             "description": "Action to convert color images to JPEG format with cjpegli",
@@ -217,20 +273,9 @@
                     "default": null,
                     "title": "Conditions to run the action"
                 },
-                "kind": {
-                    "const": "denoise",
-                    "default": "denoise",
-                    "title": "Denoise Images Action",
-                    "type": "string"
-                },
                 "model": {
                     "format": "file-path",
                     "title": "The ONNX Model Path",
-                    "type": "string"
-                },
-                "base_path": {
-                    "default": "denoised",
-                    "title": "Output Base Path",
                     "type": "string"
                 },
                 "device_id": {
@@ -264,6 +309,34 @@
                     "default": false,
                     "title": "Contrast Stretch After Denoising",
                     "type": "boolean"
+                },
+                "precompiled": {
+                    "default": false,
+                    "title": "Is precompiled TensorRT model",
+                    "type": "boolean"
+                },
+                "data_type": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/MLDataType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "The data type to use for TensorRT model"
+                },
+                "base_path": {
+                    "default": "denoised",
+                    "title": "Output Base Path",
+                    "type": "string"
+                },
+                "kind": {
+                    "const": "denoise",
+                    "default": "denoise",
+                    "title": "Denoise Images Action",
+                    "type": "string"
                 }
             },
             "required": [
@@ -762,6 +835,103 @@
             "title": "nmanga Orchestrator - Daiz-like Rename Images Action",
             "type": "object"
         },
+        "ActionRescale": {
+            "additionalProperties": false,
+            "description": "Action to rescale images to a specified size.",
+            "properties": {
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
+                },
+                "kind": {
+                    "const": "rescale",
+                    "default": "rescale",
+                    "title": "Rescale Images Action",
+                    "type": "string"
+                },
+                "base_path": {
+                    "default": "rescaled",
+                    "title": "Output Base Path",
+                    "type": "string"
+                },
+                "rescale": {
+                    "discriminator": {
+                        "mapping": {
+                            "exact": "#/$defs/RescaleTargetExact",
+                            "fit": "#/$defs/RescaleTargetFit",
+                            "height": "#/$defs/RescaleTargetHeight",
+                            "multiply": "#/$defs/RescaleTargetMultiply",
+                            "width": "#/$defs/RescaleTargetWidth"
+                        },
+                        "propertyName": "mode"
+                    },
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/RescaleTargetExact"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetWidth"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetHeight"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetFit"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetMultiply"
+                        }
+                    ],
+                    "title": "Rescale Target"
+                },
+                "kernel": {
+                    "$ref": "#/$defs/ResizeKernel",
+                    "title": "Rescale Kernel"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Processing Threads",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "rescale",
+                "kernel"
+            ],
+            "title": "nmanga Orchestrator - Rescale Images Action",
+            "type": "object"
+        },
         "ActionShiftName": {
             "additionalProperties": false,
             "description": "Action to shift rename of a volume\n\nTitle and volume are derived from the main config so they are not included here.",
@@ -986,6 +1156,129 @@
             "title": "nmanga Orchestrator - Image Tagging Action",
             "type": "object"
         },
+        "ActionUpscale": {
+            "additionalProperties": false,
+            "description": "Action to upscale all images in a volume with upscale-trt",
+            "properties": {
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
+                },
+                "model": {
+                    "format": "file-path",
+                    "title": "The ONNX Model Path",
+                    "type": "string"
+                },
+                "device_id": {
+                    "default": 0,
+                    "minimum": 0,
+                    "title": "Device ID",
+                    "type": "integer"
+                },
+                "batch_size": {
+                    "default": 64,
+                    "minimum": 1,
+                    "title": "Batch Size",
+                    "type": "integer"
+                },
+                "tile_size": {
+                    "default": 128,
+                    "minimum": 64,
+                    "title": "Tile Size",
+                    "type": "integer"
+                },
+                "background": {
+                    "default": "black",
+                    "enum": [
+                        "white",
+                        "black"
+                    ],
+                    "title": "Padding Background Color",
+                    "type": "string"
+                },
+                "contrast_strectch": {
+                    "default": false,
+                    "title": "Contrast Stretch After Denoising",
+                    "type": "boolean"
+                },
+                "precompiled": {
+                    "default": false,
+                    "title": "Is precompiled TensorRT model",
+                    "type": "boolean"
+                },
+                "data_type": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/MLDataType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "The data type to use for TensorRT model"
+                },
+                "base_path": {
+                    "default": "upscaled",
+                    "title": "Output Base Path",
+                    "type": "string"
+                },
+                "kind": {
+                    "const": "upscale",
+                    "default": "upscale",
+                    "title": "Upscale Images Action",
+                    "type": "string"
+                },
+                "rescale": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/UpscaleRescaleConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Rescale Configuration"
+                }
+            },
+            "required": [
+                "model"
+            ],
+            "title": "nmanga Orchestrator - Upscale Images Action",
+            "type": "object"
+        },
         "AndModel": {
             "description": "Pydantic model for a logical AND.\n\nThis will be converted to an `And` DSL object.",
             "properties": {
@@ -1119,6 +1412,15 @@
             "title": "ExporterType",
             "type": "string"
         },
+        "MLDataType": {
+            "enum": [
+                "fp32",
+                "fp16",
+                "bf16"
+            ],
+            "title": "MLDataType",
+            "type": "string"
+        },
         "MetadataNamingConfig": {
             "additionalProperties": false,
             "description": "The configuration for metadata naming\n\nThis is used to add extra metadata to the filename, e.g. [Cover], [ToC], etc.",
@@ -1238,6 +1540,146 @@
             "title": "OrModel",
             "type": "object"
         },
+        "RescaleTargetExact": {
+            "description": "Rescale target specifying exact width and height.",
+            "properties": {
+                "mode": {
+                    "const": "exact",
+                    "default": "exact",
+                    "title": "Resize Mode",
+                    "type": "string"
+                },
+                "width": {
+                    "minimum": 1,
+                    "title": "Target Width",
+                    "type": "integer"
+                },
+                "height": {
+                    "minimum": 1,
+                    "title": "Target Height",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "width",
+                "height"
+            ],
+            "title": "RescaleTargetExact",
+            "type": "object"
+        },
+        "RescaleTargetFit": {
+            "description": "Rescale target specifying maximum width and height, maintaining aspect ratio.",
+            "properties": {
+                "mode": {
+                    "const": "fit",
+                    "default": "fit",
+                    "title": "Resize Mode",
+                    "type": "string"
+                },
+                "width": {
+                    "minimum": 1,
+                    "title": "Maximum Width",
+                    "type": "integer"
+                },
+                "height": {
+                    "minimum": 1,
+                    "title": "Maximum Height",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "width",
+                "height"
+            ],
+            "title": "RescaleTargetFit",
+            "type": "object"
+        },
+        "RescaleTargetHeight": {
+            "description": "Rescale target specifying height only, width is computed to maintain aspect ratio.",
+            "properties": {
+                "mode": {
+                    "const": "height",
+                    "default": "height",
+                    "title": "Resize Mode",
+                    "type": "string"
+                },
+                "height": {
+                    "minimum": 1,
+                    "title": "Target Height",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "height"
+            ],
+            "title": "RescaleTargetHeight",
+            "type": "object"
+        },
+        "RescaleTargetMultiply": {
+            "description": "Rescale target specifying a scaling factor.",
+            "properties": {
+                "mode": {
+                    "const": "multiply",
+                    "default": "multiply",
+                    "title": "Resize Mode",
+                    "type": "string"
+                },
+                "factor": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "number"
+                        }
+                    ],
+                    "gt": 0,
+                    "title": "Scaling Factor"
+                }
+            },
+            "required": [
+                "factor"
+            ],
+            "title": "RescaleTargetMultiply",
+            "type": "object"
+        },
+        "RescaleTargetWidth": {
+            "description": "Rescale target specifying width only, height is computed to maintain aspect ratio.",
+            "properties": {
+                "mode": {
+                    "const": "width",
+                    "default": "width",
+                    "title": "Resize Mode",
+                    "type": "string"
+                },
+                "width": {
+                    "minimum": 1,
+                    "title": "Target Width",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "width"
+            ],
+            "title": "RescaleTargetWidth",
+            "type": "object"
+        },
+        "ResizeKernel": {
+            "description": "Resampling kernels for image rescaling.",
+            "enum": [
+                "nearest",
+                "box",
+                "bicubic",
+                "bilinear",
+                "catmull_rom",
+                "mitchell",
+                "gaussian",
+                "lanczos",
+                "hamming"
+            ],
+            "title": "ResizeKernel",
+            "type": "string"
+        },
         "SkipActionConfig": {
             "additionalProperties": false,
             "description": "What actions to skip for a volume\n\nNote: Not all actions support skipping, those that do not will be ignored",
@@ -1290,6 +1732,51 @@
             ],
             "title": "SpreadDirection",
             "type": "string"
+        },
+        "UpscaleRescaleConfig": {
+            "description": "Configuration for rescaling after upscaling.",
+            "properties": {
+                "target": {
+                    "discriminator": {
+                        "mapping": {
+                            "exact": "#/$defs/RescaleTargetExact",
+                            "fit": "#/$defs/RescaleTargetFit",
+                            "height": "#/$defs/RescaleTargetHeight",
+                            "multiply": "#/$defs/RescaleTargetMultiply",
+                            "width": "#/$defs/RescaleTargetWidth"
+                        },
+                        "propertyName": "mode"
+                    },
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/RescaleTargetExact"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetWidth"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetHeight"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetFit"
+                        },
+                        {
+                            "$ref": "#/$defs/RescaleTargetMultiply"
+                        }
+                    ],
+                    "title": "Rescale Target"
+                },
+                "kernel": {
+                    "$ref": "#/$defs/ResizeKernel",
+                    "title": "Rescale Kernel"
+                }
+            },
+            "required": [
+                "target",
+                "kernel"
+            ],
+            "title": "UpscaleRescaleConfig",
+            "type": "object"
         },
         "VolumeConfig": {
             "additionalProperties": false,
@@ -1509,6 +1996,7 @@
                 "discriminator": {
                     "mapping": {
                         "autolevel": "#/$defs/ActionAutolevel",
+                        "change_cwd": "#/$defs/ActionChangeCwd",
                         "color_jpegify": "#/$defs/ActionColorJpegify",
                         "denoise": "#/$defs/ActionDenoise",
                         "interrupt": "#/$defs/ActionInterrupt",
@@ -1518,9 +2006,11 @@
                         "pack": "#/$defs/ActionPack",
                         "posterize": "#/$defs/ActionPosterize",
                         "rename": "#/$defs/ActionRename",
+                        "rescale": "#/$defs/ActionRescale",
                         "shift_rename": "#/$defs/ActionShiftName",
                         "spreads": "#/$defs/ActionSpreads",
-                        "tagging": "#/$defs/ActionTagging"
+                        "tagging": "#/$defs/ActionTagging",
+                        "upscale": "#/$defs/ActionUpscale"
                     },
                     "propertyName": "kind"
                 },
@@ -1536,6 +2026,12 @@
                     },
                     {
                         "$ref": "#/$defs/ActionDenoise"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionUpscale"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionRescale"
                     },
                     {
                         "$ref": "#/$defs/ActionAutolevel"
@@ -1563,6 +2059,9 @@
                     },
                     {
                         "$ref": "#/$defs/ActionInterrupt"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionChangeCwd"
                     }
                 ]
             },

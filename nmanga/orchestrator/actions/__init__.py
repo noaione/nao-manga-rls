@@ -13,18 +13,20 @@ from pydantic import Field
 
 from ._base import *
 from .colors import *
-from .denoise import *
 from .leveling import *
+from .ml import *
 from .optimize import *
-from .others import *
 from .pack import *
 from .posterize import *
 from .renamer import *
+from .rescale import *
 from .spreads import *
 from .tagging import *
+from .utils import *
 
 __all__ = (
     "ActionAutolevel",
+    "ActionChangeCwd",
     "ActionColorJpegify",
     "ActionDenoise",
     "ActionInterrupt",
@@ -35,9 +37,11 @@ __all__ = (
     "ActionPack",
     "ActionPosterize",
     "ActionRename",
+    "ActionRescale",
     "ActionShiftName",
     "ActionSpreads",
     "ActionTagging",
+    "ActionUpscale",
     "Actions",
     "BaseAction",
     "ThreadedResult",
@@ -50,6 +54,8 @@ ActionType: TypeAlias = (
     | ActionSpreads
     | ActionRename
     | ActionDenoise
+    | ActionUpscale
+    | ActionRescale
     | ActionAutolevel
     | ActionLevel
     | ActionPosterize
@@ -59,6 +65,7 @@ ActionType: TypeAlias = (
     | ActionColorJpegify
     | ActionPack
     | ActionInterrupt
+    | ActionChangeCwd
 )
 Actions = Annotated[ActionType, Field(discriminator="kind", description="The collection of all supported actions.")]
 """

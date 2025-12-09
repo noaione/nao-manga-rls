@@ -49,10 +49,10 @@ __all__ = (
 logger = logging.getLogger(__name__)
 
 
-class MLDataType(int, Enum):
-    FP32 = 1
-    FP16 = 2
-    BF16 = 3
+class MLDataType(str, Enum):
+    FP32 = "fp32"
+    FP16 = "fp16"
+    BF16 = "bf16"
 
     @classmethod
     def from_str(cls, type_str: str) -> MLDataType:

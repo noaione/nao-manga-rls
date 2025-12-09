@@ -39,6 +39,7 @@ dependencies = [
     "pymupdf==1.26.6",
     "defusedxml==0.7.1",
     "rich-click>=1.9.4",
+    "cykooz.resizer[pillow]==3.1.1",
 ]
 
 [project.optional-dependencies]

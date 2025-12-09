@@ -25,6 +25,7 @@ from .common import SkipActionConfig, SkipActionKind
 
 __all__ = (
     "ActionAutolevel",
+    "ActionChangeCwd",
     "ActionColorJpegify",
     "ActionDenoise",
     "ActionInterrupt",
@@ -35,9 +36,11 @@ __all__ = (
     "ActionPack",
     "ActionPosterize",
     "ActionRename",
+    "ActionRescale",
     "ActionShiftName",
     "ActionSpreads",
     "ActionTagging",
+    "ActionUpscale",
     "Actions",
     "BaseAction",
     "ChapterConfig",

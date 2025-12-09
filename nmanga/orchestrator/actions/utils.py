@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import ConfigDict, Field
@@ -33,7 +34,44 @@ from ._base import ActionKind, BaseAction, WorkerContext
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
 
-__all__ = ("ActionInterrupt",)
+__all__ = (
+    "ActionChangeCwd",
+    "ActionInterrupt",
+)
+
+
+class ActionChangeCwd(BaseAction):
+    """
+    Action to change the current working directory
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Change Working Directory Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    kind: Literal[ActionKind.CHANGE_CWD] = Field(ActionKind.CHANGE_CWD, title="Change Working Directory Action")
+    """The kind of action"""
+    directory: str = Field(title="Target Path")
+    """The target directory to change to"""
+
+    def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
+        """
+        Run the action on a volume
+
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        """
+
+        output_dir = context.root_dir / Path(self.directory) / Path(volume.path)
+        context.update_cwd(output_dir)
+
+        if context.dry_run:
+            context.terminal.info(f"- Target: {output_dir}")
+            return
 
 
 class ActionInterrupt(BaseAction):
