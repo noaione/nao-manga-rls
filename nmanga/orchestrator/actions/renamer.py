@@ -92,10 +92,11 @@ class ActionShiftName(BaseAction):
         volume_text = format_volume_text(manga_volume=volume.number)
 
         context.terminal.info(f"Renaming {len(all_images)} images in {context.current_dir}...")
+        prefer_title = self.title or volume.title or orchestrator.title
         renaming_maps = shift_renaming_gen(
             all_images,
             start_index=self.start,
-            title=self.title or orchestrator.title,
+            title=prefer_title,
             volume=volume_text,
             spreads_aware=self.spreads_aware,
             reverse=self.reverse,
@@ -157,6 +158,8 @@ class ActionRename(BaseAction):
                 packing_extra[chapter.base] = []
             packing_extra[chapter.base].append(chapter)
 
+        prefer_title = self.title or volume.title or orchestrator.title
+
         # Make into chapter range
         meta_namings = volume.meta_name_maps
         renaming_maps: dict[str, Path] = {}  # This is new name -> old path (yeah)
@@ -206,7 +209,7 @@ class ActionRename(BaseAction):
                 extra_name = meta_namings[page_num_int]
 
             image_filename, _ = format_daiz_like_filename(
-                manga_title=self.title or orchestrator.title,
+                manga_title=prefer_title,
                 manga_publisher=orchestrator.publisher,
                 manga_year=volume.year,
                 chapter_info=selected_range,

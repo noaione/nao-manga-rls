@@ -117,8 +117,10 @@ class ActionTagging(BaseAction):
 
         volume_text = format_volume_text(manga_volume=volume.number)
 
+        prefer_title = self.title or volume.title or orchestrator.title
+
         archive_filename = format_archive_filename(
-            manga_title=self.title or orchestrator.title,
+            manga_title=prefer_title,
             manga_year=volume.year,
             publication_type=volume.publication,
             ripper_credit=orchestrator.credit,

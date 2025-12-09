@@ -125,6 +125,8 @@ class VolumeConfig(BaseModel):
     """The directory of the volume, relative to the base_path"""
     number: int | float = Field(..., title="Volume Number")
     """The volume number, can be float for decimals"""
+    title: str | None = Field(None, title="Volume Title")
+    """The title of the volume, this is used for tagging + renaming, if not provided would use the manga title"""
     year: int = Field(default_factory=current_year, ge=1000, le=9999, title="Volume Year")
     """The year of the volume release, this is used for tagging"""
     oneshot: bool = Field(False, title="Is Oneshot")

@@ -313,6 +313,8 @@ def orchestrator_validate(
     for volume in config.volumes:
         console.info(f"   - Volume {volume.number}:")
         console.info(f"     - Path: {volume.path}")
+        if volume.title:
+            console.info(f"     - Title: {volume.title}")
         console.info(f"     - Year: {volume.year}")
         console.info(f"     - Publication: {volume.pub_type}")
         console.info(f"     - Quality: {volume.quality}")
