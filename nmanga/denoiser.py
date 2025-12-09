@@ -25,7 +25,6 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import logging
 import sys
@@ -141,7 +140,7 @@ def prepare_model_runtime(model_path: Path, device_id: int = 0, is_verbose: bool
 
 def get_model_information(model_path: Path) -> tuple[str, int]:
     try:
-        import onnx
+        import onnx  # pyright: ignore[reportMissingImports]
     except ImportError:
         warnings.warn(
             "onnx is not installed, cannot determine model input name. "

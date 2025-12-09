@@ -256,7 +256,7 @@ def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], u
                 param_hint="path_or_archive",
             )
     try:
-        import torch
+        import torch  # pyright: ignore[reportMissingImports]
     except ImportError as exc:
         raise click.ClickException("PyTorch is not installed. Please install it to use this command.") from exc
 
@@ -282,7 +282,7 @@ def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], u
         typing.Self = TypingSelf  # type: ignore
 
     try:
-        from resselt import load_from_file
+        from resselt import load_from_file  # pyright: ignore[reportMissingImports]
     except ImportError as exc:
         raise click.ClickException("resselt is not installed. Please install it to use this command.") from exc
 
