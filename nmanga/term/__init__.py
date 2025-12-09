@@ -237,10 +237,13 @@ class Console(ConsoleInterface):
     def stop_progress(self, progress: NMProgress, text: str | None = None, *, skip_total: bool = False) -> None:
         for task in progress.tasks:
             if task.total is not None and not skip_total:
+                progress.update(task.id, completed=task.total, run_state=ProgressStopState.COMPLETED)
+            elif task.total is not None and skip_total:
                 run_state = (
                     ProgressStopState.COMPLETED if task.completed >= task.total else ProgressStopState.EARLY_STOP
                 )
-                progress.update(task.id, completed=task.total, run_state=run_state)
+                progress.update(task.id, run_state=run_state)
+
         progress.stop()
         if text is not None:
             self.info(text)
