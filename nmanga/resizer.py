@@ -27,7 +27,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal, overload
 
-from cykooz.resizer import FilterType, ResizeAlg, ResizeOptions, Resizer
+from cykooz.resizer import FilterType, ResizeAlg, ResizeOptions, Resizer, ImageData, PixelType
 from PIL import Image
 
 __all__ = (
@@ -67,39 +67,32 @@ class ResizeKernel(str, Enum):
             case ResizeKernel.Nearest:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.nearest(),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.Box:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.convolution(FilterType.box),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.Bicubic:
                 return Image.Resampling.BICUBIC
             case ResizeKernel.Bilinear:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.convolution(FilterType.bilinear),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.CatmullRom:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.convolution(FilterType.catmull_rom),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.Mitchell:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.convolution(FilterType.mitchell),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.Gaussian:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.convolution(FilterType.gaussian),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.Lanczos:
                 return ResizeOptions(
                     resize_alg=ResizeAlg.convolution(FilterType.lanczos3),
-                    use_alpha=False,  # We don't care about alpha channel for PIL resampling
                 )
             case ResizeKernel.Hamming:
                 return Image.Resampling.HAMMING
@@ -246,6 +239,41 @@ class ResizeTarget:
                 return (new_width, new_height)
 
 
+def get_image_mode(img: Image.Image) -> PixelType:
+    match img.mode:
+        case "L":
+            return PixelType.U8
+        case "LA":
+            return PixelType.U8x2
+        case "RGB":
+            return PixelType.U8x3
+        case "RGBA" | "RGBa" | "CMYK":
+            return PixelType.U8x4
+        case "I":
+            return PixelType.I32
+        case "F":
+            return PixelType.F32
+        case _:
+            raise ValueError(f"Unsupported image mode: {img.mode}")
+
+
+def make_image_pair(in_img: Image.Image, out_size: tuple[int, int]) -> tuple[ImageData, ImageData]:
+    pixels = in_img.tobytes()
+    img_mode = get_image_mode(in_img)
+    src_img = ImageData(
+        width=in_img.width,
+        height=in_img.height,
+        pixel_type=img_mode,
+        pixels=pixels,
+    )
+    dest_img = ImageData(
+        width=out_size[0],
+        height=out_size[1],
+        pixel_type=img_mode,
+    )
+    return src_img, dest_img
+
+
 def rescale_image(
     img: Image.Image,
     target: ResizeTarget,
@@ -266,9 +294,10 @@ def rescale_image(
 
     if isinstance(resample, ResizeOptions):
         resizer = Resizer()
-        dst_image = Image.new(img.mode, (new_width, new_height))
-        resizer.resize_pil(img, dst_image, resample)
-        return dst_image
+        src_image, dst_image = make_image_pair(img, (new_width, new_height))
+        resizer.resize(src_image, dst_image, resample)
+        out_img = Image.frombytes(img.mode, (dst_image.width, dst_image.height), dst_image.get_buffer())
+        return out_img
     elif isinstance(resample, Image.Resampling):
         return img.resize((new_width, new_height), resample=resample)
     else:

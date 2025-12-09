@@ -333,8 +333,10 @@ class ActionUpscale(ActionML):
                 rescaler = metafield.rescale
 
         target = rescaler.to_params()
-        return rescale_image(
+        output_img = rescale_image(
             image,
             target=target,
             kernel=self.rescale.kernel,
         )
+        image.close()
+        return output_img
