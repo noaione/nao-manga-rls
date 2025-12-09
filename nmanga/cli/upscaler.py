@@ -239,7 +239,22 @@ def upscale_trt(
     show_default=True,
     help="Use torch dynamo to optimize the model before exporting to ONNX",
 )
-def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], use_dynamo: bool):
+@click.option(
+    "-op",
+    "--opset",
+    "opset_version",
+    type=options.POSITIVE_INT,
+    default=20,
+    show_default=True,
+    help="The ONNX opset version to use for exporting the model",
+)
+@time_program
+def export_to_onnx(
+    path_or_archive: Path,
+    quant_size: Literal["fp32", "bf16"],
+    use_dynamo: bool,
+    opset_version: int,
+):
     """Export torch model or safetensors model to ONNX format"""
 
     file_candidates: list[Path] = []
@@ -255,6 +270,13 @@ def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], u
                 f"{path_or_archive} is not a valid model file. Please provide a .pt, .pth or .safetensors file.",
                 param_hint="path_or_archive",
             )
+
+    if not file_candidates:
+        raise click.BadParameter(
+            f"No valid model files found in {path_or_archive}. Please provide a .pt, .pth or .safetensors file.",
+            param_hint="path_or_archive",
+        )
+
     try:
         import torch  # pyright: ignore[reportMissingImports]
     except ImportError as exc:
@@ -283,6 +305,7 @@ def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], u
 
     try:
         from resselt import load_from_file  # pyright: ignore[reportMissingImports]
+        from resselt.factory.arch import ModelMetadata
     except ImportError as exc:
         raise click.ClickException("resselt is not installed. Please install it to use this command.") from exc
 
@@ -301,9 +324,15 @@ def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], u
 
         console.info(f"Loading model file: {model_file.name}...")
         model_torch: torch.nn.Module = load_from_file(str(model_file))
+        param_info = getattr(model_torch, "parameters_info", None)
+
+        input_channel = 3
+        if isinstance(param_info, ModelMetadata):
+            input_channel = param_info.in_channels
+
         model_torch = model_torch.to("cpu", dtype=torch_dtype)
         autocast_ctx = torch.autocast(device_type="cpu", dtype=torch_dtype, enabled=True)
-        input_tensor = torch.rand((1, 3, 32, 32))
+        input_tensor = torch.rand((1, input_channel, 32, 32))
 
         with autocast_ctx:
             torch.onnx.export(
@@ -311,7 +340,7 @@ def export_to_onnx(path_or_archive: Path, quant_size: Literal["fp32", "bf16"], u
                 (input_tensor,),
                 str(onnx_path),
                 external_data=False,
-                opset_version=20,  # Although op23 is available
+                opset_version=opset_version,
                 input_names=["input"],
                 output_names=["output"],
                 dynamo=use_dynamo,
