@@ -35,7 +35,7 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..denoiser import MLDataType, UpscalingSize, denoise_single_image, prepare_model_runtime_builders
+from ..denoiser import MLDataType, denoise_single_image, prepare_model_runtime_builders
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler
@@ -110,15 +110,6 @@ console = term.get_console()
     show_default=True,
     help="The quantization size to use for inference",
 )
-@click.option(
-    "-uf",
-    "--upscale-factor",
-    "upscale_factor",
-    type=click.Choice([2, 4]),
-    default=4,
-    show_default=True,
-    help="The upscaling factor to use",
-)
 @options.recursive
 @time_program
 @check_config_first
@@ -132,7 +123,6 @@ def upscale_trt(
     contrast_stretch: bool,
     background: Literal["black", "white"],
     quant_size: str,
-    upscale_factor: int,
     recursive: bool,
 ):
     """Upscale images using TensorRT models."""
@@ -159,7 +149,6 @@ def upscale_trt(
     is_tensorrt_available = importlib.util.find_spec("tensorrt")
 
     # Try importing stuff here
-    up_factor = UpscalingSize.from_int(upscale_factor)
     ml_quant = MLDataType.from_str(quant_size)
     console.info(f"Loading model: {model_path.name}...")
     console.info(f"Using device ID: {device_id}")
@@ -204,7 +193,6 @@ def upscale_trt(
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
                 background=background,
-                scale=up_factor,
                 use_fp32=True,
             )
 

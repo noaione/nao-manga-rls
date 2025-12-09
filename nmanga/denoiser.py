@@ -41,30 +41,12 @@ if TYPE_CHECKING:
 
 __all__ = (
     "MLDataType",
-    "UpscalingSize",
     "denoise_single_image",
     "prepare_model_runtime",
     "prepare_model_runtime_builders",
 )
 
 logger = logging.getLogger(__name__)
-
-
-class UpscalingSize(int, Enum):
-    x1 = 1
-    x2 = 2
-    x4 = 4
-
-    @classmethod
-    def from_int(cls, size_int: int) -> UpscalingSize:
-        if size_int == 1:
-            return cls.x1
-        elif size_int == 2:
-            return cls.x2
-        elif size_int == 4:
-            return cls.x4
-        else:
-            raise ValueError(f"Unknown UpscalingSize integer: {size_int}")
 
 
 class MLDataType(int, Enum):
@@ -259,12 +241,15 @@ def denoise_single_image(
     tile_size: int = 128,
     contrast_stretch: bool = False,
     background: Literal["white", "black"] = "black",
-    scale: UpscalingSize = UpscalingSize.x1,
     use_fp32: bool = False,
 ) -> Image.Image:
     import numpy as np  # type: ignore
     from einops import rearrange  # type: ignore
 
+    # Calculate upscale scale from model input and output shapes
+    upscale_scale = int(model.get_outputs()[0].shape[2] // model.get_inputs()[0].shape[2])
+    if upscale_scale not in (1, 2, 4):
+        raise ValueError(f"Unsupported upscale scale: {upscale_scale}")
     input_channel_count: int = model.get_inputs()[0].shape[1]
     is_grayscale = bool(input_channel_count == 1)
 
@@ -333,9 +318,9 @@ def denoise_single_image(
     # Concatenate the results from all batches into a single array
     tiled_output_image = np.concatenate(all_output_chunks, axis=0)
 
-    if scale > 1:
-        image_height = image_height * scale
-        image_width = image_width * scale
+    if upscale_scale > 1:
+        image_height = image_height * upscale_scale
+        image_width = image_width * upscale_scale
 
     # Reshape it back to the input
     reconstructed_image_with_pad = rearrange(
