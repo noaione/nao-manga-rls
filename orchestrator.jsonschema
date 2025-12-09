@@ -1939,6 +1939,18 @@
                     },
                     "title": "Skip Actions Configurations",
                     "type": "array"
+                },
+                "metafields": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/VolumeMetafields"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Volume Metafields"
                 }
             },
             "required": [
@@ -1946,6 +1958,53 @@
                 "number"
             ],
             "title": "nmanga Orchestrator Volume Configuration",
+            "type": "object"
+        },
+        "VolumeMetafields": {
+            "additionalProperties": false,
+            "description": "Extra metafields for a volume\n\nBasically some overrides for certain parameters in the volume",
+            "properties": {
+                "rescale": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "exact": "#/$defs/RescaleTargetExact",
+                                    "fit": "#/$defs/RescaleTargetFit",
+                                    "height": "#/$defs/RescaleTargetHeight",
+                                    "multiply": "#/$defs/RescaleTargetMultiply",
+                                    "width": "#/$defs/RescaleTargetWidth"
+                                },
+                                "propertyName": "mode"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/RescaleTargetExact"
+                                },
+                                {
+                                    "$ref": "#/$defs/RescaleTargetWidth"
+                                },
+                                {
+                                    "$ref": "#/$defs/RescaleTargetHeight"
+                                },
+                                {
+                                    "$ref": "#/$defs/RescaleTargetFit"
+                                },
+                                {
+                                    "$ref": "#/$defs/RescaleTargetMultiply"
+                                }
+                            ],
+                            "title": "Rescale Target"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Rescale Target Override"
+                }
+            },
+            "title": "nmanga Orchestrator Volume Metafields",
             "type": "object"
         }
     },

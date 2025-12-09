@@ -147,7 +147,8 @@ def _runner_rescale_threaded(
     log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
-    action: "ActionRescale",
+    rescale: RescaleTarget,
+    kernel: ResizeKernel,
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
     cnsl = term.with_thread_queue(log_q)
@@ -161,11 +162,11 @@ def _runner_rescale_threaded(
         return ThreadedResult.COPIED
 
     img = Image.open(img_path)
-    res_target = action.rescale.to_params()
+    res_target = rescale.to_params()
     rescaled_img = rescale_image(
         img,
         target=res_target,
-        kernel=action.kernel,
+        kernel=kernel,
     )
 
     rescaled_img.save(dest_path, format="PNG")
@@ -175,7 +176,7 @@ def _runner_rescale_threaded(
 
 
 def _runner_rescale_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, "ActionRescale", SkipActionKind | None],
+    args: tuple[term.MessageQueue, Path, Path, RescaleTarget, ResizeKernel, SkipActionKind | None],
 ) -> ThreadedResult:
     return _runner_rescale_threaded(*args)
 
@@ -245,6 +246,11 @@ class ActionRescale(BaseAction):
 
             images_complete.append((image, is_skip_action))
 
+        rescaler = self.rescale
+        if metafield := volume.metafields:
+            if metafield.rescale is not None:
+                rescaler = metafield.rescale
+
         results: list[ThreadedResult] = []
         progress = context.terminal.make_progress()
         task = progress.add_task("Rescaling images...", finished_text="Rescaled images", total=total_images)
@@ -252,7 +258,10 @@ class ActionRescale(BaseAction):
         with threaded_worker(context.terminal, lowest_or(self.threads, images_complete)) as (pool, log_q):
             for result in pool.imap_unordered(
                 _runner_rescale_threaded_star,
-                [(log_q, image, output_dir, self, is_skip_action) for image, is_skip_action in images_complete],
+                [
+                    (log_q, image, output_dir, rescaler, self.kernel, is_skip_action)
+                    for image, is_skip_action in images_complete
+                ],
             ):
                 results.append(result)
                 progress.update(task, advance=1)

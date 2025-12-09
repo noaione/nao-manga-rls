@@ -18,6 +18,8 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
+from nmanga.orchestrator.actions.rescale import RescaleTarget
+
 from ..common import ChapterRange
 from ..constants import MANGA_PUBLICATION_TYPES, MangaPublication
 from .actions import *
@@ -109,6 +111,24 @@ class MetadataNamingConfig(BaseModel):
     """The page number to add the tag to, can be a list for multiple pages"""
 
 
+class VolumeMetafields(BaseModel):
+    """
+    Extra metafields for a volume
+
+    Basically some overrides for certain parameters in the volume
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator Volume Metafields",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    rescale: RescaleTarget | None = Field(None, title="Rescale Target Override")
+    """The rescale target override for the volume"""
+
+
 class VolumeConfig(BaseModel):
     """
     The configuration for a volume
@@ -162,6 +182,8 @@ class VolumeConfig(BaseModel):
     """The publication type of the volume, this is used for tagging"""
     skip_actions: list[SkipActionConfig] = Field(default_factory=list, title="Skip Actions Configurations")
     """The list of actions to skip for this volume"""
+    metafields: VolumeMetafields | None = Field(None, title="Volume Metafields")
+    """The extra metafields for the volume"""
 
     @cached_property
     def publication(self) -> MangaPublication:
@@ -296,13 +318,13 @@ class OrchestratorConfig(BaseModel):
     def check_volumes_duplicates(self) -> Self:
         existing_volumes = set()
         for vol in self.volumes:
-            if vol.number in existing_volumes:
+            if vol.path in existing_volumes:
                 raise PydanticCustomError(
                     "duplicate_volume",
                     "Duplicate volume number found: {volume}",
-                    {"volume": vol.number},
+                    {"volume": vol.path},
                 )
-            existing_volumes.add(vol.number)
+            existing_volumes.add(vol.path)
         return self
 
     @cached_property

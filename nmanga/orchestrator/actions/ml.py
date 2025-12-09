@@ -320,7 +320,12 @@ class ActionUpscale(ActionML):
         if self.rescale is None:
             return image
 
-        target = self.rescale.target.to_params()
+        rescaler = self.rescale.target
+        if metafield := volume.metafields:
+            if metafield.rescale is not None:
+                rescaler = metafield.rescale
+
+        target = rescaler.to_params()
         return rescale_image(
             image,
             target=target,
