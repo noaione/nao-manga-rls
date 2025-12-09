@@ -1797,6 +1797,18 @@
                     ],
                     "title": "Volume Number"
                 },
+                "title": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Volume Title"
+                },
                 "year": {
                     "maximum": 9999,
                     "minimum": 1000,
