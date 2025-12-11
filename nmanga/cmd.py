@@ -52,6 +52,7 @@ from .cli.pdfs import pdf_manager
 from .cli.posterize import analyze_shades, auto_posterize, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
+from .cli.rescaler import rescale_image
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
 from .cli.upscaler import export_to_onnx, upscale_trt
@@ -198,7 +199,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Image Utilities",
     help="Commands for optimizing and converting images",
-    commands=["forcegray", "posterize", "jpegify", "spreads", "optimize", "mixmatch"],
+    commands=["forcegray", "posterize", "rescale", "jpegify", "spreads", "optimize", "mixmatch"],
 )
 @click.command_panel(
     name="Configuration",
@@ -263,6 +264,7 @@ main.add_command(shift_renamer)
 main.add_command(pdf_manager)
 main.add_command(orchestractor)
 main.add_command(lookup_group)
+main.add_command(rescale_image)
 main.add_command(show_version)
 main.add_command(simulate_progress)
 

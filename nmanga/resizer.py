@@ -25,9 +25,9 @@ SOFTWARE.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, overload
+from typing import Literal, cast, overload
 
-from cykooz.resizer import FilterType, ResizeAlg, ResizeOptions, Resizer, ImageData, PixelType
+from cykooz.resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
 from PIL import Image
 
 __all__ = (
@@ -132,9 +132,13 @@ class ResizeTarget:
     @overload
     def __init__(self, mode: Literal[ResizeMode.Fit], *, width: int, height: int) -> None: ...
     @overload
-    def __init__(self, mode: Literal[ResizeMode.Multiply], *, factor: float) -> None: ...
+    def __init__(self, mode: Literal[ResizeMode.Multiply], *, factor: int | float) -> None: ...
+    @overload
+    def __init__(
+        self, mode: ResizeMode, *, factor: int | float | None, width: int | None, height: int | None
+    ) -> None: ...
 
-    def __init__(self, mode: ResizeMode, **kwargs: int | float) -> None:
+    def __init__(self, mode: ResizeMode, **kwargs: int | float | None) -> None:
         # Unpack args based on mode, also calculate the width/height if needed
         self.mode = mode
 
@@ -173,19 +177,24 @@ class ResizeTarget:
         is_factor = mode in {ResizeMode.Multiply}
 
         # Check if target_width and target_height are positive integers or None
-        if self.target_width is not None and (not isinstance(self.target_width, int) or self.target_width <= 0):
+        target_width = getattr(self, "target_width", None)
+        target_height = getattr(self, "target_height", None)
+        if target_width and (not isinstance(target_width, int) or target_width <= 0):
             raise ValueError("Target width must be a positive integer or None")
-        if self.target_height is not None and (not isinstance(self.target_height, int) or self.target_height <= 0):
+        if target_height is not None and (not isinstance(target_height, int) or target_height <= 0):
             raise ValueError("Target height must be a positive integer or None")
-        if is_factor and (
-            not isinstance(self.target_width, (int, float)) or not isinstance(self.target_height, (int, float))
-        ):
+        if is_factor and (not isinstance(target_width, (int, float)) or not isinstance(target_height, (int, float))):
             raise ValueError("Multiply mode requires numeric factor for width and height")
         if is_factor and (
-            (isinstance(self.target_width, (int, float)) and self.target_width <= 0)
-            or (isinstance(self.target_height, (int, float)) and self.target_height <= 0)
+            (isinstance(target_width, (int, float)) and target_width <= 0)
+            or (isinstance(target_height, (int, float)) and target_height <= 0)
         ):
             raise ValueError("Multiply mode factor must be positive")
+
+        if hasattr(self, "target_width") is True:
+            self.target_width = cast(int | float, self.target_width)
+        if hasattr(self, "target_height") is True:
+            self.target_height = cast(int | float, self.target_height)
 
     def __str__(self) -> str:
         match self.mode:
