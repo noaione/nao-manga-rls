@@ -497,10 +497,10 @@ def autolevel2(
         console.info(f"Recursively collecting folder in {path_or_archive}...")
         for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
             candidates.append(comic)
-        console.info(f"Found {len(candidates)} archives/folders to denoise.")
+        console.info(f"Found {len(candidates)} archives/folders to autolevel.")
 
     if not candidates and recursive:
-        console.warning("No valid folders found to denoise.")
+        console.warning("No valid folders found to autolevel.")
         return 1
 
     for path_real in candidates:

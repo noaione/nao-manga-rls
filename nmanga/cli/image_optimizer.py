@@ -161,7 +161,7 @@ def image_jpegify(
         console.info(f"Recursively collecting folder in {path_or_archive}...")
         for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
             candidates.append(comic)
-        console.info(f"Found {len(candidates)} archives/folders to denoise.")
+        console.info(f"Found {len(candidates)} archives/folders to jpegify.")
 
     for path_real in candidates:
         if recursive:
