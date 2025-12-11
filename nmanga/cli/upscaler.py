@@ -166,6 +166,9 @@ def upscale_trt(
         data_type=ml_quant,
     )
 
+    if scale_factor := getattr(sess, "scale_factor", None):
+        console.info(f"Detected model scale factor: x{scale_factor}")
+
     console.info("Model loaded successfully. Starting upscaling process...")
 
     for candidate in candidates:

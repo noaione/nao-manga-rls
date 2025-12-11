@@ -90,7 +90,7 @@ class ActionML(BaseAction):
 
     @model_validator(mode="after")
     def validate_precompiled_and_data_type(self) -> Self:
-        if self.precompiled and self.data_type is None:
+        if not self.precompiled and self.data_type is None:
             raise PydanticCustomError(
                 "precompiled_data_type_missing",
                 "data_type must be specified when precompiled is True",

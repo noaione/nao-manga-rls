@@ -77,7 +77,7 @@ def get_data_dir() -> Path:
     return cache_dir
 
 
-def get_model_scale_factor(session: "InferenceSession", *, tile_size: int | None) -> int:
+def get_model_scale_factor(session: "InferenceSession", *, tile_size: int | None = None) -> int:
     import numpy as np
 
     # Detect scale using small input and output shapes
@@ -94,15 +94,9 @@ def get_model_scale_factor(session: "InferenceSession", *, tile_size: int | None
     if not isinstance(real_tile_size, int):
         real_tile_size = 64  # Fallback tile size
 
-    shapes = []
-    for dim in inp.shape:
-        if isinstance(dim, int):
-            shapes.append(dim)
-        else:
-            if dim == "width" or dim == "height":
-                shapes.append(real_tile_size)
-            else:
-                shapes.append(1 if dim == "batch_size" else 3)
+    # Most model would have shape like (batch_size, channels, height, width)
+    batch_size = inp.shape[0] if isinstance(inp.shape[0], int) else 1
+    shapes = [batch_size, inp.shape[1], real_tile_size, real_tile_size]
 
     x = np.zeros(shapes, dtype=np.float32)
     input_name = inp.name
@@ -113,7 +107,12 @@ def get_model_scale_factor(session: "InferenceSession", *, tile_size: int | None
     return scale_height // real_tile_size
 
 
-def prepare_model_runtime(model_path: Path, device_id: int = 0, is_verbose: bool = False) -> "InferenceSession":
+def prepare_model_runtime(
+    model_path: Path,
+    *,
+    device_id: int = 0,
+    is_verbose: bool = False,
+) -> "InferenceSession":
     import onnxruntime as ort  # type: ignore
 
     if sys.platform == "darwin":

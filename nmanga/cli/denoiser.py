@@ -435,7 +435,7 @@ def denoiser_trt(
 
     # Try importing stuff here
     console.info(f"Loading model: {model_path.name}...")
-    sess = prepare_model_runtime(model_path, device_id, console.debugged)
+    sess = prepare_model_runtime(model_path, device_id=device_id, is_verbose=console.debugged)
     console.info(f"Using device ID: {device_id}")
 
     for path_real in candidates:

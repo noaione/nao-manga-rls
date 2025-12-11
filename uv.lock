@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10, <3.14"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -300,6 +300,35 @@ wheels = [
 [package.optional-dependencies]
 toml = [
     { name = "tomli", marker = "python_full_version <= '3.11'" },
+]
+
+[[package]]
+name = "cykooz-resizer"
+version = "3.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/bd/841fc97e51c9f69d8d6960163b07246e2df8bb6190145f2a5ce3279accde/cykooz.resizer-3.1.1.tar.gz", hash = "sha256:c99130c979ffcbcbc5b114e32d82c06b3544f0ddcd8c80b628befc8853e2f4bf", size = 27850, upload-time = "2025-02-17T11:33:40.661Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/6f/a44670ff6791ce7e576a3cc6c55146ff6075958f95bd3d0a2655b4207e15/cykooz.resizer-3.1.1-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:7a5e48e158105b79aecdb866a9d3410be0c806b1c90b733be3d71e61e4a21337", size = 2569125, upload-time = "2025-02-17T11:32:44.666Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/0b/74620c45246b2f53c4f482bec237b0cae0d8af02efca7ff4e85435e37517/cykooz.resizer-3.1.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:61b377612d9990658d45e51985c4c05092369445e39f03a89086f98433f7c878", size = 1598788, upload-time = "2025-02-17T11:32:47.218Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/7e/dccf13580546bba008d1b4b7202ba94cdf0347e320446bbc4e5cac8b0db7/cykooz.resizer-3.1.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:98aaf4b1cc537268e51b3c7b1ad21a2e8b70f177638c9f614ee6c12282863496", size = 2770781, upload-time = "2025-02-17T11:32:50.341Z" },
+    { url = "https://files.pythonhosted.org/packages/90/5c/16677dda480340154a60251d1c9903c956db6f16d714f45127e3ca571928/cykooz.resizer-3.1.1-cp310-cp310-win_amd64.whl", hash = "sha256:a03db77c86faa9a9459e16120a5eb6e505e53cb5573072defb7ec8849445f488", size = 2684388, upload-time = "2025-02-17T11:32:54.101Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/a2/8f59fea46032437d8e7bdb2cb2c8dd34cdd736a63b8d7151fa2cce73615b/cykooz.resizer-3.1.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:d81d65ce568a1ad2775f057898ebce2d7ba05b1d340743876bf3433900956b91", size = 2569018, upload-time = "2025-02-17T11:32:59.858Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/7a/89287841977c1b6bcce5a717d9f57ba99326d33b934e3d21cd3ee75fe9da/cykooz.resizer-3.1.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:efd4e92cf031ed2ecff7f98a38974542b918e48963971e7dde9836dc8389bbce", size = 1598852, upload-time = "2025-02-17T11:33:01.861Z" },
+    { url = "https://files.pythonhosted.org/packages/40/d8/89b60e7377bb4bdc749aec15d885e2066c4d55d33fe73c32952abecf0e5d/cykooz.resizer-3.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4f19531a2cf6dc5456895bb39ae4a0f9ce63b4fa663b5142d5f0395ec4c90edc", size = 2770697, upload-time = "2025-02-17T11:33:05.103Z" },
+    { url = "https://files.pythonhosted.org/packages/76/ef/95034bcd5ecc4b3fc1efb920927bbcd4facd9fcac0e6ade43dc7e332f3c4/cykooz.resizer-3.1.1-cp311-cp311-win_amd64.whl", hash = "sha256:eb7459f26568f52f881c20fb202436a37184c63fa927385f8d0c4c3f6a7b56a1", size = 2684564, upload-time = "2025-02-17T11:33:07.28Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/2f/4094de6cf0c999d8e8cfda063c9a353c7a1223db809b71735b77b574469c/cykooz.resizer-3.1.1-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:7678f3b61c684b5333aa955eda2b2aa486bc1ced7bfc6d919e7edd3d3a7c90e8", size = 2566269, upload-time = "2025-02-17T11:33:10.506Z" },
+    { url = "https://files.pythonhosted.org/packages/09/be/e410e25468ee264cd186b6c08d0d7b1bee49e471f0b7744eb70533f2c6f2/cykooz.resizer-3.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:0a9b55e8b07558eaf127e2248324b5385bba2c4757969d488af5bad76be8280e", size = 1596355, upload-time = "2025-02-17T11:33:13.446Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/49/725e5ce3477d96bc17ca00f3e18e94d70d7c463b4a02c45d40ac7178832a/cykooz.resizer-3.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:49bb25767e3b446dc7011bc6619c0d46e2d3f2286c617e6afc22b6a95c980afd", size = 2768287, upload-time = "2025-02-17T11:33:15.306Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/2a/1fcd70064ac04460046069347490bb82382e032cfe5fc9bade9e8ae10031/cykooz.resizer-3.1.1-cp312-cp312-win_amd64.whl", hash = "sha256:d05629db8ba844f413b4b87830027b56c77c83bc774045bccd220210f545f57a", size = 2683232, upload-time = "2025-02-17T11:33:17.382Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/2b/2dcd9888201029db0a46eaf29390cfd07bf0cef67f56e24d11be619a0185/cykooz.resizer-3.1.1-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:f9e6cad31228076fa3bb6d391c8fc7f496d083b7c5bb33fad64ad30dcbcfd098", size = 2565792, upload-time = "2025-02-17T11:33:20.048Z" },
+    { url = "https://files.pythonhosted.org/packages/88/35/7546d50c0cd29561a59d226ec0ee6b651fa1f04cfe37fb7fdb6eaa1d2ed6/cykooz.resizer-3.1.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:aefec9429f0fba70871f3c1336e3cffd0c0e98d3df1db9bdc79bb9bc9db4b860", size = 1595862, upload-time = "2025-02-17T11:33:23.319Z" },
+    { url = "https://files.pythonhosted.org/packages/84/54/b8bd2623458f487fccca3f20c72ef42be2b8dca656b216f5a821f21869d6/cykooz.resizer-3.1.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:934ab7c4a9c0591e37ff787da2368fadc9b347ec36fffdea7511abd90dfa9d4d", size = 2767805, upload-time = "2025-02-17T11:33:26.447Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/ae/4d7410382036127f6a916954f898b2897f2801b84053f01994882007e364/cykooz.resizer-3.1.1-cp313-cp313-win_amd64.whl", hash = "sha256:9134c1d33d4dd5e406add5e58e5f533eed95e46ab1147748d300487f73648955", size = 2682931, upload-time = "2025-02-17T11:33:28.638Z" },
+]
+
+[package.optional-dependencies]
+pillow = [
+    { name = "pillow" },
 ]
 
 [[package]]
@@ -747,6 +776,7 @@ name = "nmanga"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "cykooz-resizer", extra = ["pillow"] },
     { name = "defusedxml" },
     { name = "ftfy" },
     { name = "inquirer" },
@@ -783,6 +813,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = "==8.3.1" },
+    { name = "cykooz-resizer", extras = ["pillow"], specifier = "==3.1.1" },
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "einops", marker = "extra == 'denoiser'", specifier = "==0.8.1" },
     { name = "ftfy", specifier = "==6.3.1" },
