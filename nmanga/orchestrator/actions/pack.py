@@ -84,9 +84,11 @@ class ActionPack(BaseAction):
         source_dir = source_dir.resolve()
         volume_text = format_volume_text(manga_volume=volume.number)
 
+        prefer_title = volume.title or orchestrator.title
+
         context.terminal.info(f"Packing volume {volume.number} in {source_dir}...")
         archive_filename = format_archive_filename(
-            manga_title=orchestrator.title,
+            manga_title=prefer_title,
             manga_year=volume.year,
             publication_type=volume.publication,
             ripper_credit=orchestrator.credit,
