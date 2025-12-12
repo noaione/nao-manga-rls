@@ -48,7 +48,6 @@ from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.orchestrator import orchestractor
-from .cli.pdfs import pdf_manager
 from .cli.posterize import analyze_shades, auto_posterize, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
@@ -166,11 +165,6 @@ signal.signal(signal.SIGTERM, exit_143)
     commands=["denoise", "denoise-trt", "upscale-trt", "to-onnx"],
 )
 @click.command_panel(
-    name="Other Tooling",
-    help="Miscellaneous tools and utilities",
-    commands=["pdf"],
-)
-@click.command_panel(
     name="Release Management",
     help="Commands for managing manga releases and archives",
     commands=[
@@ -261,7 +255,6 @@ main.add_command(upscale_trt)
 main.add_command(export_to_onnx)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
-main.add_command(pdf_manager)
 main.add_command(orchestractor)
 main.add_command(lookup_group)
 main.add_command(rescale_image)
