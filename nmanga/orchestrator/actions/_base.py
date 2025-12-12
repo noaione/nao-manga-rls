@@ -27,7 +27,7 @@ from __future__ import annotations
 import abc
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -35,6 +35,8 @@ from ..dsl import Context
 from ..rules import RuleModel
 
 if TYPE_CHECKING:
+    from onnxruntime import InferenceSession  # type: ignore[import]
+
     from ...term import Console
     from .. import OrchestratorConfig, SkipActionConfig, VolumeConfig
 
@@ -78,6 +80,7 @@ class WorkerContext(Context):
     """The skip action configuration, if any."""
     dry_run: bool = False
     """Run the action in dry run mode."""
+    ml_model_session: ClassVar[dict[str, "InferenceSession"]] = {}
 
     def __init__(
         self,
@@ -90,6 +93,7 @@ class WorkerContext(Context):
         dry_run: bool = False,
         **kwargs,
     ):
+        kwargs.pop("ml_model_session", None)  # prevent passing ml_model_session in init
         super().__init__(**kwargs)
         self.root_dir = root_dir
         self.current_dir = current_dir

@@ -25,6 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -42,6 +43,8 @@ from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 from .rescale import RescaleTarget
 
 if TYPE_CHECKING:
+    from onnxruntime import InferenceSession  # type: ignore[import]
+
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = (
@@ -120,6 +123,61 @@ class ActionML(BaseAction):
 
         return image
 
+    def make_cache_key(self) -> str:
+        """
+        Make a cache key for the model session
+
+        :return: The cache key
+        """
+
+        fqdn_model = Path(self.model).resolve(True).as_posix()
+        model_hash = sha256(fqdn_model.encode("utf-8")).hexdigest()
+
+        other_key = (
+            f"d{self.device_id}-b{self.batch_size}-t{self.tile_size}-p{self.precompiled}-d{self.data_type or 'None'}"
+        )
+
+        return f"{model_hash}_{other_key}"
+
+    def build_or_load_model(self, context: WorkerContext) -> "InferenceSession":
+        """
+        Build or load the ML model for the action
+
+        :param context: The worker context
+        :return: The ONNX Inference Session
+        """
+
+        cache_key = self.make_cache_key()
+        cached_session = context.ml_model_session.get(cache_key)
+        if cached_session is not None:
+            context.terminal.log(f"Using cached model session for key {cache_key}.")
+            return cached_session
+
+        if self.precompiled:
+            session = prepare_model_runtime(
+                self.model,
+                device_id=self.device_id,
+                is_verbose=context.terminal.debugged,
+            )
+        else:
+            context.terminal.info(
+                f"Building/loading TensorRT Engine for {self.model.name}. "
+                + "If it is building, you may need to wait up to 20-25 minutes for the first time."
+            )
+            session = prepare_model_runtime_builders(
+                self.model,
+                device_id=self.device_id,
+                is_verbose=context.terminal.debugged,
+                tile_size=self.tile_size,
+                batch_size=self.batch_size,
+                data_type=cast(MLDataType, self.data_type),
+            )
+
+        context.ml_model_session[cache_key] = session
+        context.terminal.log(f"Cached model session for key {cache_key}.")
+
+        return session
+
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
         Run the action on a volume
@@ -158,25 +216,7 @@ class ActionML(BaseAction):
         context.terminal.info(f"Loading {self.action_name.load} model from {self.model.name}...")
 
         page_re = RegexCollection.page_re()
-        if self.precompiled:
-            session = prepare_model_runtime(
-                self.model,
-                device_id=self.device_id,
-                is_verbose=context.terminal.debugged,
-            )
-        else:
-            context.terminal.info(
-                f"Building/loading TensorRT Engine for {self.model.name}. "
-                + "If it is building, you may need to wait up to 20-25 minutes for the first time."
-            )
-            session = prepare_model_runtime_builders(
-                self.model,
-                device_id=self.device_id,
-                is_verbose=context.terminal.debugged,
-                tile_size=self.tile_size,
-                batch_size=self.batch_size,
-                data_type=cast(MLDataType, self.data_type),
-            )
+        session = self.build_or_load_model(context)
 
         current_index = 1
         total_image = 0
