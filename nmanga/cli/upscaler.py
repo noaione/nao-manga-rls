@@ -300,7 +300,7 @@ def export_to_onnx(
     except ImportError as exc:
         raise click.ClickException("resselt is not installed. Please install it to use this command.") from exc
 
-    model_sfx = f"{quant_size}_op20"
+    model_sfx = f"{quant_size}_op{opset_version}"
     if use_dynamo:
         model_sfx += "_dynamo"
 
