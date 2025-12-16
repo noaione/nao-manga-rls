@@ -32,12 +32,16 @@ import warnings
 from enum import Enum
 from hashlib import md5
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from PIL import Image
 
 if TYPE_CHECKING:
     from onnxruntime import InferenceSession  # type: ignore
+
+    class InferenceSessionWithScale(InferenceSession):
+        scale_factor: int | None
+
 
 __all__ = (
     "MLDataType",
@@ -77,8 +81,11 @@ def get_data_dir() -> Path:
     return cache_dir
 
 
-def get_model_scale_factor(session: "InferenceSession", *, tile_size: int | None = None) -> int:
+def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: int | None = None) -> int:
     import numpy as np
+
+    if scale_factor := getattr(session, "scale_factor", None):
+        return scale_factor
 
     # Detect scale using small input and output shapes
     inp = session.get_inputs()[0]
@@ -112,7 +119,7 @@ def prepare_model_runtime(
     *,
     device_id: int = 0,
     is_verbose: bool = False,
-) -> "InferenceSession":
+) -> "InferenceSessionWithScale":
     import onnxruntime as ort  # type: ignore
 
     if sys.platform == "darwin":
@@ -148,13 +155,11 @@ def prepare_model_runtime(
     ort.set_default_logger_verbosity(verb_level)
 
     sess_opt = ort.SessionOptions()
-    session = ort.InferenceSession(
-        model_path,
-        sess_options=sess_opt,
-        providers=providers,
+    session = cast(
+        "InferenceSessionWithScale", ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
     )
     scale_factor = get_model_scale_factor(session, tile_size=None)
-    session.scale_factor = scale_factor  # type: ignore
+    session.scale_factor = scale_factor
     return session
 
 
@@ -186,7 +191,7 @@ def prepare_model_runtime_builders(
     tile_size: int | None = None,
     batch_size: int = 64,
     data_type: MLDataType = MLDataType.FP16,
-) -> "InferenceSession":
+) -> "InferenceSessionWithScale":
     import onnxruntime as ort  # type: ignore
 
     is_torch_available = importlib.util.find_spec("torch")
@@ -199,6 +204,8 @@ def prepare_model_runtime_builders(
     data_dir = get_data_dir()
     cache_dir = data_dir / "trt_engines"
     cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_rtx_dir = data_dir / "trtrtx_engines"
+    cache_rtx_dir.mkdir(parents=True, exist_ok=True)
 
     hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
     cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
@@ -221,28 +228,39 @@ def prepare_model_runtime_builders(
         "trt_engine_cache_path": "trt_engines",
         "trt_engine_cache_prefix": cache_prefix,
         "trt_build_heuristics_enable": True,
+        "trt_builder_optimization_level": 3,
         "trt_context_memory_sharing_enable": True,
         "trt_dump_ep_context_model": True,
         "trt_ep_context_file_path": str(data_dir),
         "trt_detailed_build_log": True if is_verbose else False,
     }
+    trtrtx_ep_config = {
+        "device_id": device_id,
+        "nv_max_workspace_size": memory_limit,
+        "nv_detailed_build_log": True if is_verbose else False,
+        "nv_runtime_cache_path": str(cache_rtx_dir),
+    }
 
     model_input, model_channel_count = get_model_information(model_path)
     if tile_size is not None:
-        trt_ep_config["trt_profile_min_shapes"] = f"{model_input}:1x{model_channel_count}x{tile_size}x{tile_size}"
-        trt_ep_config["trt_profile_max_shapes"] = (
-            f"{model_input}:{batch_size}x{model_channel_count}x{tile_size}x{tile_size}"
-        )
-        trt_ep_config["trt_profile_opt_shapes"] = (
-            f"{model_input}:{batch_size}x{model_channel_count}x{tile_size}x{tile_size}"
-        )
+        min_shapes = f"{model_input}:1x{model_channel_count}x{tile_size}x{tile_size}"
+        max_shapes = f"{model_input}:{batch_size}x{model_channel_count}x{tile_size}x{tile_size}"
+        opt_shapes = max_shapes
+        trt_ep_config["trt_profile_min_shapes"] = min_shapes
+        trt_ep_config["trt_profile_max_shapes"] = max_shapes
+        trt_ep_config["trt_profile_opt_shapes"] = opt_shapes
+
+        trtrtx_ep_config["nv_profile_min_shapes"] = model_input
+        trtrtx_ep_config["nv_profile_max_shapes"] = min_shapes
+        trtrtx_ep_config["nv_profile_opt_shapes"] = max_shapes
     if sys.platform != "darwin":
         providers = [
+            ("NvTensorRTRTXExecutionProvider", trtrtx_ep_config),
             ("TensorrtExecutionProvider", trt_ep_config),
             (
                 "CUDAExecutionProvider",
                 {
-                    "device_id": 0,
+                    "device_id": device_id,
                     "arena_extend_strategy": "kNextPowerOfTwo",
                     "gpu_mem_limit": memory_limit,
                     "cudnn_conv_algo_search": "EXHAUSTIVE",
@@ -267,16 +285,22 @@ def prepare_model_runtime_builders(
             ),
         ]
 
+    verb_level = 0 if is_verbose else 3
+    ort.set_default_logger_severity(verb_level)
+    ort.set_default_logger_verbosity(verb_level)
+
     sess_opt = ort.SessionOptions()
-    session: "InferenceSession" = ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
+    session = cast(
+        "InferenceSessionWithScale", ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
+    )
     scale_factor = get_model_scale_factor(session, tile_size=tile_size)
-    session.scale_factor = scale_factor  # type: ignore
+    session.scale_factor = scale_factor
     return session
 
 
 def denoise_single_image(
     input_image: Image.Image,
-    model: "InferenceSession",
+    model: "InferenceSessionWithScale",
     *,
     batch_size: int = 64,
     tile_size: int = 128,
