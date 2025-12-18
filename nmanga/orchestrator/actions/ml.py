@@ -43,8 +43,7 @@ from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 from .rescale import RescaleTarget
 
 if TYPE_CHECKING:
-    from onnxruntime import InferenceSession  # type: ignore[import]
-
+    from ...denoiser import InferenceSessionWithScale
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = (
@@ -139,7 +138,7 @@ class ActionML(BaseAction):
 
         return f"{model_hash}_{other_key}"
 
-    def build_or_load_model(self, context: WorkerContext) -> "InferenceSession":
+    def build_or_load_model(self, context: WorkerContext) -> "InferenceSessionWithScale":
         """
         Build or load the ML model for the action
 

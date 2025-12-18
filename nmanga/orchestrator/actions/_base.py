@@ -35,8 +35,7 @@ from ..dsl import Context
 from ..rules import RuleModel
 
 if TYPE_CHECKING:
-    from onnxruntime import InferenceSession  # type: ignore[import]
-
+    from ...denoiser import InferenceSessionWithScale
     from ...term import Console
     from .. import OrchestratorConfig, SkipActionConfig, VolumeConfig
 
@@ -80,7 +79,7 @@ class WorkerContext(Context):
     """The skip action configuration, if any."""
     dry_run: bool = False
     """Run the action in dry run mode."""
-    ml_model_session: ClassVar[dict[str, "InferenceSession"]] = {}
+    ml_model_session: ClassVar[dict[str, "InferenceSessionWithScale"]] = {}
 
     def __init__(
         self,
