@@ -30,7 +30,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import TypedDict
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 __all__ = (
     "analyze_gray_shades",
@@ -344,10 +344,10 @@ def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
         image = image.convert("L")  # force grayscale
 
     colors = 2**num_bits
-    posterize = ImageOps.posterize(image, bits=num_bits)
-    quantized = posterize.quantize(colors=colors, dither=Image.Dither.NONE)
-    # TODO: Maybe figure out dithering?
-
+    # Posterize without fucking up luminance
+    posterized = image.point(lambda x: round(x * (colors - 1) / 255) * 255 / (colors - 1))
+    # Maybe can be commented out? optimizing with pingo give similar ssimulacra2 scores
+    quantized = posterized.quantize(colors=colors, dither=Image.Dither.NONE)
     return quantized.convert("L")
 
 
