@@ -176,6 +176,9 @@ def image_jpegify(
         real_output.mkdir(parents=True, exist_ok=True)
 
         total_images = len(image_candidates)
+        if total_images == 0:
+            console.info(f"No images found in {path_real}, skipping.")
+            continue
         quality = max(0, min(100, jpeg_quality))
 
         progress = console.make_progress()
