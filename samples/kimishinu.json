@@ -38,7 +38,7 @@
                     "page": 178
                 }
             ],
-            "quality": "HQ",
+            "quality": "auto",
             "chapters": [
                 {
                     "number": 1,
@@ -100,7 +100,7 @@
                     "page": 180
                 }
             ],
-            "quality": "HQ",
+            "quality": "auto",
             "chapters": [
                 {
                     "number": 6,
@@ -166,7 +166,7 @@
                     "page": 180
                 }
             ],
-            "quality": "HQ",
+            "quality": "auto",
             "chapters": [
                 {
                     "number": 11,
@@ -229,7 +229,7 @@
                     "page": 180
                 }
             ],
-            "quality": "HQ",
+            "quality": "auto",
             "chapters": [
                 {
                     "number": 15,
@@ -296,7 +296,7 @@
                     "page": 180
                 }
             ],
-            "quality": "HQ",
+            "quality": "auto",
             "chapters": [
                 {
                     "number": 20,
@@ -331,11 +331,75 @@
                     "action": "copy"
                 }
             ]
+        },
+        {
+            "path": "v06",
+            "number": 6,
+            "year": 2025,
+            "spreads": [
+                [2, 3]
+            ],
+            "colors": [0, 1, 2, 3, 4],
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Afterword",
+                    "page": 164
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 180
+                }
+            ],
+            "quality": "auto",
+            "chapters": [
+                {
+                    "number": 25,
+                    "title": "Thank You",
+                    "start": 0
+                },
+                {
+                    "number": 26,
+                    "title": "Wound",
+                    "start": 35
+                },
+                {
+                    "number": 27,
+                    "title": "A Sweet Fever",
+                    "start": 65
+                },
+                {
+                    "number": 28,
+                    "title": "Don't Cry",
+                    "start": 93
+                },
+                {
+                    "number": 29,
+                    "title": "Forever Mine",
+                    "start": 123
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
         }
     ],
     "actions": [
         {
             "kind": "autolevel",
+            "legacy_mode": true,
+            "skip_color": false,
             "threads": 4
         },
         {
@@ -376,7 +440,7 @@
         {
             "kind": "pack",
             "output_mode": "cbz",
-            "source_dir": "denoised"
+            "compress_level": 7
         }
     ]
 }

@@ -17,7 +17,7 @@
                 168, 169, 170, 171, 172, 173, 174, 175, 176, 177
             ],
             "revision": 1,
-            "quality": "HQ",
+            "quality": "auto",
             "extra_text": "PNG4",
             "pub_type": "digital",
             "skip_actions": []
@@ -32,7 +32,7 @@
                 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
             ],
             "revision": 1,
-            "quality": "HQ",
+            "quality": "auto",
             "extra_text": "PNG4",
             "pub_type": "digital",
             "skip_actions": []
@@ -47,7 +47,7 @@
                 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
             ],
             "revision": 1,
-            "quality": "HQ",
+            "quality": "auto",
             "extra_text": "PNG4",
             "pub_type": "digital",
             "skip_actions": []
@@ -62,7 +62,7 @@
                 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
             ],
             "revision": 1,
-            "quality": "HQ",
+            "quality": "auto",
             "extra_text": "PNG4",
             "pub_type": "digital",
             "skip_actions": []
@@ -77,7 +77,22 @@
                 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
             ],
             "revision": 1,
-            "quality": "HQ",
+            "quality": "auto",
+            "extra_text": "PNG4",
+            "pub_type": "digital",
+            "skip_actions": []
+        },
+        {
+            "path": "v06",
+            "number": 6,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3, 4,
+                165,
+                168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179
+            ],
+            "revision": 1,
+            "quality": "auto",
             "extra_text": "PNG4",
             "pub_type": "digital",
             "skip_actions": []
@@ -87,7 +102,8 @@
         {
             "kind": "posterize",
             "bpc": 4,
-            "threads": 4
+            "threads": 4,
+            "pillow": true
         },
         {
             "kind": "optimize",
@@ -104,7 +120,8 @@
         },
         {
             "kind": "pack",
-            "output_mode": "cbz"
+            "output_mode": "cbz",
+            "compress_level": 7
         }
     ]
 }
