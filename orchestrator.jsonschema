@@ -1540,6 +1540,22 @@
             "title": "OrModel",
             "type": "object"
         },
+        "QualityMapping": {
+            "properties": {
+                "LQ": {
+                    "default": 1500,
+                    "title": "Lq",
+                    "type": "integer"
+                },
+                "HQ": {
+                    "default": 2000,
+                    "title": "Hq",
+                    "type": "integer"
+                }
+            },
+            "title": "QualityMapping",
+            "type": "object"
+        },
         "RescaleTargetExact": {
             "description": "Rescale target specifying exact width and height.",
             "properties": {
@@ -1679,6 +1695,26 @@
             ],
             "title": "ResizeKernel",
             "type": "string"
+        },
+        "SeriesMetafields": {
+            "additionalProperties": false,
+            "description": "Extra metafields for a series\n\nBasically some overrides for certain parameters in the series",
+            "properties": {
+                "quality_maps": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/QualityMapping"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Quality Mapping Override"
+                }
+            },
+            "title": "nmanga Orchestrator Series Metafields",
+            "type": "object"
         },
         "SkipActionConfig": {
             "additionalProperties": false,
@@ -1907,7 +1943,8 @@
                         {
                             "enum": [
                                 "LQ",
-                                "HQ"
+                                "HQ",
+                                "auto"
                             ],
                             "type": "string"
                         },
@@ -1915,7 +1952,7 @@
                             "type": "null"
                         }
                     ],
-                    "default": null,
+                    "default": "auto",
                     "title": "Volume Quality"
                 },
                 "pub_type": {
@@ -2139,6 +2176,18 @@
             "minItems": 1,
             "title": "Actions",
             "type": "array"
+        },
+        "metafields": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/SeriesMetafields"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": "Series Metafields"
         }
     },
     "required": [

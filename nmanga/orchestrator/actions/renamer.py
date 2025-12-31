@@ -31,7 +31,7 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler
 from ...common import ChapterRange, RegexCollection, format_daiz_like_filename, format_volume_text
-from ...renamer import shift_renaming_gen
+from ...renamer import QualityMapping, determine_quality_suffix, shift_renaming_gen
 from ._base import ActionKind, BaseAction, WorkerContext
 
 if TYPE_CHECKING:
@@ -170,6 +170,10 @@ class ActionRename(BaseAction):
 
         prefer_title = self.title or volume.title or orchestrator.title
 
+        quality_maps = QualityMapping()
+        if orchestrator.metafields is not None and orchestrator.metafields.quality_maps is not None:
+            quality_maps = orchestrator.metafields.quality_maps
+
         # Make into chapter range
         meta_namings = volume.meta_name_maps
         renaming_maps: dict[str, Path] = {}  # This is new name -> old path (yeah)
@@ -218,6 +222,12 @@ class ActionRename(BaseAction):
             if page_num_int in meta_namings:
                 extra_name = meta_namings[page_num_int]
 
+            volume_quality = (
+                determine_quality_suffix(quality=volume.quality, image_path=image, quality_maps=quality_maps)
+                if volume.quality
+                else None
+            )
+
             image_filename, _ = format_daiz_like_filename(
                 manga_title=prefer_title,
                 manga_publisher=orchestrator.publisher,
@@ -229,7 +239,7 @@ class ActionRename(BaseAction):
                 bracket_type=orchestrator.bracket_type,
                 manga_volume=vol_actual,
                 extra_metadata=extra_name,
-                image_quality=volume.quality,
+                image_quality=volume_quality,
                 rls_revision=volume.revision,
                 chapter_extra_maps=packing_extra,
                 extra_archive_metadata=volume.extra_text,

@@ -18,11 +18,11 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
-from nmanga.orchestrator.actions.rescale import RescaleTarget
-
 from ..common import ChapterRange
 from ..constants import MANGA_PUBLICATION_TYPES, MangaPublication
+from ..renamer import QualityMapping
 from .actions import *
+from .actions.rescale import RescaleTarget
 from .common import SkipActionConfig, SkipActionKind
 
 __all__ = (
@@ -129,6 +129,24 @@ class VolumeMetafields(BaseModel):
     """The rescale target override for the volume"""
 
 
+class SeriesMetafields(BaseModel):
+    """
+    Extra metafields for a series
+
+    Basically some overrides for certain parameters in the series
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator Series Metafields",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    quality_maps: QualityMapping | None = Field(None, title="Quality Mapping Override")
+    """Quality mapping override for the series"""
+
+
 class VolumeConfig(BaseModel):
     """
     The configuration for a volume
@@ -172,7 +190,7 @@ class VolumeConfig(BaseModel):
 
     Only applied if greater than 1
     """
-    quality: Literal["LQ", "HQ"] | None = Field(None, title="Volume Quality")
+    quality: Literal["LQ", "HQ", "auto"] | None = Field("auto", title="Volume Quality")
     """The quality of the volume, this is used for tagging"""
     pub_type: Annotated[str, AfterValidator(is_publication_type)] = Field(
         "digital",
@@ -313,6 +331,8 @@ class OrchestratorConfig(BaseModel):
     """The list of volumes to process"""
     actions: list[Actions] = Field(default_factory=list, min_length=1)
     """The list of actions to perform on each volume"""
+    metafields: SeriesMetafields | None = Field(None, title="Series Metafields")
+    """The extra metafields for the series"""
 
     @model_validator(mode="after")
     def check_volumes_duplicates(self) -> Self:

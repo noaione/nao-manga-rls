@@ -25,11 +25,26 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
 
-__all__ = ("shift_renaming_gen",)
+__all__ = (
+    "QualityMapping",
+    "determine_quality_suffix",
+    "shift_renaming_gen",
+)
+
+
+@dataclass
+class QualityMapping:
+    """The mapping for image quality based on resolution thresholds, we use height in pixels."""
+
+    LQ: int = 1500
+    """Low Quality threshold in height pixels."""
+    HQ: int = 2000
+    """High Quality threshold in height pixels."""
 
 
 def shift_renaming_gen(
@@ -117,3 +132,31 @@ def shift_renaming_gen(
             raise ValueError(f"Renaming conflict detected for file: {new_file_path}")
         final_renaming_map[original_file] = new_file_path
     return final_renaming_map
+
+
+def determine_quality_suffix(*, quality: str, image_path: Path, quality_maps: QualityMapping) -> str:
+    """
+    Determine the quality suffix based on the base quality and image resolution.
+
+    Parameters
+    ----------
+    base_quality: :class:`str`
+        The base quality setting (e.g., "auto", "LQ", "HQ").
+    image_path: :class:`pathlib.Path`
+        The path to the image file.
+    quality_maps: :class:`QualityMapping`
+        The quality mapping thresholds.
+
+    Returns
+    -------
+    :class:`str`
+        The determined quality suffix.
+    """
+
+    if quality.lower() in ("auto", "mixed"):
+        with Image.open(image_path) as img:
+            if img.height >= quality_maps.HQ:
+                return "HQ"
+            elif img.height <= quality_maps.LQ:
+                return "LQ"
+    return quality
