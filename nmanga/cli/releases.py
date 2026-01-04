@@ -47,6 +47,7 @@ from ..common import (
     threaded_worker,
 )
 from ..constants import MangaPublication
+from ..renamer import QualityMapping, determine_quality_suffix
 from . import options
 from ._deco import check_config_first, time_program
 from .base import (
@@ -104,8 +105,8 @@ class SpecialNaming:
     "-mq",
     "--quality",
     "image_quality",
-    type=click.Choice(["LQ", "HQ"]),
-    default=None,
+    type=click.Choice(["LQ", "HQ", "auto"]),
+    default="auto",
     help="Image quality of this release.",
     panel="Release Options",
 )
@@ -219,6 +220,10 @@ def prepare_releases(
     console.info("Processing: 1/???")
     image_titling: str | None = None
     vol_oshot_warn = False
+    q_maps = QualityMapping.from_config(
+        lq_threshold=conf.defaults.lq_threshold,
+        hq_threshold=conf.defaults.hq_threshold,
+    )
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = cmx_re.match(image.name)
         if title_match is None:
@@ -275,9 +280,9 @@ def prepare_releases(
         if p01_copy in special_naming:
             extra_name = special_naming[p01_copy].data
 
-        act_img_quality = "HQ" if is_high_quality else None
-        if image_quality is not None:
-            act_img_quality = image_quality
+        quality_suffix = determine_quality_suffix(
+            quality=image_quality or "auto", image_path=image, quality_maps=q_maps
+        )
 
         image_filename, archive_filename = format_daiz_like_filename(
             manga_title=manga_title,
@@ -290,7 +295,7 @@ def prepare_releases(
             bracket_type=bracket_type,
             manga_volume=vol_act,
             extra_metadata=extra_name,
-            image_quality=act_img_quality,
+            image_quality=quality_suffix,
             rls_revision=rls_revision,
             chapter_extra_maps=packing_extra,
             extra_archive_metadata=rls_extra_metadata,
@@ -372,8 +377,8 @@ def prepare_releases(
     "-mq",
     "--quality",
     "image_quality",
-    type=click.Choice(["LQ", "HQ"]),
-    default=None,
+    type=click.Choice(["LQ", "HQ", "auto"]),
+    default="auto",
     help="Image quality of this release.",
     panel="Release Options",
 )
@@ -465,6 +470,10 @@ def prepare_releases_chapter(
     current = 1
     console.info("Processing: 1/???")
     image_titling: str | None = None
+    q_maps = QualityMapping.from_config(
+        lq_threshold=conf.defaults.lq_threshold,
+        hq_threshold=conf.defaults.hq_threshold,
+    )
     for image, _, total_img, _ in file_handler.collect_image_from_folder(path_or_archive):
         title_match = page_re.match(image.name)
         if title_match is None:
@@ -477,9 +486,9 @@ def prepare_releases_chapter(
             p01 = f"{p01}-{p02}"
 
         ch_range = ChapterRange(manga_chapter, chapter_title, [], True)
-        act_img_quality = "HQ" if is_high_quality else None
-        if image_quality is not None:
-            act_img_quality = image_quality
+        quality_suffix = determine_quality_suffix(
+            quality=image_quality or "auto", image_path=image, quality_maps=q_maps
+        )
 
         image_filename, _ = format_daiz_like_filename(
             manga_title=manga_title,
@@ -491,7 +500,7 @@ def prepare_releases_chapter(
             ripper_credit=rls_credit,
             bracket_type=bracket_type,
             manga_volume=manga_volume,
-            image_quality=act_img_quality,
+            image_quality=quality_suffix,
             rls_revision=rls_revision,
             fallback_volume_name="NA",
         )
