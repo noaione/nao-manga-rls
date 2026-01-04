@@ -163,6 +163,26 @@ def _loop_defaults_release_publication_type(config: config.Config, default_now: 
     return select_option.name
 
 
+def _loop_defaults_quality_threshold(config: config.Config, quality_type: Literal["lq_threshold", "hq_threshold"]):
+    default_value = config.defaults.lq_threshold if quality_type == "lq_threshold" else config.defaults.hq_threshold
+
+    q_name = "Low-Quality" if quality_type == "lq_threshold" else "High-Quality"
+
+    threshold_value_str = console.inquire(
+        f"Set the {q_name} threshold (in height pixels)",
+        validation=lambda x: x.isdigit() and int(x) > 0,
+        default=str(default_value),
+    )
+
+    threshold_value = int(threshold_value_str)
+    if quality_type == "lq_threshold":
+        config.defaults.lq_threshold = threshold_value
+    else:
+        config.defaults.hq_threshold = threshold_value
+
+    return config
+
+
 def _loop_defaults_sections(config: config.Config) -> config.Config:  # pragma: no cover
     while True:
         select_option = console.choice(
@@ -175,6 +195,8 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:  # pragma: 
                 term.ConsoleChoice("hashtag_special", "Use `#` instead of `x` as special separator"),
                 term.ConsoleChoice("rls_pub_type", "Configure default publication type for releases command"),
                 term.ConsoleChoice("rls_ch_pub_type", "Configure default publication type for releasesch command"),
+                term.ConsoleChoice("lq_threshold", "Configure low-quality image size threshold (in height pixels)"),
+                term.ConsoleChoice("hq_threshold", "Configure high-quality image size threshold (in height pixels)"),
                 SAVE_CHOICE,
             ],
         )
@@ -198,6 +220,10 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:  # pragma: 
             config.defaults.rls_ch_pub_type = _loop_defaults_release_publication_type(
                 config, config.defaults.rls_ch_pub_type
             )
+        elif option == "lq_threshold":
+            config = _loop_defaults_quality_threshold(config, "lq_threshold")
+        elif option == "hq_threshold":
+            config = _loop_defaults_quality_threshold(config, "hq_threshold")
         else:
             console.warning("Invalid option selected")
             console.sleep(2)

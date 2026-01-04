@@ -20,6 +20,8 @@ class _ConfigDefaultsT(TypedDict, total=False):
     chapter_special_tag: str
     release_publication_type: str
     release_chapter_publication_type: str
+    lq_threshold: int
+    hq_threshold: int
 
 
 class _ConfigExecutableT(TypedDict, total=False):

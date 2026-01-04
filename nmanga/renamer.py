@@ -46,6 +46,16 @@ class QualityMapping:
     HQ: int = 2000
     """High Quality threshold in height pixels."""
 
+    @classmethod
+    def from_config(cls: type["QualityMapping"], lq_threshold: int | None, hq_threshold: int | None) -> QualityMapping:
+        """Create a QualityMapping instance from configuration thresholds."""
+        defaults = cls()
+        if lq_threshold is None:
+            lq_threshold = defaults.LQ
+        if hq_threshold is None:
+            hq_threshold = defaults.HQ
+        return cls(LQ=lq_threshold, HQ=hq_threshold)
+
 
 def shift_renaming_gen(
     all_files: list[Path],

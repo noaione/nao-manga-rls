@@ -88,6 +88,9 @@ class _ConfigDefaults:
     rls_pub_type: str = field(default=next(iter(MANGA_PUBLICATION_TYPES.keys())))
     rls_ch_pub_type: str = field(default=next(iter(MANGA_PUBLICATION_TYPES.keys())))
 
+    lq_threshold: int = field(default=1500)
+    hq_threshold: int = field(default=2000)
+
     def to_dict(self) -> _ConfigDefaultsT:
         return {
             "bracket_type": self.bracket_type,
@@ -97,6 +100,8 @@ class _ConfigDefaults:
             "chapter_special_tag": self.ch_special_tag,
             "release_publication_type": self.rls_pub_type,
             "release_chapter_publication_type": self.rls_ch_pub_type,
+            "lq_threshold": self.lq_threshold,
+            "hq_threshold": self.hq_threshold,
         }
 
     @property
