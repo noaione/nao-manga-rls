@@ -45,7 +45,7 @@ __all__ = (
 )
 
 rich_theme = RichTheme({
-    "success": "green bold",
+    "success": "bright_green bold",
     "warning": "yellow bold",
     "error": "red bold",
     "highlight": "magenta bold",
@@ -100,6 +100,8 @@ class ConsoleInterface(abc.ABC):
     def warning(self, *args, **kwargs): ...
     @abc.abstractmethod
     def error(self, *args, **kwargs): ...
+    @abc.abstractmethod
+    def success(self, *args, **kwargs): ...
     @abc.abstractmethod
     def log(self, *args, **kwargs): ...
     @abc.abstractmethod
@@ -182,6 +184,13 @@ class Console(ConsoleInterface):
             self.console.print(self.__wrap_theme("ERROR", "error"), *args, **kwargs)
         else:
             self.console.print(self.__wrap_theme("ERROR", "error"), space, *args, **kwargs)
+
+    def success(self, *args, **kwargs):
+        space = " " * self.shift_space
+        if not space:
+            self.console.print(self.__wrap_theme("SUCCESS", "success"), *args, **kwargs)
+        else:
+            self.console.print(self.__wrap_theme("SUCCESS", "success"), space, *args, **kwargs)
 
     def __beautiful_status(self, message: str, **kwargs_spinner_style):
         if not self._status:
@@ -459,6 +468,9 @@ class ThreadConsoleQueue(ConsoleInterface):
     def log(self, message: str) -> None:
         self.queue.put(("log", message))
 
+    def success(self, message: str) -> None:
+        self.queue.put(("info", message))
+
     def close(self) -> None:
         self.queue.put_nowait(STOP_SIGNAL)
 
@@ -576,6 +588,8 @@ def thread_queue_callback(log_q: MessageQueue, console: Console) -> None:
                     console.log(message)
                 case "enter":
                     console.enter()
+                case "success":
+                    console.success(message)
                 case "update_progress":
                     params = cast(dict[str, Any], message)
                     console.update_progress(

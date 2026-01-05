@@ -288,7 +288,7 @@ def lookup_broken_images(
                 progress.update(task_collect, advance=1)
 
         if not broken_images:
-            console.info("No broken images found in this folder.")
+            console.success("No broken images found in this folder.")
             console.stop_progress(progress)
             continue
 
