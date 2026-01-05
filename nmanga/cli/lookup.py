@@ -209,3 +209,93 @@ def lookup_nongray_images(
 
     if recursive:
         console.info("Completed processing all folders.")
+
+
+def _batch_lookup_broken(img_path: Path, interface: term.MessageQueue) -> tuple[bool, Path]:
+    cnsl = term.with_thread_queue(interface)
+    try:
+        with Image.open(img_path) as img:
+            img.load()
+        return False, img_path
+    except Exception as exc:
+        cnsl.log(f"Image {img_path} is broken: {exc}")
+        return True, img_path
+
+
+def _batch_lookup_broken_star(args: tuple[Path, term.MessageQueue]) -> tuple[bool, Path]:
+    return _batch_lookup_broken(*args)
+
+
+@lookup_group.command(
+    name="broken-images",
+    help="Lookup for broken images inside a folder",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.recursive
+@options.threads
+@time_program
+def lookup_broken_images(
+    path_or_archive: Path,
+    recursive: bool,
+    threads: int,
+):
+    """
+    Lookup for broken images inside a folder
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    candidates: list[Path] = []
+    if not recursive:
+        console.info(f"Looking up images in {path_or_archive}...")
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively looking up images in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} folders to lookup.")
+
+    if recursive and not candidates:
+        console.warning("No valid folders found to lookup.")
+        return
+
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        if not all_images:
+            console.info(f"No images found in {path_real}, skipping.")
+            continue
+
+        console.info(f"Using {threads} CPU threads for processing.")
+        progress = console.make_progress()
+        task_collect = progress.add_task(
+            "Processing images...", finished_text="Processed images", total=len(all_images)
+        )
+        broken_images: list[Path] = []
+        with threaded_worker(console, lowest_or(threads, all_images)) as (pool, log_q):
+            for result, img_path in pool.imap_unordered(
+                _batch_lookup_broken_star,
+                [(image, log_q) for image in all_images],
+            ):
+                if result:
+                    broken_images.append(img_path)
+                progress.update(task_collect, advance=1)
+
+        if not broken_images:
+            console.info("No broken images found in this folder.")
+            console.stop_progress(progress)
+            continue
+
+        console.warning(f"Found {len(broken_images)} broken images:")
+        for img_path in broken_images:
+            console.warning(f" - {img_path}")
+        console.stop_progress(progress, f"Completed processing {path_real}")
+
+    if recursive:
+        console.info("Completed processing all folders.")
