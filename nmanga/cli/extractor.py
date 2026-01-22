@@ -162,12 +162,26 @@ def try_extract_images_from_xhtml(
 
     # Handle blank images (e.g., SVG placeholders)
     for svg_element in root.findall(".//xhtml:svg", namespace):
-        img_src = svg_element.get("data-placeholder-src")
-        if not img_src:
+        img_placeholder_src = svg_element.get("data-placeholder-src")
+        if img_placeholder_src:
+            console.log(f"Found SVG placeholder for image {img_placeholder_src}, marking as blank.")
+            extracted_images.append(ExtractedImage(data=b"", ext="png", blank=True))
             continue
 
-        console.log(f"Found SVG placeholder for image {img_src}, marking as blank.")
-        extracted_images.append(ExtractedImage(data=b"", ext="png", blank=True))
+        image_child = svg_element.find(".//xhtml:image", namespace)
+        if image_child is not None:
+            # Find the referenced image
+            img_href = image_child.get("{http://www.w3.org/1999/xlink}href")
+            if img_href:
+                try:
+                    img_path = Path(img_href)
+                    img_resolved = (xhtml_path_real.parent / img_path).as_posix()
+                    with epub_zip.open(img_resolved) as img_file:
+                        img_data = img_file.read()
+                        img_ext = Path(img_resolved).suffix.lstrip(".").lower()
+                        extracted_images.append(ExtractedImage(data=img_data, ext=img_ext))
+                except KeyError:
+                    console.log(f"Image {img_href} not found in EPUB archive, skipping.")
 
     return extracted_images
 
