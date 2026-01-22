@@ -59,6 +59,26 @@ class ExtractedImage:
         return cls(data=b"", ext=ext, blank=True)
 
 
+def solve_path(base_path: Path, relative_path: str) -> Path:
+    """Resolve a relative path against a base path within an EPUB archive"""
+
+    base_path_parts = base_path.parts[:-1]  # exclude the file itself
+    relative_parts = Path(relative_path).parts
+
+    combined_parts = list(base_path_parts)
+
+    for part in relative_parts:
+        if part == ".":
+            continue
+        elif part == "..":
+            if len(combined_parts) > 0:
+                combined_parts.pop()
+        else:
+            combined_parts.append(part)
+
+    return Path(*combined_parts)
+
+
 def find_root_file_path(epub_zip: ZipFile) -> str:
     """Find the rootfile path from the EPUB's container.xml"""
 
@@ -116,10 +136,9 @@ def is_xhtml_blank(xhtml_content: str) -> bool:
     """Check if the XHTML content is blank (i.e., contains no significant elements)"""
 
     root = ET.fromstring(xhtml_content)
-    namespace = {"xhtml": "http://www.w3.org/1999/xhtml"}
-
+    namespace = {"xhtml": "http://www.w3.org/1999/xhtml", "xhtmlsvg": "http://www.w3.org/2000/svg"}
     # Check for significant elements like <img>, <svg>, etc.
-    significant_elements = root.findall(".//xhtml:img", namespace) + root.findall(".//xhtml:svg", namespace)
+    significant_elements = root.findall(".//xhtml:img", namespace) + root.findall(".//xhtmlsvg:svg", namespace)
     # Has text?
     has_text_data = (root.text and root.text.strip()) or any((elem.tail and elem.tail.strip()) for elem in root.iter())
     return len(significant_elements) == 0 and not bool(has_text_data)  # no images and no text
@@ -141,7 +160,10 @@ def try_extract_images_from_xhtml(
         return [ExtractedImage.make_blank(ext="png")]
 
     root = ET.fromstring(xhtml_content)
-    namespace = {"xhtml": "http://www.w3.org/1999/xhtml"}
+    namespace = {
+        "xhtml": "http://www.w3.org/1999/xhtml",
+        "xhtmlsvg": "http://www.w3.org/2000/svg",
+    }
 
     xhtml_path_real = Path(xhtml_path)
 
@@ -151,8 +173,7 @@ def try_extract_images_from_xhtml(
             continue
 
         try:
-            img_path = Path(img_src)
-            img_resolved = (xhtml_path_real.parent / img_path).as_posix()
+            img_resolved = solve_path(xhtml_path_real, img_src).as_posix()
             with epub_zip.open(img_resolved) as img_file:
                 img_data = img_file.read()
                 img_ext = Path(img_resolved).suffix.lstrip(".").lower()
@@ -161,21 +182,20 @@ def try_extract_images_from_xhtml(
             console.log(f"Image {img_src} not found in EPUB archive, skipping.")
 
     # Handle blank images (e.g., SVG placeholders)
-    for svg_element in root.findall(".//xhtml:svg", namespace):
+    for svg_element in root.findall(".//xhtmlsvg:svg", namespace):
         img_placeholder_src = svg_element.get("data-placeholder-src")
         if img_placeholder_src:
             console.log(f"Found SVG placeholder for image {img_placeholder_src}, marking as blank.")
             extracted_images.append(ExtractedImage(data=b"", ext="png", blank=True))
             continue
 
-        image_child = svg_element.find(".//xhtml:image", namespace)
+        image_child = svg_element.find(".//xhtmlsvg:image", namespace)
         if image_child is not None:
             # Find the referenced image
             img_href = image_child.get("{http://www.w3.org/1999/xlink}href")
             if img_href:
                 try:
-                    img_path = Path(img_href)
-                    img_resolved = (xhtml_path_real.parent / img_path).as_posix()
+                    img_resolved = solve_path(xhtml_path_real, img_href).as_posix()
                     with epub_zip.open(img_resolved) as img_file:
                         img_data = img_file.read()
                         img_ext = Path(img_resolved).suffix.lstrip(".").lower()
