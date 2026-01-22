@@ -90,9 +90,10 @@ def _wrapper_jpegify_threaded(
     output_dir: Path,
     cjpegli: str,
     quality: int,
+    force: bool,
 ) -> None:
     dest_path = output_dir / f"{img_path.stem}.jpg"
-    if dest_path.exists():
+    if dest_path.exists() and not force:
         cnsl = term.with_thread_queue(log_q)
         cnsl.warning(f"Skipping existing file: {dest_path}")
         return
@@ -102,7 +103,7 @@ def _wrapper_jpegify_threaded(
 
 
 def _wrapper_jpegify_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, str, int],
+    args: tuple[term.MessageQueue, Path, Path, str, int, bool],
 ) -> None:
     return _wrapper_jpegify_threaded(*args)
 
@@ -126,6 +127,7 @@ def _wrapper_jpegify_threaded_star(
 @options.cjpegli_path
 @options.threads
 @options.recursive
+@options.force
 @check_config_first
 @time_program
 def image_jpegify(
@@ -135,6 +137,7 @@ def image_jpegify(
     cjpegli_path: str,
     threads: int,
     recursive: bool,
+    force: bool,
 ):  # pragma: no cover
     """
     Convert images to JPEG to save space
@@ -188,7 +191,7 @@ def image_jpegify(
         with threaded_worker(console, lowest_or(threads, image_candidates)) as (pool, log_q):
             for _ in pool.imap_unordered(
                 _wrapper_jpegify_threaded_star,
-                ((log_q, image, real_output, cjpegli_exe, quality) for image in image_candidates),
+                ((log_q, image, real_output, cjpegli_exe, quality, force) for image in image_candidates),
             ):
                 progress.update(task, advance=1)
         console.stop_progress(progress, f"Converted {total_images} images to JPEG.")

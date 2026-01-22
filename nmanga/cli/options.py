@@ -165,6 +165,15 @@ recursive = click.option(
     help="Recursively lookup in subdirectories (only when a folder is given)",
     panel="Input Options",
 )
+force = click.option(
+    "-f",
+    "--force",
+    "force",
+    is_flag=True,
+    default=False,
+    help="Force overwrite or move existing files",
+    panel="Input Options",
+)
 output_mode = click.option(
     "-m",
     "--mode",

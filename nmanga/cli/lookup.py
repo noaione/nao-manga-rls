@@ -121,13 +121,7 @@ def _batch_lookup_nongray(img_path: Path) -> tuple[bool, Path]:
 @options.dest_output(optional=False)
 @options.recursive
 @options.threads
-@click.option(
-    "--force",
-    "-f",
-    is_flag=True,
-    default=False,
-    help="Do move instead of copy existing files in the output directory.",
-)
+@options.force
 @time_program
 def lookup_nongray_images(
     path_or_archive: Path,
