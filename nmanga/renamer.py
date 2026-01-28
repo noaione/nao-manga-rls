@@ -144,7 +144,7 @@ def shift_renaming_gen(
     return final_renaming_map
 
 
-def determine_quality_suffix(*, quality: str, image_path: Path, quality_maps: QualityMapping) -> str:
+def determine_quality_suffix(*, quality: str, image_path: Path, quality_maps: QualityMapping) -> str | None:
     """
     Determine the quality suffix based on the base quality and image resolution.
 
@@ -159,8 +159,8 @@ def determine_quality_suffix(*, quality: str, image_path: Path, quality_maps: Qu
 
     Returns
     -------
-    :class:`str`
-        The determined quality suffix.
+    :class:`str` or :class:`None`
+        The determined quality suffix, or :class:`None` if it cannot be determined (which means standard quality).
     """
 
     if quality.lower() in ("auto", "mixed"):
@@ -169,4 +169,6 @@ def determine_quality_suffix(*, quality: str, image_path: Path, quality_maps: Qu
                 return "HQ"
             elif img.height <= quality_maps.LQ:
                 return "LQ"
+            else:
+                return None
     return quality
