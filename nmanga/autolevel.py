@@ -184,7 +184,7 @@ def find_local_peak(
     peaks_w = peaks_w[valid_w]
 
     if len(peaks_w) > 0:
-        peak_val_w = math.ceil(binedges_roi_w[peaks_w[-1]])
+        peak_val_w = math.ceil(binedges_roi_w[peaks_w[0]])
         white_level = peak_val_w
     else:
         # Find without max height constraint
@@ -194,7 +194,7 @@ def find_local_peak(
         valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
         peaks_w = peaks_w[valid_w]
         if len(peaks_w) > 0:
-            peak_val_w = math.ceil(binedges_roi_w[peaks_w[-1]])
+            peak_val_w = math.ceil(binedges_roi_w[peaks_w[0]])
             white_level = peak_val_w
 
     return black_level, white_level, force_gray
