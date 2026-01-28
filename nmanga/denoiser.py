@@ -339,6 +339,9 @@ def denoise_single_image(
     new_padded_image.paste(img, (0, 0))  # Paste at (0, 0) position
     # Pre-Processing
     image_array = np.array(new_padded_image)
+    # For grayscale images, add channel dimension so rearrange operations work correctly
+    if is_grayscale:
+        image_array = np.expand_dims(image_array, axis=-1)
     # contrast stretching: scaling the image based on its own darkest and brightest pixels.
     # For example, a very dark photo (e.g., pixel values from 10 to 50) and a very bright photo (e.g., values
     # from 200 to 250) will both be stretched to the full [0.0, 1.0] range.
@@ -411,6 +414,9 @@ def denoise_single_image(
     # Rounding the array for better casting to uint8.
     postprocessed_array = np.round(postprocessed_array)
     postprocessed_array = postprocessed_array.astype(np.uint8)
+    # For grayscale images, remove channel dimension before creating PIL Image
+    if is_grayscale:
+        postprocessed_array = np.squeeze(postprocessed_array, axis=-1)
     output_image = Image.fromarray(postprocessed_array)
 
     # Cropping the image from the overall canvas.
