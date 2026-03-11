@@ -789,6 +789,7 @@ dependencies = [
     { name = "rich-click" },
     { name = "typing-extensions" },
     { name = "unrar2-cffi" },
+    { name = "wand" },
 ]
 
 [package.optional-dependencies]
@@ -837,6 +838,7 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'autostuff'", specifier = "==1.15.3" },
     { name = "typing-extensions", specifier = "==4.15.0" },
     { name = "unrar2-cffi", specifier = "==0.4.1" },
+    { name = "wand", specifier = ">=0.7.0" },
 ]
 provides-extras = ["dev", "autostuff", "denoiser"]
 
@@ -2003,6 +2005,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5b/36/2da9db3101e05635e3ff0aee6b1a8eafae0e55c4d5c38018370396b4bd88/unrar2_cffi-0.4.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:5c7a6c06f34fc8d8f0a2af7689100dcc04e14042aaa6fb9c3125c3a617408800", size = 1236320, upload-time = "2025-05-25T20:13:37.552Z" },
     { url = "https://files.pythonhosted.org/packages/d2/1e/e5a405e377f5ed8a8ae0f97f359d95a2f2a7581da8d52bddcb5e916a4605/unrar2_cffi-0.4.1-cp313-cp313-win32.whl", hash = "sha256:17ae2cb75218a2df671d6b5c369f417927697da198c33cc9aa5c838f2e2626fc", size = 189448, upload-time = "2025-05-25T20:13:45.683Z" },
     { url = "https://files.pythonhosted.org/packages/c4/4c/ec67323cb8095cb5fbe7ba2748950ee37fd5ac4400d30c8935e5ca526c7d/unrar2_cffi-0.4.1-cp313-cp313-win_amd64.whl", hash = "sha256:b4d1b357f0238c24ffb4271197962d033e9b5a98e7a66ce1858e7f95b511cad7", size = 219009, upload-time = "2025-05-25T20:13:47.077Z" },
+]
+
+[[package]]
+name = "wand"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/f6/feb40fadb7f3a6c5d45c02840c329725f6ec907eb3581c5de27445700e8a/wand-0.7.0.tar.gz", hash = "sha256:e48f983cc248c23f752e5ba8a6aa1b09370c87d81425d2cc7474f4536c0740f9", size = 11888946, upload-time = "2026-02-23T14:50:34.79Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/6c/51fe13d260d9e910d8f010494cc513420ab79852662fefdebdecfeaeebd5/wand-0.7.0-py3-none-any.whl", hash = "sha256:197a5011891a68fc14558cac58db5f5aafb66ef1dd28bfb4a2c62c156c41712e", size = 144773, upload-time = "2026-02-23T14:50:46.162Z" },
 ]
 
 [[package]]

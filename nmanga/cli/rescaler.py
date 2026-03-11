@@ -51,12 +51,17 @@ class RescaleResult(int, Enum):
     SKIPPED = 2
 
 
+FilterParamOpt = float | int | None
+
+
 def _runner_rescale_threaded(
     log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
     target: ResizeTarget,
     kernel: ResizeKernel,
+    param_a: FilterParamOpt = None,
+    param_b: FilterParamOpt = None,
 ) -> RescaleResult:
     cnsl = term.with_thread_queue(log_q)
 
@@ -70,6 +75,8 @@ def _runner_rescale_threaded(
         img,
         target=target,
         kernel=kernel,
+        param_a=param_a,
+        param_b=param_b,
     )
 
     rescaled_img.save(dest_path, format="PNG")
@@ -79,7 +86,7 @@ def _runner_rescale_threaded(
 
 
 def _runner_rescale_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, ResizeTarget, ResizeKernel],
+    args: tuple[term.MessageQueue, Path, Path, ResizeTarget, ResizeKernel, FilterParamOpt, FilterParamOpt],
 ) -> RescaleResult:
     return _runner_rescale_threaded(*args)
 
@@ -127,6 +134,20 @@ def _runner_rescale_threaded_star(
     default=ResizeMode.Fit,
     help="Resizing mode to use when both width and height are specified.",
 )
+@click.option(
+    "-a",
+    "--param-a",
+    type=options.FLOAT_INT,
+    required=False,
+    help="Additional parameter A for certain kernels (e.g., taps for lanczos or 'a' for bicubic).",
+)
+@click.option(
+    "-b",
+    "--param-b",
+    type=options.FLOAT_INT,
+    required=False,
+    help="Additional parameter B for certain kernels (e.g., 'b' for bicubic or 'blur' for lanczos).",
+)
 @options.recursive
 @options.threads_alt
 @check_config_first
@@ -139,6 +160,8 @@ def rescale_image(
     width: int | None,
     height: int | None,
     mode: ResizeMode,
+    param_a: float | int | None,
+    param_b: float | int | None,
     recursive: bool,
     threads: int,
 ) -> None:
@@ -176,7 +199,7 @@ def rescale_image(
         with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
             for result in pool.imap_unordered(
                 _runner_rescale_threaded_star,
-                ((log_q, img_path, real_output, real_target, kernel) for img_path in all_files),
+                ((log_q, img_path, real_output, real_target, kernel, param_a, param_b) for img_path in all_files),
             ):
                 results.append(result)
                 progress.update(task, advance=1)
