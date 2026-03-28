@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 import pytest  # type: ignore
+
 from nmanga.common import RegexCollection
 
 

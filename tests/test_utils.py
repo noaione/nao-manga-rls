@@ -25,6 +25,7 @@ SOFTWARE.
 import sys
 
 import pytest
+
 from nmanga.utils import clean_title, decode_or, encode_or, is_oneshot, secure_filename, unsecure_filename
 
 
