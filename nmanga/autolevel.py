@@ -94,7 +94,7 @@ def find_local_peak(
     *,
     upper_limit: int = 60,
     peak_percentage: float | None = 0.25,
-    peak_prominence: float | None = 0.1,
+    peak_prominence: float | None = None,
     skip_white_check: bool = False,
 ) -> tuple[int, int, bool]:
     """
