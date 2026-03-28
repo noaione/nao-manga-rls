@@ -65,11 +65,32 @@
                     "type": "integer"
                 },
                 "min_peak_pct": {
+                    "anyOf": [
+                        {
+                            "maximum": 100.0,
+                            "minimum": 0.0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
                     "default": 0.25,
-                    "maximum": 100.0,
-                    "minimum": 0.0,
-                    "title": "Minimum Pixels Peak Percentage",
-                    "type": "number"
+                    "title": "Minimum Pixels Peak Percentage"
+                },
+                "min_prominence_pct": {
+                    "anyOf": [
+                        {
+                            "maximum": 100.0,
+                            "minimum": 0.0,
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Minimum Prominence Percentage for Peaks"
                 },
                 "skip_white": {
                     "default": true,
@@ -1691,7 +1712,25 @@
                 "mitchell",
                 "gaussian",
                 "lanczos",
-                "hamming"
+                "lanczossharp",
+                "hamming",
+                "hanning",
+                "hermite",
+                "blackman",
+                "quadratic",
+                "jinc",
+                "sinc",
+                "sincfast",
+                "kaiser",
+                "welsh",
+                "parzen",
+                "bohman",
+                "bartlett",
+                "lagrange",
+                "robidoux",
+                "robidouxsharp",
+                "cosine",
+                "spline"
             ],
             "title": "ResizeKernel",
             "type": "string"

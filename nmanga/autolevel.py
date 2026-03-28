@@ -93,7 +93,8 @@ def find_local_peak(
     img_path: Path | BytesIO | Image.Image,
     *,
     upper_limit: int = 60,
-    peak_percentage: float = 0.25,
+    peak_percentage: float | None = 0.25,
+    peak_prominence: float | None = 0.1,
     skip_white_check: bool = False,
 ) -> tuple[int, int, bool]:
     """
@@ -118,86 +119,107 @@ def find_local_peak(
     if force_gray:
         image = image.convert("L")  # force grayscale
 
-    if peak_percentage <= 0 and peak_percentage >= 100:
+    if peak_percentage is not None and (peak_percentage <= 0 and peak_percentage >= 100):
         peak_percentage = 0.25  # default value
+    if peak_prominence is not None and (peak_prominence <= 0 and peak_prominence >= 100):
+        peak_prominence = 0.1  # default value
 
     img_width, img_height = image.size
 
-    min_px_count = math.ceil((img_width * img_height) * (peak_percentage / 100.0))
-    min_prominence = int(min_px_count / 2)
-
     img_array = NumpyLib.array(image)  # type: ignore
-    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 256))  # type: ignore
+    hist, bin_edges = NumpyLib.histogram(img_array, bins=256, range=(0, 256))  # type: ignore
 
     # Region of interest: only consider peaks in the lower range for black level
-    roi_min, roi_max = 0, upper_limit
-    roi_mask = (binedges[:-1] >= roi_min) & (binedges[:-1] < roi_max)
+    roi_min = 0
+    roi_max = upper_limit
+    roi_mask = (bin_edges[:-1] >= roi_min) & (bin_edges[:-1] <= roi_max)
     hist_roi = hist[roi_mask]
-    binedges_roi = binedges[:-1][roi_mask]
 
-    # Pad left and right to avoid edge peaks
+    if len(hist_roi) == 0:
+        # Nothing to analyze, return defaults
+        return 0, 255, force_gray
+
+    bins_roi = bin_edges[:-1][roi_mask].astype(int)
+    total_pixels = img_width * img_height
+
+    min_pix_count = math.ceil(total_pixels * (peak_percentage / 100.0)) if peak_percentage is not None else 0
+    min_prominence = math.ceil(total_pixels * (peak_prominence / 100.0)) if peak_prominence is not None else 0
+
+    # Pad so edge bins can be detected as peaks
     hist_padded = NumpyLib.pad(hist_roi, (1, 1), mode="constant", constant_values=0)  # type: ignore
+    # Primary peak detection with thresholds
+    find_peaks_kwargs: dict = {"height": min_pix_count}
+    if min_prominence is not None:
+        find_peaks_kwargs["prominence"] = min_prominence
 
-    # Find peaks on padded array
-    peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=min_px_count, prominence=min_prominence)  # type: ignore
+    peaks_padded, properties = ScipySignalLib.find_peaks(hist_padded, **find_peaks_kwargs)  # type: ignore
 
-    peaks = peaks_padded - 1  # Adjust indices back to original hist_roi
+    # Map back from padded indices to ROI indices and filter out padding ghosts
+    peaks = peaks_padded - 1
     valid = (peaks >= 0) & (peaks < len(hist_roi))
     peaks = peaks[valid]
+    heights = NumpyLib.array(properties["peak_heights"])[valid]  # type: ignore
 
-    black_level = 0
+    black_peak_level = 0
     if len(peaks) > 0:
-        peak_val = math.ceil(binedges_roi[peaks[0]])
-        black_level = peak_val
+        # Select the tallest peak, not the first
+        best = NumpyLib.argmax(heights)  # type: ignore
+        black_peak_level = int(bins_roi[peaks[best]])
     else:
-        # Find without max height constraint
-        peaks_padded, _ = ScipySignalLib.find_peaks(hist_padded, height=0)  # type: ignore
+        # Fallback: find any peak in the ROI regardless of thresholds
+        peaks_padded_fb, properties_fb = ScipySignalLib.find_peaks(hist_padded, height=0)  # type: ignore
+        peaks_fb = peaks_padded_fb - 1
+        valid_fb = (peaks_fb >= 0) & (peaks_fb < len(hist_roi))
+        peaks_fb = peaks_fb[valid_fb]
+        heights_fb = NumpyLib.array(properties_fb["peak_heights"])[valid_fb]  # type: ignore
 
-        peaks = peaks_padded - 1  # Adjust indices back to original hist_roi
-        valid = (peaks >= 0) & (peaks < len(hist_roi))
-        peaks = peaks[valid]
-        if len(peaks) > 0:
-            peak_val = math.ceil(binedges_roi[peaks[0]])
-            black_level = peak_val
+        if len(peaks_fb) > 0:
+            best_fb = NumpyLib.argmax(heights_fb)  # type: ignore
+            black_peak_level = int(bins_roi[peaks_fb[best_fb]])
 
-    if not isinstance(img_path, Image.Image):
-        # temp image, close
-        image.close()
-
-    white_level = 255
+    # Do the reverse, white level detection
+    # Check what's the most common shade in the white region (e.g. 195-255)
+    # If it has a significant amount of pixels, we can consider that as the white level
+    white_peak_level = 255
     if skip_white_check:
-        return black_level, white_level, force_gray
+        return black_peak_level, white_peak_level, force_gray
 
-    # White level detection: find the highest peak near white
-    roi_min_w, roi_max_w = 195, 256
-    roi_mask_w = (binedges[:-1] >= roi_min_w) & (binedges[:-1] < roi_max_w)
-    hist_roi_w = hist[roi_mask_w]
-    binedges_roi_w = binedges[:-1][roi_mask_w]
-    if hist_roi_w.size == 0:
-        return black_level, white_level, force_gray
+    # Region of interest for white level detection
+    w_roi_min = 255 - upper_limit
+    w_roi_max = 255
+    w_roi_mask = (bin_edges[:-1] >= w_roi_min) & (bin_edges[:-1] <= w_roi_max)
+    hist_w_roi = hist[w_roi_mask]
 
-    hist_padded_w = NumpyLib.pad(hist_roi_w, (1, 1), mode="constant", constant_values=0)  # type: ignore
-    peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=min_px_count, prominence=min_prominence)  # type: ignore
+    if len(hist_w_roi) == 0:
+        return black_peak_level, white_peak_level, force_gray
 
-    peaks_w = peaks_padded_w - 1
-    valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
-    peaks_w = peaks_w[valid_w]
+    bins_w_roi = bin_edges[:-1][w_roi_mask].astype(int)
 
-    if len(peaks_w) > 0:
-        peak_val_w = math.ceil(binedges_roi_w[peaks_w[0]])
-        white_level = peak_val_w
+    hist_w_paddded = NumpyLib.pad(hist_w_roi, (1, 1), mode="constant", constant_values=0)  # type: ignore
+
+    w_peaks_padded, w_properties = ScipySignalLib.find_peaks(hist_w_paddded, **find_peaks_kwargs)  # type: ignore
+
+    w_peaks = w_peaks_padded - 1
+    w_valid = (w_peaks >= 0) & (w_peaks < len(hist_w_roi))
+    w_peaks = w_peaks[w_valid]
+    w_heights = NumpyLib.array(w_properties["peak_heights"])[w_valid]  # type: ignore
+
+    if len(w_peaks) > 0:
+        best_w = NumpyLib.argmax(w_heights)  # type: ignore
+        white_peak_level = int(bins_w_roi[w_peaks[best_w]])
     else:
-        # Find without max height constraint
-        peaks_padded_w, _ = ScipySignalLib.find_peaks(hist_padded_w, height=0)  # type: ignore
+        # Fallback
+        w_peaks_padded_fb, w_properties_fb = ScipySignalLib.find_peaks(hist_w_paddded, height=0)  # type: ignore
+        w_peaks_fb = w_peaks_padded_fb - 1
+        w_valid_fb = (w_peaks_fb >= 0) & (w_peaks_fb < len(hist_w_roi))
+        w_peaks_fb = w_peaks_fb[w_valid_fb]
+        w_heights_fb = NumpyLib.array(w_properties_fb["peak_heights"])[w_valid_fb]  # type: ignore
 
-        peaks_w = peaks_padded_w - 1
-        valid_w = (peaks_w >= 0) & (peaks_w < len(hist_roi_w))
-        peaks_w = peaks_w[valid_w]
-        if len(peaks_w) > 0:
-            peak_val_w = math.ceil(binedges_roi_w[peaks_w[0]])
-            white_level = peak_val_w
+        if len(w_peaks_fb) > 0:
+            best_w_fb = NumpyLib.argmax(w_heights_fb)  # type: ignore
+            white_peak_level = int(bins_w_roi[w_peaks_fb[best_w_fb]])
 
-    return black_level, white_level, force_gray
+    return black_peak_level, white_peak_level, force_gray
 
 
 def find_local_peak_legacy(

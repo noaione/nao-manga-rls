@@ -104,7 +104,11 @@ def _runner_autolevel2_threaded(
         )
     else:
         black_level, white_level, _ = find_local_peak(
-            img, upper_limit=action.upper_limit, peak_percentage=action.min_peak_pct
+            img,
+            upper_limit=action.upper_limit,
+            peak_percentage=action.min_peak_pct,
+            peak_prominence=action.min_prominence_pct,
+            skip_white_check=action.skip_white,
         )
 
     is_black_bad = black_level <= 0
@@ -181,8 +185,13 @@ class ActionAutolevel(BaseAction):
     """The upper limit for finding local peaks in the histogram"""
     peak_offset: int = Field(0, ge=-20, le=20, title="Peak Offset")
     """The offset to add to the found black level peak, can be negative"""
-    min_peak_pct: float = Field(0.25, ge=0.0, le=100.0, title="Minimum Pixels Peak Percentage")
+    min_peak_pct: float | None = Field(0.25, ge=0.0, le=100.0, title="Minimum Pixels Peak Percentage")
     """The minimum percentage of pixels for a peak to be considered valid"""
+    min_prominence_pct: float | None = Field(None, ge=0.0, le=100.0, title="Minimum Prominence Percentage for Peaks")
+    """
+    The minimum prominence relative to nearby shades for a peak to be considered valid, if None, it is disabled.
+    Prefer to set it lower comparedd to `min_peak_pct`
+    """
     skip_white: bool = Field(True, title="Skip White Levels During Peak Finding")
     """Whether to skip white peaks when finding local peaks in the histogram"""
     skip_color: bool = Field(False, title="Skip Color Images")

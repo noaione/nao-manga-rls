@@ -103,11 +103,20 @@ def determine_image_format(img_path: Path, prefer: str) -> str:
 
 
 def _find_local_peak_magick_wrapper(
-    img_path: Path, upper_limit: int, peak_min_pct: float, skip_white: bool, is_legacy: bool
+    img_path: Path,
+    upper_limit: int,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
+    skip_white: bool,
+    is_legacy: bool,
 ) -> tuple[int, int, Path, bool]:
     if not is_legacy:
         black_level, white_level, force_gray = find_local_peak(
-            img_path, upper_limit=upper_limit, peak_percentage=peak_min_pct, skip_white_check=skip_white
+            img_path,
+            upper_limit=upper_limit,
+            peak_percentage=peak_min_pct,
+            peak_prominence=peak_prom_pct,
+            skip_white_check=skip_white,
         )
     else:
         black_level, white_level, force_gray = find_local_peak_legacy(
@@ -116,7 +125,9 @@ def _find_local_peak_magick_wrapper(
     return black_level, white_level, img_path, force_gray
 
 
-def _find_local_peak_magick_wrapper_star(args: tuple[Path, int, float, bool, bool]) -> tuple[int, int, Path, bool]:
+def _find_local_peak_magick_wrapper_star(
+    args: tuple[Path, int, float | None, float | None, bool, bool],
+) -> tuple[int, int, Path, bool]:
     return _find_local_peak_magick_wrapper(*args)
 
 
@@ -144,6 +155,15 @@ def _find_local_peak_magick_wrapper_star(args: tuple[Path, int, float, bool, boo
     default=0.25,
     show_default=True,
     help="The minimum percentage of pixels for a peak to be considered valid",
+)
+@click.option(
+    "-ppm",
+    "--peak-prominence-pct",
+    "peak_prom_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=None,
+    show_default=True,
+    help="Minimum prominence relative to nearby shades to be considered a peak.",
 )
 @click.option(
     "-po",
@@ -183,7 +203,8 @@ def autolevel(
     path_or_archive: Path,
     dest_output: Path,
     upper_limit: int,
-    peak_min_pct: float,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
     peak_offset: int,
     image_fmt: str,
     no_white: bool,
@@ -224,7 +245,7 @@ def autolevel(
     with threaded_worker(console, lowest_or(threads, all_files)) as (pool, _):
         for result in pool.imap_unordered(
             _find_local_peak_magick_wrapper_star,
-            ((file, upper_limit, peak_min_pct, no_white, legacy) for file in all_files),
+            ((file, upper_limit, peak_min_pct, peak_prom_pct, no_white, legacy) for file in all_files),
         ):
             results.append(result)
             progress.update(task_calculate, advance=1)
@@ -320,7 +341,8 @@ def autolevel(
 class Autolevel2Config:
     upper_limit: int
     peak_offset: int
-    peak_min_pct: float
+    peak_min_pct: float | None
+    peak_prom_pct: float | None
     force_gray: bool
     keep_colorspace: bool
     image_fmt: str
@@ -421,6 +443,15 @@ def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autoleve
     help="The minimum percentage of pixels for a peak to be considered valid",
 )
 @click.option(
+    "-ppm",
+    "--peak-prominence-pct",
+    "peak_prom_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=None,
+    show_default=True,
+    help="Minimum prominence relative to nearby shades to be considered a peak.",
+)
+@click.option(
     "-po",
     "--peak-offset",
     "peak_offset",
@@ -474,7 +505,8 @@ def autolevel2(
     path_or_archive: Path,
     dest_output: Path,
     upper_limit: int,
-    peak_min_pct: float,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
     peak_offset: int,
     force_gray: bool,
     keep_colorspace: bool,
@@ -514,6 +546,7 @@ def autolevel2(
             upper_limit=upper_limit,
             peak_offset=peak_offset,
             peak_min_pct=peak_min_pct,
+            peak_prom_pct=peak_prom_pct,
             force_gray=force_gray,
             keep_colorspace=keep_colorspace,
             image_fmt=image_fmt,
@@ -711,6 +744,15 @@ def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config, bool]) -> Au
     help="The minimum percentage of pixels for a peak to be considered valid",
 )
 @click.option(
+    "-ppm",
+    "--peak-prominence-pct",
+    "peak_prom_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=None,
+    show_default=True,
+    help="Minimum prominence relative to nearby shades to be considered a peak.",
+)
+@click.option(
     "-po",
     "--peak-offset",
     "peak_offset",
@@ -737,7 +779,8 @@ def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config, bool]) -> Au
 def analyze_level(
     path_or_archive: Path,
     upper_limit: int,
-    peak_min_pct: float,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
     peak_offset: int,
     no_white: bool,
     legacy: bool,
@@ -761,6 +804,7 @@ def analyze_level(
         upper_limit=upper_limit,
         peak_offset=peak_offset,
         peak_min_pct=peak_min_pct,
+        peak_prom_pct=peak_prom_pct,
         no_white=no_white,
         # Mocked values
         force_gray=False,
