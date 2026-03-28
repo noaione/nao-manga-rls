@@ -159,5 +159,8 @@ exclude = [
     ".venv",
     "venv",
     "env",
-    "**/Lib/**"
+    "**/Lib/**",
+    "**/node_modules/**",
+    "**/__pycache__",
+    "**/.*"
 ]

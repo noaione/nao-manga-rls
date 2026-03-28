@@ -26,11 +26,13 @@ SOFTWARE.
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import sys
 import warnings
 from enum import Enum
 from hashlib import md5
+from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -51,6 +53,7 @@ __all__ = (
 )
 
 logger = logging.getLogger(__name__)
+__winml_registered__ = False
 
 
 class MLDataType(str, Enum):
@@ -70,6 +73,16 @@ class MLDataType(str, Enum):
         else:
             raise ValueError(f"Unknown MLDataType string: {type_str}")
 
+    def to_onv(self) -> str:
+        if self == MLDataType.FP32:
+            return "f32"
+        elif self == MLDataType.FP16:
+            return "f16"
+        elif self == MLDataType.BF16:
+            return "bf16"
+        else:
+            raise ValueError(f"Unsupported MLDataType for OpenVINO: {self}")
+
 
 def get_data_dir() -> Path:
     # Should use APPDATA on Windows, XDG_CACHE_HOME on Linux, etc. but for simplicity just use home/.cache
@@ -79,6 +92,55 @@ def get_data_dir() -> Path:
         cache_dir = Path.home() / ".cache" / "nmanga"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
+
+
+def _preload_winml_and_register() -> None:
+    global __winml_registered__
+
+    if __winml_registered__:
+        return
+    if sys.platform != "win32":
+        __winml_registered__ = True  # Mark as registered to avoid trying again on non-Windows platforms
+        return
+
+    # Unlink to avoid issues with old versions of msvcp140.dll being loaded by winrt-runtime package
+    site_packages_path = Path(str(metadata.distribution("winrt-runtime").locate_file("")))
+    dll_path = site_packages_path / "winrt" / "msvcp140.dll"
+    if dll_path.exists():
+        dll_path.unlink()
+
+    import onnxruntime as ort  # type: ignore
+
+    winui3_boostrap = importlib.util.find_spec("winui3.microsoft.windows.applicationmodel.dynamicdependency.bootstrap")
+    if winui3_boostrap is None:
+        __winml_registered__ = True  # Mark as registered to avoid trying again if WinUI3 bootstrap is not available
+        return
+    winml_spec = importlib.util.find_spec("winui3.microsoft.windows.ai.machinelearning")
+    if winml_spec is None:
+        __winml_registered__ = True  # Mark as registered to avoid trying again if WinML is not available
+        return
+
+    # Actually import the modules
+    import winui3.microsoft.windows.ai.machinelearning as winml  # type: ignore
+    from winui3.microsoft.windows.applicationmodel.dynamicdependency.bootstrap import (  # type: ignore
+        InitializeOptions,
+        initialize,
+    )
+
+    # Load WinUI, use with/context to auto unload/garbage collect
+    with initialize(options=InitializeOptions.ON_NO_MATCH_SHOW_UI):
+        # Get WinML providers
+        catalog = winml.ExecutionProviderCatalog.get_default()
+        providers = catalog.find_all_providers()
+        for provider in providers:
+            # Load/download the provider
+            provider.ensure_ready_async().get()
+            if provider.library_path == "":
+                continue
+            # Register the provider with ONNX Runtime
+            ort.register_execution_provider_library(provider.name, provider.library_path)
+
+    __winml_registered__ = True
 
 
 def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: int | None = None) -> int:
@@ -201,11 +263,21 @@ def prepare_model_runtime_builders(
     if is_tensorrt_available is not None:
         import tensorrt  # type: ignore  # noqa: F401
 
+    verb_level = 0 if is_verbose else 3
+    ort.set_default_logger_severity(verb_level)
+    ort.set_default_logger_verbosity(verb_level)
+
+    _preload_winml_and_register()
+
     data_dir = get_data_dir()
     cache_dir = data_dir / "trt_engines"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_rtx_dir = data_dir / "trtrtx_engines"
     cache_rtx_dir.mkdir(parents=True, exist_ok=True)
+    cache_migx_dir = data_dir / "migx_cache"
+    cache_migx_dir.mkdir(parents=True, exist_ok=True)
+    cache_onv_dir = data_dir / "openvino_cache"
+    cache_onv_dir.mkdir(parents=True, exist_ok=True)
 
     hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
     cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
@@ -240,6 +312,34 @@ def prepare_model_runtime_builders(
         "nv_detailed_build_log": True if is_verbose else False,
         "nv_runtime_cache_path": str(cache_rtx_dir),
     }
+    migraphx_ep_config = {
+        "device_id": device_id,
+        "migraphx_fp16_enable": data_type == MLDataType.FP16,
+        "migraphx_bf16_enable": data_type == MLDataType.BF16,
+        "migraphx_exhaustive_tune": 1,
+        "migraphx_mem_limit": memory_limit,
+        "migraphx_cache_dir": str(cache_migx_dir),
+    }
+    onv_json_ep_config = {
+        "CPU": {
+            "PERFORMANCE_HINT": "THROUGHPUT",
+            "EXECUTION_MODE_HINT": "ACCURACY",
+            "CACHE_DIR": str(cache_onv_dir),
+            "CACHE_MODE": "OPTIMIZE_SPEED",
+        },
+        "GPU": {
+            "PERFORMANCE_HINT": "THROUGHPUT",
+            "EXECUTION_MODE_HINT": "ACCURACY",
+            "INFERENCE_PRECISION_HINT": data_type.to_onv(),
+            "NUM_STREAMS": "2",  # A bit more
+            "CACHE_DIR": str(cache_onv_dir),
+            "CACHE_MODE": "OPTIMIZE_SPEED",
+        },
+    }
+    onv_ep_config = {
+        "device_type": "HETERO:GPU,CPU",
+        "load_config": json.dumps(onv_json_ep_config),
+    }
 
     model_input, model_channel_count = get_model_information(model_path)
     if tile_size is not None:
@@ -253,11 +353,18 @@ def prepare_model_runtime_builders(
         trtrtx_ep_config["nv_profile_min_shapes"] = model_input
         trtrtx_ep_config["nv_profile_max_shapes"] = min_shapes
         trtrtx_ep_config["nv_profile_opt_shapes"] = max_shapes
+
+    available_providers = ort.get_available_providers()
     if sys.platform != "darwin":
-        providers = [
-            ("NvTensorRTRTXExecutionProvider", trtrtx_ep_config),
-            ("TensorrtExecutionProvider", trt_ep_config),
-            (
+        providers = []
+        if "NvTensorRTRTXExecutionProvider" in available_providers:
+            providers.append(("NvTensorRTRTXExecutionProvider", trtrtx_ep_config))
+        if "TensorrtExecutionProvider" in available_providers:
+            providers.append(("TensorrtExecutionProvider", trt_ep_config))
+        if "MIGraphXExecutionProvider" in available_providers:
+            providers.append(("MIGraphXExecutionProvider", migraphx_ep_config))
+        if "CUDAExecutionProvider" in available_providers:
+            providers.append((
                 "CUDAExecutionProvider",
                 {
                     "device_id": device_id,
@@ -268,8 +375,9 @@ def prepare_model_runtime_builders(
                     "cudnn_conv_use_max_workspace": True,
                     "prefer_nhwc": True,
                 },
-            ),
-        ]
+            ))
+        if "OpenVINOExecutionProvider" in available_providers:
+            providers.append(("OpenVINOExecutionProvider", onv_ep_config))
     else:
         providers = [
             (
@@ -285,9 +393,11 @@ def prepare_model_runtime_builders(
             ),
         ]
 
-    verb_level = 0 if is_verbose else 3
-    ort.set_default_logger_severity(verb_level)
-    ort.set_default_logger_verbosity(verb_level)
+    if not providers:
+        raise RuntimeError(
+            "No suitable ONNX Runtime execution providers found. "
+            "Ensure you have compatible hardware and the necessary dependencies installed."
+        )
 
     sess_opt = ort.SessionOptions()
     session = cast(
