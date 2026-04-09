@@ -15,7 +15,7 @@
                 [22, 23],
                 [152, 153]
             ],
-            "colors": [0, 1, 2, 3],
+            "colors": "auto",
             "meta_naming": [
                 {
                     "tag": "Cover",
@@ -81,7 +81,7 @@
             "spreads": [
                 [2, 3]
             ],
-            "colors": [0, 1, 2, 3, 4],
+            "colors": "auto",
             "meta_naming": [
                 {
                     "tag": "Cover",
@@ -151,7 +151,7 @@
                 [84, 85],
                 [126, 127]
             ],
-            "colors": [0, 1, 2, 3, 4],
+            "colors": "auto",
             "meta_naming": [
                 {
                     "tag": "Cover",
@@ -210,7 +210,7 @@
                 [2, 3],
                 [80, 81]
             ],
-            "colors": [0, 1, 2, 3, 4],
+            "colors": "auto",
             "meta_naming": [
                 {
                     "tag": "Cover",
@@ -277,7 +277,7 @@
             "spreads": [
                 [2, 3]
             ],
-            "colors": [0, 1, 2, 3, 4],
+            "colors": "auto",
             "meta_naming": [
                 {
                     "tag": "Cover",
@@ -339,7 +339,7 @@
             "spreads": [
                 [2, 3]
             ],
-            "colors": [0, 1, 2, 3, 4],
+            "colors": "auto",
             "meta_naming": [
                 {
                     "tag": "Cover",
@@ -393,14 +393,78 @@
                     "action": "copy"
                 }
             ]
+        },
+        {
+            "path": "v07",
+            "number": 7,
+            "year": 2026,
+            "spreads": [
+                [2, 3]
+            ],
+            "colors": "auto",
+            "meta_naming": [
+                {
+                    "tag": "Cover",
+                    "page": 0
+                },
+                {
+                    "tag": "ToC",
+                    "page": 4
+                },
+                {
+                    "tag": "Afterword",
+                    "page": 180
+                },
+                {
+                    "tag": "Colophon",
+                    "page": 195
+                }
+            ],
+            "quality": "auto",
+            "chapters": [
+                {
+                    "number": 30,
+                    "title": "A Flicker",
+                    "start": 0
+                },
+                {
+                    "number": 31,
+                    "title": "Hope",
+                    "start": 37
+                },
+                {
+                    "number": 32,
+                    "title": "What's Here With Us",
+                    "start": 67
+                },
+                {
+                    "number": 33,
+                    "title": "At the End of Our Days",
+                    "start": 99
+                },
+                {
+                    "number": 34,
+                    "title": "The Shape of Us",
+                    "start": 135
+                },
+                {
+                    "number": 34.5,
+                    "title": "I Love You",
+                    "start": 173
+                }
+            ],
+            "skip_actions": [
+                {
+                    "step": "autolevel-1",
+                    "pages": [0],
+                    "action": "copy"
+                }
+            ]
         }
     ],
     "actions": [
         {
-            "kind": "autolevel",
-            "legacy_mode": true,
-            "skip_color": false,
-            "threads": 4
+            "kind": "color_detect"
         },
         {
             "kind": "denoise",
@@ -408,7 +472,15 @@
             "model": "I:\\Manga\\_Toolsets\\models\\umzi_denoiser\\1x_umzi_digital_decompress_gaterv3_1_fp16_op17_rtx3050m_cudnn92_trt10-9.onnx",
             "batch_size": 64,
             "tile_size": 128,
-            "device_id": 0
+            "device_id": 0,
+            "precompiled": true
+        },
+        {
+            "kind": "autolevel",
+            "base_path": "final",
+            "legacy_mode": false,
+            "skip_color": false,
+            "threads": 4
         },
         {
             "kind": "move_color",
@@ -418,7 +490,7 @@
             "kind": "color_jpegify",
             "quality": 98,
             "source_path": "colors",
-            "base_path": "denoised",
+            "base_path": "final",
             "threads": 4
         },
         {
@@ -442,5 +514,8 @@
             "output_mode": "cbz",
             "compress_level": 7
         }
-    ]
+    ],
+    "metafields": {
+        "color_model": "I:\\Manga\\_Toolsets\\models\\ogsov.npz"
+    }
 }
