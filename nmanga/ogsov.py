@@ -302,6 +302,7 @@ def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike) -> Det
 
     image = Image.open(BytesIO(img_bytes))
     if (detected := detect_image_color(image)) and not detected.is_color:
+        image.close()
         return detected  # if the basic detection already says it's not color, we can skip the ML-based detection
 
     rgb_array = np.array(image.convert("RGB"))
@@ -309,4 +310,5 @@ def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike) -> Det
 
     # predict the colorfulness
     is_color, confidence = instance.predict(bgr_array)
+    image.close()
     return DetectedColor(is_color, confidence, "ML-based detection", is_color)

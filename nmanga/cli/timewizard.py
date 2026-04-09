@@ -29,9 +29,8 @@ from pathlib import Path
 
 import rich_click as click
 
-from nmanga.timewizard import modify_filetimestamp
-
 from .. import config, file_handler, term
+from ..timewizard import modify_filetimestamp
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
