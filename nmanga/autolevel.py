@@ -32,6 +32,8 @@ from typing import TypedDict
 
 from PIL import Image
 
+from .ogsov import is_grayscale_palette
+
 __all__ = (
     "analyze_gray_shades",
     "apply_levels",
@@ -78,15 +80,6 @@ def try_imports():
         ScipySignalLib = signal
     except ImportError as exc:
         raise ImportError("scipy is required to use autolevel. Please install scipy.") from exc
-
-
-def is_grayscale_palette(palette: list[int]) -> bool:
-    for i in range(0, len(palette), 3):
-        r, g, b = palette[i : i + 3]
-        if (r != g) or (g != b):
-            return False
-
-    return True
 
 
 def find_local_peak(
