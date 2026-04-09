@@ -35,6 +35,7 @@ from PIL import Image
 
 from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
+from ..ogsov import detect_image_color, detect_image_color_ogsov
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -114,11 +115,18 @@ def _batch_lookup_nongray(img_path: Path) -> tuple[bool, Path]:
 
 @lookup_group.command(
     name="nongray",
-    help="Lookup non-grayscale images inside a folder, then split them into a separate folder",
+    help="Lookup non-L/LA images inside a folder, then split them into a separate folder",
     cls=NMangaCommandHandler,
 )
 @options.path_or_archive(disable_archive=True)
 @options.dest_output(optional=False)
+@click.option(
+    "-cm",
+    "--color-model",
+    "color_model_path",
+    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
+    help="The path to the color model file to use for our lookup.",
+)
 @options.recursive
 @options.threads
 @options.force
@@ -131,7 +139,7 @@ def lookup_nongray_images(
     force: bool,
 ):
     """
-    Lookup non-grayscale images inside a folder, then split them into a separate folder
+    Lookup non-L/LA images inside a folder, then split them into a separate folder.
     """
 
     if not path_or_archive.is_dir():
@@ -200,6 +208,116 @@ def lookup_nongray_images(
                 shutil.copy2(img_path, dest_file)
             progress.update(task_copy, advance=1)
         console.stop_progress(progress, f"Completed processing {path_real}")
+
+    if recursive:
+        console.info("Completed processing all folders.")
+
+
+@lookup_group.command(
+    name="colorama",
+    help="Find color images inside a folder, then split them into a separate folder",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output(optional=False)
+@click.option(
+    "-cm",
+    "--color-model",
+    "color_model_path",
+    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
+    help="The path to the color model file to use for our lookup.",
+)
+@options.recursive
+@options.force
+@time_program
+def lookup_color_images(
+    path_or_archive: Path,
+    dest_output: Path,
+    color_model_path: Path | None,
+    recursive: bool,
+    force: bool,
+):
+    """
+    Find color images inside a folder, then split them into a separate folder.
+
+    We also support ML based approach if you provided a color model file.
+    This can be more accurate rather than the naive approach.
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    candidates: list[Path] = []
+    if not recursive:
+        console.info(f"Looking up images in {path_or_archive}...")
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively looking up images in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} folders to lookup.")
+
+    if recursive and not candidates:
+        console.warning("No valid folders found to lookup.")
+        return
+
+    dest_output.mkdir(parents=True, exist_ok=True)
+
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        if not all_images:
+            console.info(f"No images found in {path_real}, skipping.")
+            continue
+
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+            real_output.mkdir(parents=True, exist_ok=True)
+        progress = console.make_progress()
+        task_moving = progress.add_task("Processing images...", finished_text="Processed images", total=len(all_images))
+        found_img = 0
+        grayscaled_img = 0
+        for img_path in all_images:
+            if color_model_path is not None:
+                img_bytes = img_path.read_bytes()
+                detected = detect_image_color_ogsov(img_bytes, weights_file=color_model_path)
+                del img_bytes
+            else:
+                img = Image.open(img_path)
+                detected = detect_image_color(img)
+                img.close()
+
+            if detected.is_color:
+                dest_file = real_output / img_path.name
+                if force and dest_file.exists():
+                    dest_file.unlink()
+                if force:
+                    shutil.move(img_path, dest_file)
+                else:
+                    shutil.copy2(img_path, dest_file)
+                found_img += 1
+            elif not detected.is_color and detected.should_convert:
+                # Check if this lossless image
+                if img_path.suffix.lower() in (".png", ".webp", ".bmp", ".tiff", ".tif"):
+                    # Convert to grayscale and save back to the same path
+                    with Image.open(img_path) as img:
+                        gray_img = img.convert("L")
+                        gray_img.save(img_path)
+                    grayscaled_img += 1
+            progress.update(task_moving, advance=1)
+
+        console.stop_progress(progress, f"Completed processing {path_real}")
+        if found_img:
+            console.info(f"Found {found_img} color images in {path_real}.")
+        if grayscaled_img:
+            console.info(
+                f"Grayscaled {grayscaled_img} images in {path_real} that are detected as non-color but not grayscale."
+            )
 
     if recursive:
         console.info("Completed processing all folders.")
