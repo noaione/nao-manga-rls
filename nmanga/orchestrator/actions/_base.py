@@ -29,8 +29,11 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from PIL import Image
 from pydantic import BaseModel, Field
 
+from ...common import RegexCollection
+from ...ogsov import detect_image_color, detect_image_color_ogsov
 from ..dsl import Context
 from ..rules import RuleModel
 
@@ -41,6 +44,7 @@ if TYPE_CHECKING:
 
 
 __all__ = (
+    "ActionColorMixin",
     "ActionKind",
     "BaseAction",
     "ThreadedResult",
@@ -80,6 +84,12 @@ class WorkerContext(Context):
     dry_run: bool = False
     """Run the action in dry run mode."""
     ml_model_session: ClassVar[dict[str, "InferenceSessionWithScale"]] = {}
+    """The current running ML model sessions, stored as a class variable"""
+    detected_colors: list[int] | None = None
+    """The detected color pages in the volume, used for passing from color detection to other actions
+
+    Only affected if the color detection action is in the action chain, otherwise it will be None
+    """
 
     def __init__(
         self,
@@ -108,6 +118,13 @@ class WorkerContext(Context):
     def set_skip_action(self, skip_action: SkipActionConfig | None) -> None:
         """Set the skip action configuration."""
         self.skip_action = skip_action
+
+    def push_detected_colors(self, page: int) -> None:
+        """Push the detected color pages to the context."""
+        if self.detected_colors is None:
+            self.detected_colors = []
+        if page not in self.detected_colors:
+            self.detected_colors.append(page)
 
 
 class ActionKind(str, Enum):
@@ -145,6 +162,8 @@ class ActionKind(str, Enum):
     """Move the tagged color images to a separate folder"""
     COLOR_JPEGIFY = "color_jpegify"
     """Convert color images to JPEG format with cjpegli"""
+    COLOR_DETECT = "color_detect"
+    """Detect color pages with ML-based model or Pillow"""
     INTERRUPT = "interrupt"
     """Interrupt the action chain"""
     CHANGE_CWD = "change_cwd"
@@ -190,3 +209,54 @@ class BaseAction(BaseModel, abc.ABC):
         """
 
         return {}
+
+
+class ActionColorMixin:
+    """
+    Mixin for actions that operate on color images,
+    providing common utilities and context handling for color-related actions.
+    """
+
+    _page_re = RegexCollection.page_re()
+
+    def is_color_page(
+        self, path: Path, *, context: WorkerContext, volume: VolumeConfig, orchestrator: "OrchestratorConfig"
+    ) -> tuple[int | None, bool]:
+        """
+        Determine if a given image file is a color page based on the volume's detected colors
+
+        :param path: The path to the image file
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        :return: tuple of page number (p01) and whether it is a color page, or (None, False)
+                 if the page number cannot be determined
+        """
+
+        title_match = self._page_re.match(path.stem)
+        if title_match is None:
+            return None, False
+
+        p01 = int(title_match.group("a"))
+        if isinstance(volume.colors, list):
+            return p01, p01 in volume.colors
+        if isinstance(context.detected_colors, list):
+            return p01, p01 in context.detected_colors
+
+        # Use ML-based color detection when possible
+        if orchestrator.metafields.color_model is not None:
+            # Read bytes
+            color_model_path = Path(orchestrator.metafields.color_model).resolve()
+            img_bytes = path.read_bytes()
+            is_color = detect_image_color_ogsov(img_bytes, weights_file=color_model_path).is_color
+            if is_color:
+                context.push_detected_colors(p01)  # push for caching
+            return p01, is_color
+
+        # Fall back to normal
+        img_data = Image.open(path)
+        detected = detect_image_color(img_data)
+        img_data.close()
+        if detected.is_color:
+            context.push_detected_colors(p01)  # push for caching
+        return p01, detected.is_color

@@ -14,7 +14,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FilePath, model_validator
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
@@ -28,7 +28,9 @@ from .common import SkipActionConfig, SkipActionKind
 __all__ = (
     "ActionAutolevel",
     "ActionChangeCwd",
+    "ActionColorDetect",
     "ActionColorJpegify",
+    "ActionColorMixin",
     "ActionDenoise",
     "ActionInterrupt",
     "ActionKind",
@@ -145,6 +147,12 @@ class SeriesMetafields(BaseModel):
 
     quality_maps: QualityMapping | None = Field(None, title="Quality Mapping Override")
     """Quality mapping override for the series"""
+    color_model: FilePath | None = Field(None, title="Model Path")
+    """The path to the model to use for identifying color images (ML-based color detection)"""
+
+
+def default_root_meta() -> SeriesMetafields:
+    return SeriesMetafields(quality_maps=None, color_model=None)
 
 
 class VolumeConfig(BaseModel):
@@ -177,7 +185,9 @@ class VolumeConfig(BaseModel):
 
     This would be made into a range from the first to the second number inclusive.
     """
-    colors: list[int] = Field(default_factory=list, title="Volume Color Pages", examples=[[0]])
+    colors: list[int] | Literal["auto"] = Field(
+        default_factory=list, title="Volume Color Pages", examples=[[0], "auto"]
+    )
     """The list of color tagged pages in the volume"""
     meta_naming: list[MetadataNamingConfig] = Field(default_factory=list, title="Metadata Naming Configurations")
     """The list of metadata naming configurations"""
@@ -331,7 +341,7 @@ class OrchestratorConfig(BaseModel):
     """The list of volumes to process"""
     actions: list[Actions] = Field(default_factory=list, min_length=1)
     """The list of actions to perform on each volume"""
-    metafields: SeriesMetafields | None = Field(None, title="Series Metafields")
+    metafields: SeriesMetafields = Field(default_factory=default_root_meta, title="Series Metafields")
     """The extra metafields for the series"""
 
     @model_validator(mode="after")
@@ -345,6 +355,26 @@ class OrchestratorConfig(BaseModel):
                     {"volume": vol.path},
                 )
             existing_volumes.add(vol.path)
+        return self
+
+    @model_validator(mode="after")
+    def ensure_color_model_provided(self) -> Self:
+        has_auto_colors = any(vol.colors == "auto" for vol in self.volumes)
+        # Check if any actions has the ActionColorMixin, which indicates it is a color-related action
+        use_color_actions = any(isinstance(action, ActionColorMixin) for action in self.actions)
+        if has_auto_colors and use_color_actions:
+            if not self.metafields.color_model:
+                raise PydanticCustomError(
+                    "missing_color_model",
+                    "Color model must be provided in series metafields when using auto colors and related actions",
+                )
+            resolved_path = Path(self.metafields.color_model).resolve()
+            if not resolved_path.is_file():
+                raise PydanticCustomError(
+                    "invalid_color_model_path",
+                    "Color model path does not exist or is not a file: {path}",
+                    {"path": self.metafields.color_model},
+                )
         return self
 
     @cached_property

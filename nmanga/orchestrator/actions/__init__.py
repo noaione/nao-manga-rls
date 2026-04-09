@@ -27,7 +27,9 @@ from .utils import *
 __all__ = (
     "ActionAutolevel",
     "ActionChangeCwd",
+    "ActionColorDetect",
     "ActionColorJpegify",
+    "ActionColorMixin",
     "ActionDenoise",
     "ActionInterrupt",
     "ActionKind",
@@ -63,6 +65,7 @@ ActionType: TypeAlias = (
     | ActionTagging
     | ActionMoveColor
     | ActionColorJpegify
+    | ActionColorDetect
     | ActionPack
     | ActionInterrupt
     | ActionChangeCwd

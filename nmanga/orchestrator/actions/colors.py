@@ -33,20 +33,21 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import RegexCollection, lowest_or, threaded_worker
+from ...common import lowest_or, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
+from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
 
 __all__ = (
+    "ActionColorDetect",
     "ActionColorJpegify",
     "ActionMoveColor",
 )
 
 
-class ActionMoveColor(BaseAction):
+class ActionMoveColor(BaseAction, ActionColorMixin):
     """
     Action to move the tagged color images to a separate folder
 
@@ -79,7 +80,6 @@ class ActionMoveColor(BaseAction):
             context.terminal.info(f"- Total {len(volume.colors)} would be moved.")
             return
 
-        cmx_re = RegexCollection.cmx_re()
         output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,20 +87,15 @@ class ActionMoveColor(BaseAction):
         progress = context.terminal.make_progress()
         task = progress.add_task("Moving color images...", finished_text="Moved color images", total=len(volume.colors))
         for img_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
-            title_match = cmx_re.match(img_file.stem)
-            if title_match is None:
-                context.terminal.error(f"Image {img_file} does not match page regex, aborting...")
-                continue
-
-            p01 = int(title_match.group("a"))
-            if p01 in volume.colors:
+            pg_num, is_color = self.is_color_page(img_file, context=context, volume=volume, orchestrator=orchestrator)
+            if is_color and pg_num is not None:
                 dest_path = output_dir / img_file.name
                 if dest_path.exists():
                     context.terminal.warning(f"Skipping existing file: {dest_path}")
                     continue
                 shutil.move(img_file, dest_path)
-                progress.update(task, advance=1)
                 moved_count += 1
+            progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Moved {moved_count} color images to {output_dir}", skip_total=True)
 
@@ -133,7 +128,7 @@ def _runner_jpegify_threaded_star(
     return _runner_jpegify_threaded(*args)
 
 
-class ActionColorJpegify(BaseAction):
+class ActionColorJpegify(BaseAction, ActionColorMixin):
     """
     Action to convert color images to JPEG format with cjpegli
     """
@@ -188,18 +183,12 @@ class ActionColorJpegify(BaseAction):
             context.terminal.error("cjpegli is required for JPEG conversion, but not found!")
             raise RuntimeError("JPEG conversion failed due to missing cjpegli.")
 
-        page_re = RegexCollection.page_re()
-
         image_candidates: list[tuple[Path, SkipActionKind | None]] = []
         for img_path, _, _, _ in file_handler.collect_image_from_folder(source_dir):
-            title_match = page_re.match(img_path.stem)
-            if title_match is None:
-                context.terminal.warning(f"Image {img_path} does not match page regex, ignoring...")
-                continue
-            p01 = int(title_match.group("a"))
-            if p01 in volume.colors:
+            pg_num, is_color = self.is_color_page(img_path, context=context, volume=volume, orchestrator=orchestrator)
+            if is_color and pg_num is not None:
                 skip_action = None
-                if context.skip_action is not None and p01 in context.skip_action.pages:
+                if context.skip_action is not None and pg_num in context.skip_action.pages:
                     skip_action = context.skip_action.action
                 image_candidates.append((img_path, skip_action))
 
@@ -243,3 +232,57 @@ class ActionColorJpegify(BaseAction):
         return {
             "cjpegli": ToolsKind.BINARY,
         }
+
+
+class ActionColorDetect(BaseAction, ActionColorMixin):
+    """
+    Action to detect color pages in the volume and store the result in the context for later actions to use
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Detect Color Pages Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    kind: Literal[ActionKind.COLOR_DETECT] = Field(ActionKind.COLOR_DETECT, title="Detect Color Pages Action")
+    """The kind of action"""
+
+    def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
+        """
+        Run the action on a volume
+
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        """
+
+        if context.dry_run:
+            if volume.colors == "auto":
+                context.terminal.info("- Detect color pages automatically")
+                context.terminal.info(f"- Color model path: {orchestrator.metafields.color_model}")
+            if isinstance(volume.colors, list):
+                context.terminal.info(f"- Has color page information from config: {sorted(volume.colors)}")
+            return
+
+        if isinstance(volume.colors, list):
+            context.push_detected_colors(*volume.colors)
+            context.terminal.info(f"Volume has color page information from config: {sorted(volume.colors)}")
+            return
+
+        context.terminal.info(f"Detecting color pages in {context.current_dir}...")
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Detecting color...", finished_text="Detected pages", total=None)
+        for img_path, _, total_file, _ in file_handler.collect_image_from_folder(context.current_dir):
+            pg_num, is_color = self.is_color_page(img_path, context=context, volume=volume, orchestrator=orchestrator)
+            if pg_num is not None and is_color:
+                context.push_detected_colors(pg_num)
+            progress.update(task, advance=1, total=total_file)
+
+        context.terminal.stop_progress(
+            progress, f"Detected {len(context.detected_colors) if context.detected_colors else 0} color pages."
+        )
+
+        if context.detected_colors:
+            context.terminal.info(f"Detected color pages: {sorted(context.detected_colors)}")

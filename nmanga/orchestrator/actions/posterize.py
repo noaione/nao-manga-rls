@@ -39,9 +39,9 @@ from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
-from ...common import RegexCollection, lowest_or, threaded_worker
+from ...common import lowest_or, threaded_worker
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
+from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
@@ -130,7 +130,7 @@ def _runner_posterize_threaded_star(
     return _runner_posterize_threaded(*args)
 
 
-class ActionPosterize(BaseAction):
+class ActionPosterize(BaseAction, ActionColorMixin):
     """
     Action to posterize all images in a volume with imagemagick or Pillow
     """
@@ -187,8 +187,6 @@ class ActionPosterize(BaseAction):
             context.terminal.error("ImageMagick is required for posterizing, but not found!")
             raise RuntimeError("Spreads action failed due to missing ImageMagick.")
 
-        page_re = RegexCollection.page_re()
-
         context.terminal.info(f"Processing {context.current_dir} with posterizer...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
@@ -197,15 +195,11 @@ class ActionPosterize(BaseAction):
         # Do pre-processing
         images_complete: list[tuple[Path, bool, SkipActionKind | None]] = []
         for image in all_images:
-            img_match = page_re.match(image.stem)
-            is_color = False
             is_skip_action = None
 
-            if img_match is not None:
-                p01 = int(img_match.group("a"))
-                is_color = p01 in volume.colors
-                if context.skip_action is not None and p01 in context.skip_action.pages:
-                    is_skip_action = context.skip_action.action
+            pg_num, is_color = self.is_color_page(image, context=context, volume=volume, orchestrator=orchestrator)
+            if pg_num is not None and context.skip_action is not None and pg_num in context.skip_action.pages:
+                is_skip_action = context.skip_action.action
 
             images_complete.append((image, is_color, is_skip_action))
 

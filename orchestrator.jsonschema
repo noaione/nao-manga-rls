@@ -177,6 +177,55 @@
             "title": "nmanga Orchestrator - Change Working Directory Action",
             "type": "object"
         },
+        "ActionColorDetect": {
+            "additionalProperties": false,
+            "description": "Action to detect color pages in the volume and store the result in the context for later actions to use",
+            "properties": {
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
+                },
+                "kind": {
+                    "const": "color_detect",
+                    "default": "color_detect",
+                    "title": "Detect Color Pages Action",
+                    "type": "string"
+                }
+            },
+            "title": "nmanga Orchestrator - Detect Color Pages Action",
+            "type": "object"
+        },
         "ActionColorJpegify": {
             "additionalProperties": false,
             "description": "Action to convert color images to JPEG format with cjpegli",
@@ -1750,6 +1799,19 @@
                     ],
                     "default": null,
                     "title": "Quality Mapping Override"
+                },
+                "color_model": {
+                    "anyOf": [
+                        {
+                            "format": "file-path",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Model Path"
                 }
             },
             "title": "nmanga Orchestrator Series Metafields",
@@ -1929,16 +1991,25 @@
                     "type": "array"
                 },
                 "colors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "const": "auto",
+                            "type": "string"
+                        }
+                    ],
                     "examples": [
                         [
                             0
-                        ]
+                        ],
+                        "auto"
                     ],
-                    "items": {
-                        "type": "integer"
-                    },
-                    "title": "Volume Color Pages",
-                    "type": "array"
+                    "title": "Volume Color Pages"
                 },
                 "meta_naming": {
                     "items": {
@@ -2144,6 +2215,7 @@
                     "mapping": {
                         "autolevel": "#/$defs/ActionAutolevel",
                         "change_cwd": "#/$defs/ActionChangeCwd",
+                        "color_detect": "#/$defs/ActionColorDetect",
                         "color_jpegify": "#/$defs/ActionColorJpegify",
                         "denoise": "#/$defs/ActionDenoise",
                         "interrupt": "#/$defs/ActionInterrupt",
@@ -2202,6 +2274,9 @@
                         "$ref": "#/$defs/ActionColorJpegify"
                     },
                     {
+                        "$ref": "#/$defs/ActionColorDetect"
+                    },
+                    {
                         "$ref": "#/$defs/ActionPack"
                     },
                     {
@@ -2217,15 +2292,7 @@
             "type": "array"
         },
         "metafields": {
-            "anyOf": [
-                {
-                    "$ref": "#/$defs/SeriesMetafields"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "default": null,
+            "$ref": "#/$defs/SeriesMetafields",
             "title": "Series Metafields"
         }
     },

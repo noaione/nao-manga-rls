@@ -34,13 +34,12 @@ from typing import TYPE_CHECKING, Literal
 from PIL import Image
 from pydantic import ConfigDict, Field
 
-from nmanga.utils import secure_filename
-
 from ... import file_handler, term
 from ...autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
-from ...common import RegexCollection, lowest_or, threaded_worker
+from ...common import lowest_or, threaded_worker
+from ...utils import secure_filename
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
+from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
     from .. import OrchestratorConfig, VolumeConfig
@@ -161,7 +160,7 @@ def _runner_autolevel2_threaded_star(
     return _runner_autolevel2_threaded(*args)
 
 
-class ActionAutolevel(BaseAction):
+class ActionAutolevel(BaseAction, ActionColorMixin):
     """
     Action to auto level all images in a volume with Pillow
 
@@ -235,8 +234,6 @@ class ActionAutolevel(BaseAction):
             context.update_cwd(output_dir)  # We still need to update CWD
             return
 
-        page_re = RegexCollection.page_re()
-
         context.terminal.info(f"Processing {context.current_dir} with autolevel...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
@@ -245,15 +242,11 @@ class ActionAutolevel(BaseAction):
         # Do pre-processing
         images_complete: list[tuple[Path, bool, SkipActionKind | None]] = []
         for image in all_images:
-            img_match = page_re.match(image.stem)
-            is_color = False
             is_skip_action = None
 
-            if img_match is not None:
-                p01 = int(img_match.group("a"))
-                is_color = p01 in volume.colors
-                if context.skip_action is not None and p01 in context.skip_action.pages:
-                    is_skip_action = context.skip_action.action
+            pg_num, is_color = self.is_color_page(image, context=context, volume=volume, orchestrator=orchestrator)
+            if pg_num is not None and context.skip_action is not None and pg_num in context.skip_action.pages:
+                is_skip_action = context.skip_action.action
 
             images_complete.append((image, is_color, is_skip_action))
 
@@ -359,7 +352,7 @@ def _runner_manualevel_threaded_star(
     return _runner_manuallevel_threaded(*args)
 
 
-class ActionLevel(BaseAction):
+class ActionLevel(BaseAction, ActionColorMixin):
     """
     Manually level all images in a volume with Pillow
     """
@@ -405,8 +398,6 @@ class ActionLevel(BaseAction):
             context.update_cwd(output_dir)  # We still need to update CWD
             return
 
-        page_re = RegexCollection.page_re()
-
         context.terminal.info(f"Processing {context.current_dir} with level...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
@@ -415,15 +406,11 @@ class ActionLevel(BaseAction):
         # Do pre-processing
         images_complete: list[tuple[Path, bool, SkipActionKind | None]] = []
         for image in all_images:
-            img_match = page_re.match(image.stem)
-            is_color = False
             is_skip_action = None
 
-            if img_match is not None:
-                p01 = int(img_match.group("a"))
-                is_color = p01 in volume.colors
-                if context.skip_action is not None and p01 in context.skip_action.pages:
-                    is_skip_action = context.skip_action.action
+            pg_num, is_color = self.is_color_page(image, context=context, volume=volume, orchestrator=orchestrator)
+            if pg_num is not None and context.skip_action is not None and pg_num in context.skip_action.pages:
+                is_skip_action = context.skip_action.action
 
             images_complete.append((image, is_color, is_skip_action))
 
