@@ -28,6 +28,7 @@ from rich.theme import Theme as RichTheme
 
 from .._ntypes import STOP_SIGNAL
 from .progress import NMProgress, ProgressStopState
+from .shell import SupportedShell, detect_shell
 
 if TYPE_CHECKING:
     from rich.status import Status as RichStatus
@@ -37,7 +38,9 @@ __all__ = (
     "ConsoleChoice",
     "MessageOrInterface",
     "MessageQueue",
+    "SupportedShell",
     "ThreadConsoleQueue",
+    "detect_shell",
     "get_console",
     "get_logger",
     "thread_queue_callback",

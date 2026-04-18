@@ -285,6 +285,18 @@ wheels = [
 ]
 
 [[package]]
+name = "click-pwsh"
+version = "0.9.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/eb/fb00efec08124d53b80eae738f972e1ef528f89b94939b490da8d4d1fb5d/click_pwsh-0.9.6.tar.gz", hash = "sha256:5de10747059686fcbf6bb05b2317f774a74c7d654ccec9e53bad29963d086d35", size = 4086, upload-time = "2026-04-04T06:42:33.084Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/12/cc4e22938df9c35a6e9582ef391a323cc6693bccf1cff509471fb4763605/click_pwsh-0.9.6-py3-none-any.whl", hash = "sha256:1f5b7ef17a463b22e9b4147bb69066097b30b3f02020c587512a4c7546755e10", size = 5519, upload-time = "2026-04-04T06:42:31.597Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -857,6 +869,7 @@ name = "nmanga"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "click-pwsh" },
     { name = "cykooz-resizer", extra = ["pillow"] },
     { name = "defusedxml" },
     { name = "ftfy" },
@@ -894,6 +907,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = "==8.3.1" },
+    { name = "click-pwsh", specifier = ">=0.9.6" },
     { name = "cykooz-resizer", extras = ["pillow"], specifier = "==3.1.1" },
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "einops", marker = "extra == 'denoiser'", specifier = "==0.8.1" },

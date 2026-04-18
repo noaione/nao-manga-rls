@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import NoReturn
 
 import rich_click as click
+from click_pwsh import support_pwsh_shell_completion
 
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
@@ -56,7 +57,15 @@ from .cli.rescaler import rescale_image
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
 from .cli.upscaler import export_to_onnx, upscale_trt
-from .term import get_console
+from .term import detect_shell, get_console
+from .term.shell import (
+    install_completion_for_bash,
+    install_completion_for_fish,
+    install_completion_for_pwsh,
+    install_completion_for_zsh,
+)
+
+support_pwsh_shell_completion()  # Import and register PowerShell 7 shell completion support for Click commands
 
 console = get_console()
 
@@ -204,7 +213,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Configuration",
     help="Commands for configuring nmanga",
-    commands=["config", "version"],
+    commands=["config", "install-completion", "version"],
 )
 def main(ctx: click.Context, verbose: bool):
     """
@@ -230,6 +239,45 @@ def show_version():
     console.console.print(f"[bold]Working directory:[/bold] {WORKING_DIR}")
     console.console.print(f"[bold]Python version:[/bold] {sys.version.replace(os.linesep, ' ')}")
     console.console.print(f"[bold]Platform:[/bold] {sys.platform}")
+
+
+@click.command(
+    name="install-completion",
+    help="Install shell completion for the current user shell",
+)
+def install_completion():
+    """Install shell completion for the current user shell."""
+    console.info("Installing shell completion for the current user shell...")
+    detected = detect_shell()
+    if detected is None:
+        console.error("Could not detect a supported shell for completion installation.")
+        console.warning(
+            "See: https://click.palletsprojects.com/en/stable/shell-completion/ for manual installation instructions"
+        )
+
+    match detected:
+        case "pwsh":
+            console.info("Detected PowerShell 7 environment. Installing completion for PowerShell 7...")
+            install_completion_for_pwsh()
+        case "bash":
+            console.info("Detected Bash shell. Installing completion for Bash...")
+            install_completion_for_bash()
+        case "fish":
+            console.info("Detected Fish shell. Installing completion for Fish...")
+            install_completion_for_fish()
+        case "zsh":
+            console.info("Detected Zsh shell. Installing completion for Zsh...")
+            install_completion_for_zsh()
+        case _:
+            console.error(f"Unsupported shell detected: {detected}. Cannot install completion.")
+            console.warning(
+                "See: https://click.palletsprojects.com/en/stable/shell-completion/ for manual installation instruction"
+            )
+
+    console.success("Shell completion installation complete!")
+    if detected is not None and detected != "pwsh":
+        console.warning("You can speed-up shell completion by optimizing the script...")
+        console.warning("See https://click.palletsprojects.com/en/stable/shell-completion/ for details")
 
 
 main.add_command(auto_split)
@@ -266,6 +314,7 @@ main.add_command(lookup_group)
 main.add_command(rescale_image)
 main.add_command(epub_extractor)
 main.add_command(show_version)
+main.add_command(install_completion)
 main.add_command(simulate_progress)
 
 

@@ -40,6 +40,7 @@ dependencies = [
     "rich-click==1.9.7",
     "cykooz.resizer[pillow]==3.1.1",
     "wand==0.7.0",
+    "click-pwsh>=0.9.6",
 ]
 
 [project.optional-dependencies]
