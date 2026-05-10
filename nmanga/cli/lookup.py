@@ -120,13 +120,6 @@ def _batch_lookup_nongray(img_path: Path) -> tuple[bool, Path]:
 )
 @options.path_or_archive(disable_archive=True)
 @options.dest_output(optional=False)
-@click.option(
-    "-cm",
-    "--color-model",
-    "color_model_path",
-    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
-    help="The path to the color model file to use for our lookup.",
-)
 @options.recursive
 @options.threads
 @options.force
