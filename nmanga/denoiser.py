@@ -38,11 +38,14 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from PIL import Image
 
+from .term import get_console
+
 if TYPE_CHECKING:
     from onnxruntime import InferenceSession  # type: ignore
 
     class InferenceSessionWithScale(InferenceSession):
         scale_factor: int | None
+        use_halfp: bool
 
 
 __all__ = (
@@ -143,7 +146,7 @@ def _preload_winml_and_register() -> None:
     __winml_registered__ = True
 
 
-def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: int | None = None) -> int:
+def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: int | None = None) -> tuple[int, bool]:
     import numpy as np
 
     if scale_factor := getattr(session, "scale_factor", None):
@@ -152,12 +155,13 @@ def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: i
     # Detect scale using small input and output shapes
     inp = session.get_inputs()[0]
     out = session.get_outputs()[0]
+    is_float16 = "float16" in str(inp.type)
 
     maybe_tile_size = inp.shape[-1]
     maybe_output_size = out.shape[-1]
 
     if isinstance(maybe_tile_size, int) and isinstance(maybe_output_size, int):
-        return maybe_output_size // maybe_tile_size  # Fast path if both sizes are known
+        return maybe_output_size // maybe_tile_size, is_float16  # Fast path if both sizes are known
 
     real_tile_size = tile_size if tile_size is not None else maybe_tile_size
     if not isinstance(real_tile_size, int):
@@ -167,13 +171,13 @@ def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: i
     batch_size = inp.shape[0] if isinstance(inp.shape[0], int) else 1
     shapes = [batch_size, inp.shape[1], real_tile_size, real_tile_size]
 
-    x = np.zeros(shapes, dtype=np.float32)
+    x = np.zeros(shapes, dtype=np.float16 if is_float16 else np.float32)
     input_name = inp.name
     output_name = out.name
 
     out = session.run([output_name], {input_name: x})
     scale_height = np.array(out[0]).shape[-1]
-    return scale_height // real_tile_size
+    return scale_height // real_tile_size, is_float16
 
 
 def prepare_model_runtime(
@@ -220,8 +224,9 @@ def prepare_model_runtime(
     session = cast(
         "InferenceSessionWithScale", ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
     )
-    scale_factor = get_model_scale_factor(session, tile_size=None)
+    scale_factor, use_halfp = get_model_scale_factor(session, tile_size=None)
     session.scale_factor = scale_factor
+    session.use_halfp = use_halfp
     return session
 
 
@@ -245,6 +250,15 @@ def get_model_information(model_path: Path) -> tuple[str, int]:
     return model.graph.input[0].name, model_channel_count
 
 
+def get_torch_memory_limit(device_id: int) -> int | None:
+    try:
+        import torch.cuda
+
+        return torch.cuda.get_device_properties(device_id).total_memory
+    except (ImportError, AssertionError):
+        return None
+
+
 def prepare_model_runtime_builders(
     model_path: Path,
     *,
@@ -253,12 +267,10 @@ def prepare_model_runtime_builders(
     tile_size: int | None = None,
     batch_size: int = 64,
     data_type: MLDataType = MLDataType.FP16,
+    with_nvrtx: bool = False,
 ) -> "InferenceSessionWithScale":
     import onnxruntime as ort  # type: ignore
 
-    is_torch_available = importlib.util.find_spec("torch")
-    if is_torch_available is not None:
-        import torch  # type: ignore
     is_tensorrt_available = importlib.util.find_spec("tensorrt")
     if is_tensorrt_available is not None:
         import tensorrt  # type: ignore  # noqa: F401
@@ -282,13 +294,8 @@ def prepare_model_runtime_builders(
     hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
     cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
 
-    memory_limit = (
-        int(
-            torch.cuda.get_device_properties(device_id).total_memory * 0.75  # type: ignore
-        )
-        if is_torch_available
-        else 2 * (1024**3)
-    )  # 2GB or 75% of GPU memory
+    torch_mem_limit = get_torch_memory_limit(device_id)
+    memory_limit = int(torch_mem_limit * 0.75) if torch_mem_limit else 2 * (1024**3)  # 2GB or 75% of GPU memory
 
     trt_ep_config = {
         "device_id": device_id,
@@ -307,9 +314,9 @@ def prepare_model_runtime_builders(
         "trt_detailed_build_log": True if is_verbose else False,
     }
     trtrtx_ep_config = {
-        "device_id": device_id,
-        "nv_max_workspace_size": memory_limit,
-        "nv_detailed_build_log": True if is_verbose else False,
+        "device_id": str(device_id),
+        "nv_max_workspace_size": str(memory_limit),
+        "nv_detailed_build_log": "1" if is_verbose else "0",
         "nv_runtime_cache_path": str(cache_rtx_dir),
     }
     migraphx_ep_config = {
@@ -350,20 +357,32 @@ def prepare_model_runtime_builders(
         trt_ep_config["trt_profile_max_shapes"] = max_shapes
         trt_ep_config["trt_profile_opt_shapes"] = opt_shapes
 
-        trtrtx_ep_config["nv_profile_min_shapes"] = model_input
-        trtrtx_ep_config["nv_profile_max_shapes"] = min_shapes
-        trtrtx_ep_config["nv_profile_opt_shapes"] = max_shapes
+        trtrtx_ep_config["nv_profile_min_shapes"] = min_shapes
+        trtrtx_ep_config["nv_profile_max_shapes"] = max_shapes
+        trtrtx_ep_config["nv_profile_opt_shapes"] = opt_shapes
 
-    available_providers = ort.get_available_providers()
+    ep_devices = {ep_device.ep_name: ep_device for ep_device in ort.get_ep_devices()}
+    has_good_ep_devices = False
+    raw_providers = set(ort.get_available_providers())
     if sys.platform != "darwin":
         providers = []
-        if "NvTensorRTRTXExecutionProvider" in available_providers:
+        ep_providers = []
+        has_nvrtx = False
+        if "NvTensorRTRTXExecutionProvider" in raw_providers and with_nvrtx:
             providers.append(("NvTensorRTRTXExecutionProvider", trtrtx_ep_config))
-        if "TensorrtExecutionProvider" in available_providers:
+            has_nvrtx = True
+        elif "NvTensorRTRTXExecutionProvider" in ep_devices and with_nvrtx:
+            ep_providers.append((ep_devices["NvTensorRTRTXExecutionProvider"], trtrtx_ep_config))
+            has_nvrtx = True
+            has_good_ep_devices = True
+        if "TensorrtExecutionProvider" in raw_providers and not has_nvrtx:
             providers.append(("TensorrtExecutionProvider", trt_ep_config))
-        if "MIGraphXExecutionProvider" in available_providers:
+        if "MIGraphXExecutionProvider" in raw_providers:
             providers.append(("MIGraphXExecutionProvider", migraphx_ep_config))
-        if "CUDAExecutionProvider" in available_providers:
+        elif "MIGraphXExecutionProvider" in ep_devices:
+            ep_providers.append((ep_devices["MIGraphXExecutionProvider"], migraphx_ep_config))
+            has_good_ep_devices = True
+        if "CUDAExecutionProvider" in raw_providers:
             providers.append((
                 "CUDAExecutionProvider",
                 {
@@ -376,9 +395,12 @@ def prepare_model_runtime_builders(
                     "prefer_nhwc": True,
                 },
             ))
-        if "OpenVINOExecutionProvider" in available_providers:
+        if "OpenVINOExecutionProvider" in raw_providers:
             providers.append(("OpenVINOExecutionProvider", onv_ep_config))
+        elif "OpenVINOExecutionProvider" in ep_devices:
+            ep_providers.append((ep_devices["OpenVINOExecutionProvider"], onv_ep_config))
     else:
+        ep_providers = []
         providers = [
             (
                 "CoreMLExecutionProvider",
@@ -392,19 +414,32 @@ def prepare_model_runtime_builders(
                 },
             ),
         ]
+        ep_providers = []
 
-    if not providers:
+    if not providers and not ep_providers:
         raise RuntimeError(
             "No suitable ONNX Runtime execution providers found. "
             "Ensure you have compatible hardware and the necessary dependencies installed."
         )
 
+    cnsl = get_console()
+    cnsl.info(f"Running with ONNX Runtime v{ort.version}")
+    cnsl.info("Available providers:", raw_providers)
+    cnsl.info("Available EP devices:", list(ep_devices.keys()))
     sess_opt = ort.SessionOptions()
+    for ep_devices, ep_config in ep_providers:
+        sess_opt.add_provider_for_devices([ep_devices], ep_config)
+    if has_good_ep_devices:
+        providers = None  # Use EP devices for NvRTX
     session = cast(
-        "InferenceSessionWithScale", ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
+        "InferenceSessionWithScale",
+        ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers, enable_fallback=0),
     )
-    scale_factor = get_model_scale_factor(session, tile_size=tile_size)
+    cnsl.info("Active providers:", session.get_providers())
+    cnsl.info(f"Loaded model: {model_path}")
+    scale_factor, use_halfp = get_model_scale_factor(session, tile_size=tile_size)
     session.scale_factor = scale_factor
+    session.use_halfp = use_halfp
     return session
 
 

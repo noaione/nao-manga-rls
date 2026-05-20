@@ -110,6 +110,15 @@ console = term.get_console()
     show_default=True,
     help="The quantization size to use for inference",
 )
+@click.option(
+    "-rtx",
+    "--with-nvrtx",
+    "with_nvidia_rtx",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Use RTX for inference",
+)
 @options.recursive
 @time_program
 @check_config_first
@@ -123,6 +132,7 @@ def upscale_trt(
     contrast_stretch: bool,
     background: Literal["black", "white"],
     quant_size: str,
+    with_nvidia_rtx: bool,
     recursive: bool,
 ):
     """Upscale images using TensorRT models."""
@@ -164,6 +174,7 @@ def upscale_trt(
         tile_size=tile_size,
         batch_size=batch_size,
         data_type=ml_quant,
+        with_nvrtx=with_nvidia_rtx,
     )
 
     if scale_factor := getattr(sess, "scale_factor", None):
@@ -196,7 +207,7 @@ def upscale_trt(
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
                 background=background,
-                use_fp32=True,
+                use_fp32=not sess.use_halfp,
             )
 
             output_image.save(output_path, format="PNG")
