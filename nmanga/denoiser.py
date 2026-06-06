@@ -28,6 +28,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
+import os
 import sys
 import warnings
 from enum import Enum
@@ -51,12 +52,14 @@ if TYPE_CHECKING:
 __all__ = (
     "MLDataType",
     "denoise_single_image",
+    "hook_onnx_extensions",
     "prepare_model_runtime",
     "prepare_model_runtime_builders",
 )
 
 logger = logging.getLogger(__name__)
 __winml_registered__ = False
+__nmanga_trt_extension_hooked__ = False
 
 
 class MLDataType(str, Enum):
@@ -146,6 +149,33 @@ def _preload_winml_and_register() -> None:
     __winml_registered__ = True
 
 
+def _preload_custom_extensions() -> None:
+    global __nmanga_trt_extension_hooked__
+
+    if __nmanga_trt_extension_hooked__:
+        return
+
+    import ctypes
+
+    # Check from environment
+    if "NMANGA_TRT_EXTENSIONS_DIR" in os.environ:
+        target_dir = Path(os.environ["NMANGA_TRT_EXTENSIONS_DIR"])
+        if not target_dir.exists() or not target_dir.is_dir():
+            return
+
+        # find any DLL and so files
+        for file in target_dir.glob("*.dll"):
+            ctypes.CDLL(file, mode=ctypes.RTLD_GLOBAL)
+        for file in target_dir.glob("*.so"):
+            ctypes.CDLL(file, mode=ctypes.RTLD_GLOBAL)
+    __nmanga_trt_extension_hooked__ = True
+
+
+def hook_onnx_extensions():
+    _preload_winml_and_register()
+    _preload_custom_extensions()
+
+
 def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: int | None = None) -> tuple[int, bool]:
     import numpy as np
 
@@ -186,6 +216,8 @@ def prepare_model_runtime(
     device_id: int = 0,
     is_verbose: bool = False,
 ) -> "InferenceSessionWithScale":
+    _preload_custom_extensions()
+
     import onnxruntime as ort  # type: ignore
 
     if sys.platform == "darwin":
@@ -269,6 +301,8 @@ def prepare_model_runtime_builders(
     data_type: MLDataType = MLDataType.FP16,
     with_nvrtx: bool = False,
 ) -> "InferenceSessionWithScale":
+    _preload_custom_extensions()
+
     import onnxruntime as ort  # type: ignore
 
     is_tensorrt_available = importlib.util.find_spec("tensorrt")

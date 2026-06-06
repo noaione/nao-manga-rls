@@ -156,6 +156,8 @@ def upscale_trt(
         console.warning("No valid folders found to upscale.")
         return 1
 
+    console.info(f"Output folder: {dest_output.resolve()} (recursive? {recursive!r})")
+
     is_tensorrt_available = importlib.util.find_spec("tensorrt")
 
     # Try importing stuff here
@@ -230,7 +232,7 @@ def upscale_trt(
     "-qs",
     "--quant-size",
     "quant_size",
-    type=click.Choice(["fp32", "bf16"], case_sensitive=True),
+    type=click.Choice(["fp32", "fp16", "bf16"], case_sensitive=True),
     default="fp32",
 )
 @click.option(
@@ -253,7 +255,7 @@ def upscale_trt(
 @time_program
 def export_to_onnx(
     path_or_archive: Path,
-    quant_size: Literal["fp32", "bf16"],
+    quant_size: Literal["fp32", "fp16", "bf16"],
     use_dynamo: bool,
     opset_version: int,
 ):
@@ -287,6 +289,7 @@ def export_to_onnx(
     dtypes_maps = {
         "fp32": torch.float32,
         "bf16": torch.bfloat16,
+        "fp16": torch.float16,
     }
 
     torch_dtype = dtypes_maps.get(quant_size)

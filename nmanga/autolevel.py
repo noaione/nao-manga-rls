@@ -37,7 +37,6 @@ from .ogsov import is_grayscale_palette
 __all__ = (
     "analyze_gray_shades",
     "apply_levels",
-    "apply_levels",
     "create_magick_params",
     "detect_nearest_bpc",
     "find_local_peak",
@@ -242,7 +241,7 @@ def find_local_peak_legacy(
     img_array = NumpyLib.array(gray_img)  # pyright: ignore[reportOptionalMemberAccess]
     hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 255))  # pyright: ignore[reportOptionalMemberAccess]
 
-    width = NumpyLib.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess]
+    width = NumpyLib.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess, reportCallIssue]
     result = ScipySignalLib.find_peaks_cwt(hist, widths=width)  # pyright: ignore[reportOptionalMemberAccess]
 
     if not isinstance(img_path, Image.Image):
