@@ -8,7 +8,7 @@ description = "A collection of CLI function to process a manga releases."
 readme = "README.md"
 dynamic = ["version"]
 license = {text = "MIT"}
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.12,<3.14"
 authors = [{name = "noaione", email = "noaione@n4o.xyz"}]
 keywords = ["manga", "colorlevel", "spreads", "auto-splitting", "processing", "cbz", "comic"]
 classifiers = [
@@ -30,36 +30,39 @@ dependencies = [
     "inquirer==3.4.1",
     "click==8.3.1",
     "ftfy==6.3.1",
-    "pydantic==2.12.5",
+    "pydantic==2.13.4",
     "typing-extensions==4.15.0",
     "Pillow==12.1.1",
-    "lxml==6.0.2",
+    "lxml==6.1.1",
     "unrar2-cffi==0.4.1",
     "py7zr==1.1.0",
     "defusedxml==0.7.1",
     "rich-click==1.9.7",
     "cykooz.resizer[pillow]==3.1.1",
     "wand==0.7.0",
-    "click-pwsh>=0.9.6",
+    "click-pwsh==0.9.7",
+    "onnxruntime-gpu==1.24.4",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest==9.0.2",
     "pytest-cov==7.0.0",
-    "ruff==0.14.8",
+    "ruff==0.15.13",
 ]
 autostuff = [
-    "numpy==2.2.6",
-    "scipy==1.15.3",
+    "numpy==2.4.6",
+    "scipy==1.17.1",
 ]
 denoiser = [
-    "numpy==2.2.6",
-    "onnx==1.20.0",
-    "onnxruntime==1.23.2",
-    "onnxruntime-gpu==1.23.2; platform_system == 'Windows' and platform_machine == 'x86_64'",
-    "einops==0.8.1",
-    "resselt==1.3.0"
+    "numpy==2.4.6",
+    "onnx==1.21.0",
+    # "onnxruntime==1.25.1",
+    "onnxruntime-gpu==1.24.4; sys_platform == 'win32'",
+    "einops==0.8.2",
+    "resselt==1.3.2",
+    "wasdk-microsoft-windows-ai-machinelearning[all]==2.0.0b2; sys_platform == 'win32'",
+    "wasdk-microsoft-windows-applicationmodel-dynamicdependency-bootstrap>=2.0.1; sys_platform == 'win32'",
 ]
 
 [tool.setuptools.dynamic]
@@ -74,6 +77,9 @@ nmanga = "nmanga.cmd:main"
 
 [tool.setuptools]
 packages = ["nmanga", "nmanga.cli", "nmanga.term", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"]
+
+[tool.uv]
+override-dependencies = ["onnxruntime-windowsml; sys_platform == 'never'"]
 
 [tool.ruff]
 line-length = 120
