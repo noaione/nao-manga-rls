@@ -61,8 +61,12 @@ denoiser = [
     "onnxruntime-gpu==1.24.4; sys_platform == 'win32'",
     "einops==0.8.2",
     "resselt==1.4.1",
-    "wasdk-microsoft-windows-ai-machinelearning[all]==2.0.0b2; sys_platform == 'win32'",
-    "wasdk-microsoft-windows-applicationmodel-dynamicdependency-bootstrap>=2.0.1; sys_platform == 'win32'",
+    "winrt-runtime>=3.2.1; sys_platform == 'win32'",
+    "winrt-windows-applicationmodel>=3.2.1; sys_platform == 'win32'",
+    "winrt-windows-foundation>=3.2.1; sys_platform == 'win32'",
+    "winrt-windows-foundation-collections>=3.2.1; sys_platform == 'win32'",
+    "winrt-windows-management-deployment>=3.2.1; sys_platform == 'win32'",
+    "winrt-windows-system>=3.2.1; sys_platform == 'win32'",
 ]
 
 [tool.setuptools.dynamic]

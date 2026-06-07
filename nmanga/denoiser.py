@@ -25,10 +25,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import importlib.util
+import ctypes
 import json
 import logging
 import os
+import site
 import sys
 import warnings
 from enum import Enum
@@ -40,11 +41,12 @@ from typing import TYPE_CHECKING, Literal, cast
 from PIL import Image
 
 from .term import get_console
+from .winml import get_winml_ep_libraries
 
 if TYPE_CHECKING:
-    from onnxruntime import InferenceSession  # type: ignore
+    import onnxruntime as ort
 
-    class InferenceSessionWithScale(InferenceSession):
+    class InferenceSessionWithScale(ort.InferenceSession):
         scale_factor: int | None
         use_halfp: bool
 
@@ -60,6 +62,7 @@ __all__ = (
 logger = logging.getLogger(__name__)
 __winml_registered__ = False
 __nmanga_trt_extension_hooked__ = False
+__preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
 
 
 class MLDataType(str, Enum):
@@ -100,6 +103,25 @@ def get_data_dir() -> Path:
     return cache_dir
 
 
+def _get_onnxruntime() -> "type[ort]":  # type: ignore
+    global __preloaded_ort__
+
+    if __preloaded_ort__ is not None:
+        return __preloaded_ort__
+
+    for sp in site.getsitepackages():
+        ort_dll = Path(sp) / "onnxruntime" / "capi" / "onnxruntime.dll"
+        if ort_dll.exists() and sys.platform == "win32":
+            ctypes.WinDLL(str(ort_dll))
+            break
+
+    import onnxruntime as ort  # type: ignore
+
+    __preloaded_ort__ = ort
+
+    return ort  # type: ignore
+
+
 def _preload_winml_and_register() -> None:
     global __winml_registered__
 
@@ -110,41 +132,19 @@ def _preload_winml_and_register() -> None:
         return
 
     # Unlink to avoid issues with old versions of msvcp140.dll being loaded by winrt-runtime package
-    site_packages_path = Path(str(metadata.distribution("winrt-runtime").locate_file("")))
-    dll_path = site_packages_path / "winrt" / "msvcp140.dll"
-    if dll_path.exists():
-        dll_path.unlink()
+    try:
+        site_packages_path = Path(str(metadata.distribution("winrt-runtime").locate_file("")))
+        dll_path = site_packages_path / "winrt" / "msvcp140.dll"
+        if dll_path.exists():
+            dll_path.unlink()
+    except metadata.PackageNotFoundError:
+        pass
 
-    import onnxruntime as ort  # type: ignore
+    ort = _get_onnxruntime()
 
-    winui3_boostrap = importlib.util.find_spec("winui3.microsoft.windows.applicationmodel.dynamicdependency.bootstrap")
-    if winui3_boostrap is None:
-        __winml_registered__ = True  # Mark as registered to avoid trying again if WinUI3 bootstrap is not available
-        return
-    winml_spec = importlib.util.find_spec("winui3.microsoft.windows.ai.machinelearning")
-    if winml_spec is None:
-        __winml_registered__ = True  # Mark as registered to avoid trying again if WinML is not available
-        return
-
-    # Actually import the modules
-    import winui3.microsoft.windows.ai.machinelearning as winml  # type: ignore
-    from winui3.microsoft.windows.applicationmodel.dynamicdependency.bootstrap import (  # type: ignore
-        InitializeOptions,
-        initialize,
-    )
-
-    # Load WinUI, use with/context to auto unload/garbage collect
-    with initialize(options=InitializeOptions.ON_NO_MATCH_SHOW_UI):
-        # Get WinML providers
-        catalog = winml.ExecutionProviderCatalog.get_default()
-        providers = catalog.find_all_providers()
-        for provider in providers:
-            # Load/download the provider
-            provider.ensure_ready_async().get()
-            if provider.library_path == "":
-                continue
-            # Register the provider with ONNX Runtime
-            ort.register_execution_provider_library(provider.name, provider.library_path)
+    winml_libraries = get_winml_ep_libraries()
+    for lib_name, lib_path in winml_libraries:
+        ort.register_execution_provider_library(lib_name, str(lib_path))
 
     __winml_registered__ = True
 
@@ -218,7 +218,7 @@ def prepare_model_runtime(
 ) -> "InferenceSessionWithScale":
     # _preload_custom_extensions()
 
-    import onnxruntime as ort  # type: ignore
+    ort = _get_onnxruntime()
 
     if sys.platform == "darwin":
         CACHE_DIR = Path.home() / ".cache" / "nmanga-denoiser"
@@ -303,11 +303,7 @@ def prepare_model_runtime_builders(
 ) -> "InferenceSessionWithScale":
     # _preload_custom_extensions()
 
-    import onnxruntime as ort  # type: ignore
-
-    is_tensorrt_available = importlib.util.find_spec("tensorrt")
-    if is_tensorrt_available is not None:
-        import tensorrt  # type: ignore  # noqa: F401
+    ort = _get_onnxruntime()
 
     verb_level = 0 if is_verbose else 3
     ort.set_default_logger_severity(verb_level)
