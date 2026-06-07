@@ -216,7 +216,7 @@ def prepare_model_runtime(
     device_id: int = 0,
     is_verbose: bool = False,
 ) -> "InferenceSessionWithScale":
-    _preload_custom_extensions()
+    # _preload_custom_extensions()
 
     import onnxruntime as ort  # type: ignore
 
@@ -301,7 +301,7 @@ def prepare_model_runtime_builders(
     data_type: MLDataType = MLDataType.FP16,
     with_nvrtx: bool = False,
 ) -> "InferenceSessionWithScale":
-    _preload_custom_extensions()
+    # _preload_custom_extensions()
 
     import onnxruntime as ort  # type: ignore
 

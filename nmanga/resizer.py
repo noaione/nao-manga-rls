@@ -29,7 +29,7 @@ from enum import Enum
 from io import BytesIO
 from typing import Literal, cast, overload
 
-from cykooz.resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
+from cykooz_resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
 from PIL import Image
 from wand.image import Image as WandImage
 
