@@ -31,13 +31,12 @@ from os import PathLike
 from typing import TYPE_CHECKING, Any, cast
 
 from PIL import Image
-from vapoursynth import PresetVideoFormat
 
 from .lazy import get_numpy, get_vapoursynth
 
 if TYPE_CHECKING:
     import numpy as np
-    from vapoursynth import VideoFrame, VideoNode
+    from vapoursynth import PresetVideoFormat, VideoFrame, VideoNode
 
 
 def fill_frame_rgb24(n: int, f: "VideoFrame | list[VideoFrame]", *, array: "np.ndarray[Any]") -> "VideoFrame":
