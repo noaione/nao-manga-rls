@@ -44,6 +44,7 @@ from ..autolevel import (
     posterize_image_by_shades,
 )
 from ..common import lowest_or, threaded_worker
+from ..lazy import get_vapoursynth
 from ..vapour import vs_find_missing_plugins, vs_prepare_image, vs_ssimulacra2
 from . import options
 from ._deco import time_program
@@ -72,14 +73,26 @@ def _posterize_simple_wrapper(
 
     dest_path = dest_output / img_path.with_suffix(".png").name
     if ssim.enabled:
-        img_reference = vs_prepare_image(img_path)
-        img_distorted = vs_prepare_image(posterized)
+        cnsl = term.with_thread_queue(log_q)
+        is_diff = False
+        if img.mode != posterized.mode:
+            is_diff = True
+            distorted_test = posterized.convert(img.mode)  # convert to same mode
+        else:
+            distorted_test = posterized
+        img_reference = vs_prepare_image(img)
+        img_distorted = vs_prepare_image(distorted_test)
+        if is_diff:
+            distorted_test.close()
+        cnsl.log(f"Reference ({img.mode}): {img_reference!r}")
+        cnsl.log(f"Distorted ({posterized.mode}): {img_distorted!r}")
         score = vs_ssimulacra2(img_reference, img_distorted)
+        cnsl.log(f"SSIM score for {img_path.name}: {score}")
+        del img_reference, img_distorted
         # if score is lower than minimum, copy file
         if score < ssim.minimum:
             img.close()
             if dest_path.exists():
-                cnsl = term.with_thread_queue(log_q)
                 cnsl.warning(f"Skipping existing file: {dest_path}")
                 return PosterizedResult.COPIED
             shutil.copy2(img_path, dest_path)
@@ -155,6 +168,8 @@ def posterize_simple(
     ssim_opt = SsimOption(enabled=use_ssimulacra2, minimum=ssim_min)
 
     if ssim_opt:
+        core = get_vapoursynth().core
+        core.num_threads = 1
         console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
         missing_plugins = vs_find_missing_plugins(["com.lumen.vship", "com.vapoursynth.bestsource"])
 
@@ -176,7 +191,7 @@ def posterize_simple(
             results.append(result)
             progress.update(task, advance=1)
 
-    console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.")
+    console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.", skip_total=True)
 
     posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
     copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)

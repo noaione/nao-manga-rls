@@ -47,6 +47,8 @@ def fill_frame_rgb24(n: int, f: "VideoFrame | list[VideoFrame]", *, array: "np.n
     else:
         fout = f.copy()
 
+    np = get_numpy()
+
     for plane in range(3):
         np.asarray(fout[plane])[:] = array[:, :, plane]
 
@@ -59,6 +61,8 @@ def fill_frame_gray8(n: int, f: "VideoFrame | list[VideoFrame]", *, array: "np.n
         fout = f[n].copy()
     else:
         fout = f.copy()
+
+    np = get_numpy()
 
     np.asarray(fout[0])[:] = array
     return fout
@@ -81,19 +85,31 @@ def get_pil_image_with_callback(img: Image.Image) -> tuple[partial["VideoFrame"]
 
 
 def vs_prepare_image(img: str | PathLike | Image.Image) -> "VideoNode":
-    core = get_vapoursynth().core
+    vs = get_vapoursynth()
+    core = vs.core
 
     if isinstance(img, Image.Image):
         callback, vs_fmt = get_pil_image_with_callback(img)
         clip = core.std.BlankClip(width=img.width, height=img.height, format=vs_fmt, length=1)
         clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=callback)
+
+        # we only support two now
+        match vs_fmt:
+            case vs.RGB24:
+                # We need to add color information
+                clip = core.resize.Bicubic(clip, format=vs.RGBS)
+            case vs.GRAY8:
+                # We need to add color information
+                clip = core.resize.Bicubic(clip, format=vs.GRAYS)
+            case _:
+                raise ValueError(f"Unsupported image mode: {img.mode}")
     else:
         clip = core.bs.VideoSource(str(img))
     return clip
 
 
 def vs_ssimulacra2(reference: "VideoNode", distorted: "VideoNode") -> float:
-    result = reference.vship.SSIMULACRA2(distorted)
+    result = reference.vship.SSIMULACRA2(distorted, numStream=1)
     with result.get_frame(0) as f:
         ssim_score = cast(float, f.props["_SSIMULACRA2"])
     return ssim_score

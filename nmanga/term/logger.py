@@ -84,6 +84,10 @@ def attach_logger(console: "RichConsole", *, is_debug: bool = False) -> None:
 
     logging.getLogger("rich").setLevel(logging.WARNING)
     logging.getLogger("multiprocessing").setLevel(logging.WARNING)
+    # disable Pillow spam
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    # disable vapoursynth spam
+    logging.getLogger("vapoursynth").setLevel(logging.WARNING)
 
 
 @dataclass
