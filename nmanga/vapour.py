@@ -80,6 +80,9 @@ def get_pil_image_with_callback(img: Image.Image) -> tuple[partial["VideoFrame"]
         case "L":
             # use partial function with array pre-allocated
             return partial(fill_frame_gray8, array=np.asarray(img)), vs.GRAY8
+        case "P":
+            # palette!, use RGB
+            return partial(fill_frame_rgb24, array=np.asarray(img.convert("RGB"))), vs.RGB24
         case _:
             raise ValueError(f"Unsupported image mode: {img.mode}")
 
