@@ -44,7 +44,7 @@ from .rescale import RescaleTarget
 
 if TYPE_CHECKING:
     from ...denoiser import InferenceSessionWithScale
-    from .. import OrchestratorConfig, VolumeConfig
+    from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = (
     "ActionDenoise",

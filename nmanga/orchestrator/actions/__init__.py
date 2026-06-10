@@ -46,12 +46,13 @@ __all__ = (
     "ActionUpscale",
     "Actions",
     "BaseAction",
+    "RescaleTarget",
     "ThreadedResult",
     "ToolsKind",
     "WorkerContext",
 )
 
-ActionType: TypeAlias = (
+ActionType: TypeAlias = (  # noqa: RUF067
     ActionShiftName
     | ActionSpreads
     | ActionRename
@@ -70,7 +71,7 @@ ActionType: TypeAlias = (
     | ActionInterrupt
     | ActionChangeCwd
 )
-Actions = Annotated[ActionType, Field(discriminator="kind", description="The collection of all supported actions.")]
+Actions = Annotated[ActionType, Field(discriminator="kind", description="The collection of all supported actions.")]  # noqa: RUF067
 """
 The list of all supported actions.
 """

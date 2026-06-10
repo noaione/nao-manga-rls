@@ -38,7 +38,7 @@ from ...spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, 
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
-    from .. import OrchestratorConfig, VolumeConfig
+    from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionSpreads",)
 

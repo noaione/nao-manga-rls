@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import math
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, cast
 
@@ -820,7 +821,9 @@ class TestNumberConverter:
         assert safe_int("1.2") is None
 
     def test_int_or_float(self):
-        assert int_or_float("1.2") == 1.2
+        matching = int_or_float("1.2")
+        assert matching is not None, "should not be None"
+        assert math.isclose(matching, 1.2), "should be 1.2"
 
     def test_int_or_float_int(self):
         assert int_or_float("1") == 1

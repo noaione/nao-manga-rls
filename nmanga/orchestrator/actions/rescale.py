@@ -39,7 +39,7 @@ from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
 
 if TYPE_CHECKING:
-    from .. import OrchestratorConfig, VolumeConfig
+    from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = (
     "ActionRescale",

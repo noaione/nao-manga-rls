@@ -26,6 +26,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import math
 import shutil
 from dataclasses import dataclass
 from enum import Enum
@@ -266,7 +267,7 @@ def auto_posterize(
             param_hint="path_or_archive",
         )
 
-    if threshold_pct <= 0.0000001:
+    if math.isclose(threshold_pct, 0.0):
         raise click.BadParameter(
             "Threshold percentage cannot be 0.0, as this will consider all shades as significant.",
             param_hint="threshold_pct",
@@ -329,7 +330,7 @@ def analyze_shades(
             param_hint="path_or_archive",
         )
 
-    if threshold_pct <= 0.0000001:
+    if math.isclose(threshold_pct, 0.0):
         raise click.BadParameter(
             "Threshold percentage cannot be 0.0, as this will consider all shades as significant.",
             param_hint="threshold_pct",

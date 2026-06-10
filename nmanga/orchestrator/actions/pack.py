@@ -34,7 +34,7 @@ from ...common import format_archive_filename, format_volume_text
 from ._base import ActionKind, BaseAction, WorkerContext
 
 if TYPE_CHECKING:
-    from .. import OrchestratorConfig, VolumeConfig
+    from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionPack",)
 

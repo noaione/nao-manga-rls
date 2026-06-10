@@ -35,7 +35,7 @@ from ...renamer import QualityMapping, determine_quality_suffix, shift_renaming_
 from ._base import ActionKind, BaseAction, WorkerContext
 
 if TYPE_CHECKING:
-    from .. import OrchestratorConfig, VolumeConfig
+    from ..models import OrchestratorConfig, VolumeConfig
 
 
 __all__ = (

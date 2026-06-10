@@ -1611,6 +1611,7 @@
             "type": "object"
         },
         "QualityMapping": {
+            "description": "The mapping for image quality based on resolution thresholds, we use height in pixels.",
             "properties": {
                 "LQ": {
                     "default": 1500,

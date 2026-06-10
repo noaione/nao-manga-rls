@@ -33,7 +33,7 @@ from ...common import is_pingo_alpha, run_pingo_and_verify
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
-    from .. import OrchestratorConfig, VolumeConfig
+    from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionOptimize",)
 

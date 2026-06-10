@@ -40,7 +40,7 @@ from ..rules import RuleModel
 if TYPE_CHECKING:
     from ...denoiser import InferenceSessionWithScale
     from ...term import Console
-    from .. import OrchestratorConfig, SkipActionConfig, VolumeConfig
+    from ..models import OrchestratorConfig, SkipActionConfig, VolumeConfig
 
 
 __all__ = (
