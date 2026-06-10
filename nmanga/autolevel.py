@@ -32,6 +32,7 @@ from typing import TypedDict
 
 from PIL import Image
 
+from .lazy import get_numpy, get_scipy_signal
 from .ogsov import is_grayscale_palette
 
 __all__ = (
@@ -46,14 +47,10 @@ __all__ = (
     "posterize_image_by_bits",
     "posterize_image_by_shades",
     "posterize_image_with_imagemagick",
-    "try_imports",
 )
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
 Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
-
-NumpyLib = None
-ScipySignalLib = None
 
 
 class ShadeAnalysis(TypedDict):
@@ -61,24 +58,6 @@ class ShadeAnalysis(TypedDict):
     """The gray shade value in integer (0-255)"""
     percentage: float
     """The percentage of pixels in the image that have this shade."""
-
-
-def try_imports():
-    global NumpyLib, ScipySignalLib
-
-    try:
-        import numpy as np  # type: ignore
-
-        NumpyLib = np
-    except ImportError as exc:
-        raise ImportError("numpy is required to use autolevel. Please install numpy.") from exc
-
-    try:
-        from scipy import signal  # type: ignore
-
-        ScipySignalLib = signal
-    except ImportError as exc:
-        raise ImportError("scipy is required to use autolevel. Please install scipy.") from exc
 
 
 def find_local_peak(
@@ -95,10 +74,8 @@ def find_local_peak(
     Courtesy of anon.
     """
 
-    global NumpyLib, ScipySignalLib
-
-    if NumpyLib is None or ScipySignalLib is None:
-        try_imports()
+    np = get_numpy()
+    scisignal = get_scipy_signal()
 
     image = img_path if isinstance(img_path, Image.Image) else Image.open(img_path)
     force_gray = image.mode != "L"
@@ -118,8 +95,8 @@ def find_local_peak(
 
     img_width, img_height = image.size
 
-    img_array = NumpyLib.array(image)  # type: ignore
-    hist, bin_edges = NumpyLib.histogram(img_array, bins=256, range=(0, 256))  # type: ignore
+    img_array = np.array(image)
+    hist, bin_edges = np.histogram(img_array, bins=256, range=(0, 256))
 
     # Region of interest: only consider peaks in the lower range for black level
     roi_min = 0
@@ -138,35 +115,35 @@ def find_local_peak(
     min_prominence = math.ceil(total_pixels * (peak_prominence / 100.0)) if peak_prominence is not None else 0
 
     # Pad so edge bins can be detected as peaks
-    hist_padded = NumpyLib.pad(hist_roi, (1, 1), mode="constant", constant_values=0)  # type: ignore
+    hist_padded = np.pad(hist_roi, (1, 1), mode="constant", constant_values=0)
     # Primary peak detection with thresholds
     find_peaks_kwargs: dict = {"height": min_pix_count}
     if min_prominence is not None:
         find_peaks_kwargs["prominence"] = min_prominence
 
-    peaks_padded, properties = ScipySignalLib.find_peaks(hist_padded, **find_peaks_kwargs)  # type: ignore
+    peaks_padded, properties = scisignal.find_peaks(hist_padded, **find_peaks_kwargs)
 
     # Map back from padded indices to ROI indices and filter out padding ghosts
     peaks = peaks_padded - 1
     valid = (peaks >= 0) & (peaks < len(hist_roi))
     peaks = peaks[valid]
-    heights = NumpyLib.array(properties["peak_heights"])[valid]  # type: ignore
+    heights = np.array(properties["peak_heights"])[valid]
 
     black_peak_level = 0
     if len(peaks) > 0:
         # Select the tallest peak, not the first
-        best = NumpyLib.argmax(heights)  # type: ignore
+        best = np.argmax(heights)
         black_peak_level = int(bins_roi[peaks[best]])
     else:
         # Fallback: find any peak in the ROI regardless of thresholds
-        peaks_padded_fb, properties_fb = ScipySignalLib.find_peaks(hist_padded, height=0)  # type: ignore
+        peaks_padded_fb, properties_fb = scisignal.find_peaks(hist_padded, height=0)
         peaks_fb = peaks_padded_fb - 1
         valid_fb = (peaks_fb >= 0) & (peaks_fb < len(hist_roi))
         peaks_fb = peaks_fb[valid_fb]
-        heights_fb = NumpyLib.array(properties_fb["peak_heights"])[valid_fb]  # type: ignore
+        heights_fb = np.array(properties_fb["peak_heights"])[valid_fb]
 
         if len(peaks_fb) > 0:
-            best_fb = NumpyLib.argmax(heights_fb)  # type: ignore
+            best_fb = np.argmax(heights_fb)
             black_peak_level = int(bins_roi[peaks_fb[best_fb]])
 
     # Do the reverse, white level detection
@@ -187,28 +164,28 @@ def find_local_peak(
 
     bins_w_roi = bin_edges[:-1][w_roi_mask].astype(int)
 
-    hist_w_paddded = NumpyLib.pad(hist_w_roi, (1, 1), mode="constant", constant_values=0)  # type: ignore
+    hist_w_paddded = np.pad(hist_w_roi, (1, 1), mode="constant", constant_values=0)
 
-    w_peaks_padded, w_properties = ScipySignalLib.find_peaks(hist_w_paddded, **find_peaks_kwargs)  # type: ignore
+    w_peaks_padded, w_properties = scisignal.find_peaks(hist_w_paddded, **find_peaks_kwargs)
 
     w_peaks = w_peaks_padded - 1
     w_valid = (w_peaks >= 0) & (w_peaks < len(hist_w_roi))
     w_peaks = w_peaks[w_valid]
-    w_heights = NumpyLib.array(w_properties["peak_heights"])[w_valid]  # type: ignore
+    w_heights = np.array(w_properties["peak_heights"])[w_valid]
 
     if len(w_peaks) > 0:
-        best_w = NumpyLib.argmax(w_heights)  # type: ignore
+        best_w = np.argmax(w_heights)
         white_peak_level = int(bins_w_roi[w_peaks[best_w]])
     else:
         # Fallback
-        w_peaks_padded_fb, w_properties_fb = ScipySignalLib.find_peaks(hist_w_paddded, height=0)  # type: ignore
+        w_peaks_padded_fb, w_properties_fb = scisignal.find_peaks(hist_w_paddded, height=0)
         w_peaks_fb = w_peaks_padded_fb - 1
         w_valid_fb = (w_peaks_fb >= 0) & (w_peaks_fb < len(hist_w_roi))
         w_peaks_fb = w_peaks_fb[w_valid_fb]
-        w_heights_fb = NumpyLib.array(w_properties_fb["peak_heights"])[w_valid_fb]  # type: ignore
+        w_heights_fb = np.array(w_properties_fb["peak_heights"])[w_valid_fb]
 
         if len(w_peaks_fb) > 0:
-            best_w_fb = NumpyLib.argmax(w_heights_fb)  # type: ignore
+            best_w_fb = np.argmax(w_heights_fb)
             white_peak_level = int(bins_w_roi[w_peaks_fb[best_w_fb]])
 
     return black_peak_level, white_peak_level, force_gray
@@ -223,10 +200,8 @@ def find_local_peak_legacy(
     Returns a tuple of (black_level, img_path, force_gray).
     """
 
-    global NumpyLib, ScipySignalLib
-
-    if NumpyLib is None or ScipySignalLib is None:
-        try_imports()
+    np = get_numpy()
+    scisignal = get_scipy_signal()
 
     image = img_path if isinstance(img_path, Image.Image) else Image.open(img_path)
     force_gray = image.mode != "L"
@@ -238,11 +213,11 @@ def find_local_peak_legacy(
 
     gray_img = image.convert("L")  # force grayscale
 
-    img_array = NumpyLib.array(gray_img)  # pyright: ignore[reportOptionalMemberAccess]
-    hist, binedges = NumpyLib.histogram(img_array, bins=256, range=(0, 255))  # pyright: ignore[reportOptionalMemberAccess]
+    img_array = np.array(gray_img)  # pyright: ignore[reportOptionalMemberAccess]
+    hist, binedges = np.histogram(img_array, bins=256, range=(0, 255))  # pyright: ignore[reportOptionalMemberAccess]
 
-    width = NumpyLib.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess, reportCallIssue]
-    result = ScipySignalLib.find_peaks_cwt(hist, widths=width)  # pyright: ignore[reportOptionalMemberAccess]
+    width = np.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess, reportCallIssue]
+    result = scisignal.find_peaks_cwt(hist, widths=width)  # pyright: ignore[reportOptionalMemberAccess]
 
     if not isinstance(img_path, Image.Image):
         # temp image, close
@@ -308,23 +283,20 @@ def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> list[Sha
     Analyze the amount of gray shades in a "grayscale" image.
     """
 
-    global NumpyLib
-
-    if NumpyLib is None:
-        try_imports()
+    np = get_numpy()
 
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    img_array = NumpyLib.array(image)  # type: ignore
+    img_array = np.array(image)
 
     total_pixels = img_array.size
-    hist, _ = NumpyLib.histogram(img_array, bins=256)  # type: ignore
+    hist, _ = np.histogram(img_array, bins=256)
 
     pixel_thresh = math.ceil(total_pixels * (threshold / 100.0))
 
     # Find the shades (indices) that have more pixels than the threshold
-    significant_indices = NumpyLib.where(hist > pixel_thresh)[0]  # type: ignore
+    significant_indices = np.where(hist > pixel_thresh)[0]
 
     # If no colors are significant, return an empty list
     if significant_indices.size == 0:

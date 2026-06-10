@@ -33,6 +33,8 @@ from cykooz_resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOp
 from PIL import Image
 from wand.image import Image as WandImage
 
+from .lazy import get_numpy
+
 __all__ = (
     "ResizeKernel",
     "ResizeMode",
@@ -71,7 +73,6 @@ class WandResizeKernel(str, Enum):
     Spline = "spline"
 
 
-NumpyLib = None
 # Basically since our CLI would have --param-a and --param-b for extra parameters for certain kernels
 WAND_PARAM_MAPPINGS = {
     "lanczos": WandParamMap(a="support", b="scale-blur"),  # Blur for "sharp" variant
@@ -87,17 +88,6 @@ WAND_PARAM_MAPPINGS = {
     "robidoux": WandParamMap(a="lobes"),
     "robidouxsharp": WandParamMap(a="lobes"),
 }
-
-
-def try_imports():
-    global NumpyLib
-
-    try:
-        import numpy as np  # type: ignore
-
-        NumpyLib = np
-    except ImportError as exc:
-        raise ImportError("numpy is required to use some specific Wand kernel. Please install numpy.") from exc
 
 
 class WandResizeOptions:
@@ -125,10 +115,10 @@ class WandResizeOptions:
         param_a: float | int | None = None,
         param_b: float | int | None = None,
     ) -> Image.Image:
-        try_imports()
+        np = get_numpy()
 
         filters = self.apply_filters(param_a, param_b)
-        img_arr = NumpyLib.array(img)  # type: ignore
+        img_arr = np.array(img)  # type: ignore
         with WandImage.from_array(img_arr, channel_map=img.mode) as wand_img:
             # Apply the filters as needed based on the kernel
             for filter_name, filter_value in filters.items():

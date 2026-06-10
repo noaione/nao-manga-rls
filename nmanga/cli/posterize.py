@@ -27,6 +27,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -42,6 +43,7 @@ from ..autolevel import (
     posterize_image_by_shades,
 )
 from ..common import lowest_or, threaded_worker
+from ..vapour import vs_find_missing_plugins, vs_prepare_image, vs_ssimulacra2
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -54,18 +56,41 @@ class PosterizedResult(int, Enum):
     COPIED = 2
 
 
-def _posterize_simple_wrapper(img_path: Path, dest_output: Path, num_bits: int):
+@dataclass
+class SsimOption:
+    enabled: bool
+    minimum: float
+
+
+def _posterize_simple_wrapper(
+    log_q: term.MessageQueue, img_path: Path, dest_output: Path, num_bits: int, ssim: SsimOption
+) -> PosterizedResult:
     img = Image.open(img_path)
 
     posterized = posterize_image_by_bits(img, num_bits)
+
     dest_path = dest_output / img_path.with_suffix(".png").name
+    if ssim.enabled:
+        img_reference = vs_prepare_image(img_path)
+        img_distorted = vs_prepare_image(posterized)
+        score = vs_ssimulacra2(img_reference, img_distorted)
+        # if score is lower than minimum, copy file
+        if score < ssim.minimum:
+            img.close()
+            if dest_path.exists():
+                cnsl = term.with_thread_queue(log_q)
+                cnsl.warning(f"Skipping existing file: {dest_path}")
+                return PosterizedResult.COPIED
+            shutil.copy2(img_path, dest_path)
+            return PosterizedResult.COPIED
 
     posterized.save(dest_path, format="PNG")
     posterized.close()
     img.close()
+    return PosterizedResult.PROCESSED
 
 
-def _posterize_simple_wrapper_star(args: tuple[Path, Path, int]):
+def _posterize_simple_wrapper_star(args: tuple[term.MessageQueue, Path, Path, int, SsimOption]):
     return _posterize_simple_wrapper(*args)
 
 
@@ -85,12 +110,31 @@ def _posterize_simple_wrapper_star(args: tuple[Path, Path, int]):
     show_default=True,
     help="The number of bits to posterize the image to (1-8)",
 )
+@click.option(
+    "-ssim",
+    "--use-ssimulacra2",
+    "use_ssimulacra2",
+    is_flag=True,
+    default=False,
+    help="Try to detect and fix bad posterization, utilize vapoursynth",
+)
+@click.option(
+    "-smin",
+    "--ssim-min",
+    "ssim_min",
+    type=click.FloatRange(0.0, 100.0),
+    default=80.0,  # anything above 80% is good
+    show_default=True,
+    help="The minimum SSIM score for an image to be considered good",
+)
 @options.threads
 @time_program
 def posterize_simple(
     path_or_archive: Path,
     dest_output: Path,
     num_bits: int,
+    use_ssimulacra2: bool,
+    ssim_min: float,
     threads: int,
 ):
     """
@@ -107,20 +151,39 @@ def posterize_simple(
     all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
     total_files = len(all_files)
     console.info(f"Found {total_files} files in the directory.")
+    ssim_opt = SsimOption(enabled=use_ssimulacra2, minimum=ssim_min)
+
+    if ssim_opt:
+        console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
+        missing_plugins = vs_find_missing_plugins(["com.lumen.vship", "com.vapoursynth.bestsource"])
+
+        if missing_plugins:
+            console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
+            raise click.Abort()
 
     progress = console.make_progress()
     task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
 
     dest_output.mkdir(parents=True, exist_ok=True)
+    results: list[PosterizedResult] = []
     console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, _):
-        for _ in pool.imap_unordered(
+    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+        for result in pool.imap_unordered(
             _posterize_simple_wrapper_star,
-            [(img_path, dest_output, num_bits) for img_path in all_files],
+            [(log_q, img_path, dest_output, num_bits, ssim_opt) for img_path in all_files],
         ):
+            results.append(result)
             progress.update(task, advance=1)
 
     console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.")
+
+    posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
+    copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
+
+    if copied_count > 0:
+        console.info(f"Copied {copied_count} images without posterization.")
+    if posterized_count > 0:
+        console.info(f"Posterized {posterized_count} images.")
 
 
 def _autoposterize_wrapper(
@@ -203,7 +266,7 @@ def auto_posterize(
             param_hint="path_or_archive",
         )
 
-    if threshold_pct == 0.0:
+    if threshold_pct <= 0.0000001:
         raise click.BadParameter(
             "Threshold percentage cannot be 0.0, as this will consider all shades as significant.",
             param_hint="threshold_pct",
@@ -266,7 +329,7 @@ def analyze_shades(
             param_hint="path_or_archive",
         )
 
-    if threshold_pct == 0.0:
+    if threshold_pct <= 0.0000001:
         raise click.BadParameter(
             "Threshold percentage cannot be 0.0, as this will consider all shades as significant.",
             param_hint="threshold_pct",

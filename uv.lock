@@ -771,6 +771,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+vapoursynth = [
+    { name = "vapoursynth" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -799,6 +802,7 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'autostuff'", specifier = "==1.17.1" },
     { name = "typing-extensions", specifier = "==4.15.0" },
     { name = "unrar2-cffi", specifier = "==0.5.0" },
+    { name = "vapoursynth", marker = "extra == 'vapoursynth'", specifier = "==76" },
     { name = "wand", specifier = "==0.7.1" },
     { name = "winrt-runtime", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
     { name = "winrt-windows-applicationmodel", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
@@ -807,7 +811,7 @@ requires-dist = [
     { name = "winrt-windows-management-deployment", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
     { name = "winrt-windows-system", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
 ]
-provides-extras = ["dev", "autostuff", "denoiser"]
+provides-extras = ["dev", "autostuff", "denoiser", "vapoursynth"]
 
 [[package]]
 name = "numpy"
@@ -1773,6 +1777,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/89/8a/684d5abf19f518bc20359c13541cb2cc2a7fa97ab7755e4a55e7c59880bf/unrar2_cffi-0.5.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aa81bf8150a8c50292b9e456528241ed8f3e9c025da7dba42782f5b26665763e", size = 252075, upload-time = "2026-06-06T23:51:44.676Z" },
     { url = "https://files.pythonhosted.org/packages/43/ca/a34439c1f3202487b8829a5b941c6e611c97b6e6530f31b1a81bd9426226/unrar2_cffi-0.5.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:075ad64661a3232fc21f92bb3f90cbe67825a44e5f957c546060706fd5a53897", size = 1289028, upload-time = "2026-06-06T23:51:46.252Z" },
     { url = "https://files.pythonhosted.org/packages/72/49/9b94fc2594cf119830465187be60d858b30cdc622b0a769c3eeaaed52c5c/unrar2_cffi-0.5.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b3dfb7f1dfdddbe26101b043f75a891f455a69542779160d3d74822d7da2fe4b", size = 438060, upload-time = "2026-06-06T23:51:47.783Z" },
+]
+
+[[package]]
+name = "vapoursynth"
+version = "76"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/f1/fa1b1198682d1d7a157a7cb9b64734ae72ab8944f8e3e3a34ac95a4bbd81/vapoursynth-76.tar.gz", hash = "sha256:09835e819373a373b8cfebdab1219795074348a5843b53d5f9c6b42e1ad3ff7a", size = 591976, upload-time = "2026-05-14T16:28:30.371Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1d/bf/f5d5d79488443e089f8e2b58e28ab471ecbbe4b9026298383ae792722c64/vapoursynth-76-cp312-abi3-macosx_13_0_arm64.whl", hash = "sha256:3be62338041adc8b88cc7be7b5700fbc39cd16df9f7dbf3b328ac7ec4ba88b2e", size = 896757, upload-time = "2026-05-14T16:28:18.286Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/15/037097104401176124f89e34d33b552d9c236feeb2f87f1fc3445a7f0ee1/vapoursynth-76-cp312-abi3-macosx_13_0_x86_64.whl", hash = "sha256:31270601801760e209f812e1b7f484aadc2533f6c7335878b09e1d83ef93508f", size = 1358670, upload-time = "2026-05-14T16:28:19.834Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/7d/efea6ffcbd6b24fa6825ecfdf89cce6037f51b787583ff6f9d55e401e1af/vapoursynth-76-cp312-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c516b04c9fde70b7075266a067b611f9d8409a20a5380ae425c21e1bada10997", size = 1618345, upload-time = "2026-05-14T16:28:21.6Z" },
+    { url = "https://files.pythonhosted.org/packages/91/bd/20a74af6c7c9da6db7690f668d2a459660428b37d5473d8e79ef7bf008b3/vapoursynth-76-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:94986f4399b3ea8ab775abfbf5986dc58b93829fbf3db2a37e3b9e6454baf898", size = 2287906, upload-time = "2026-05-14T16:28:23.266Z" },
+    { url = "https://files.pythonhosted.org/packages/15/ea/5df06cf991118a2cdeca5a50427948e12be0b9bed5345b4b8fa8ab668023/vapoursynth-76-cp312-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:18d3b58db90baad9ce5c7a10dae730f5b660c5176d19831dfb3f77c1671f9af7", size = 2157397, upload-time = "2026-05-14T16:28:25.315Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/c7/422e56e7c41054bacaa26d962eb36e585ba97d71e83de09e7783b65b8241/vapoursynth-76-cp312-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:7078e09f2674e0cd3de08df79462fc29834eb416c0444c2d5d8cd41f0a1c6884", size = 2835477, upload-time = "2026-05-14T16:28:27.178Z" },
+    { url = "https://files.pythonhosted.org/packages/20/f3/f24603ae03380831708f7af47a23492fb0e2c61c38a1c4a3b1f31a1e4744/vapoursynth-76-cp312-abi3-win_amd64.whl", hash = "sha256:cb64d4751d05d7256534ef6a7c08f4c665c15216f99b1aafc58bc7ebf46d8ec0", size = 5912918, upload-time = "2026-05-14T16:28:28.892Z" },
 ]
 
 [[package]]

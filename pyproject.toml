@@ -67,6 +67,9 @@ denoiser = [
     "winrt-windows-management-deployment>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-system>=3.2.1; sys_platform == 'win32'",
 ]
+vapoursynth = [
+    "vapoursynth==76"
+]
 
 [tool.setuptools.dynamic]
 version = {attr = "nmanga._metadata.__version__"}
