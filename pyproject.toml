@@ -41,7 +41,6 @@ dependencies = [
     "cykooz.resizer[pillow]@git+https://github.com/Cykooz/cykooz.resizer.git#19dcea501f538146806764de28accda63b6a7a63",
     "wand==0.7.1",
     "click-pwsh==0.9.7",
-    "onnxruntime-gpu==1.24.4",
 ]
 
 [project.optional-dependencies]
@@ -57,7 +56,7 @@ autostuff = [
 denoiser = [
     "numpy==2.4.6",
     "onnx==1.21.0",
-    # "onnxruntime==1.25.1",
+    "onnxruntime==1.25.1; sys_platform != 'win32'",
     "onnxruntime-gpu==1.24.4; sys_platform == 'win32'",
     "einops==0.8.2",
     "resselt==1.4.1",
