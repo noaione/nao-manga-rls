@@ -48,6 +48,7 @@ from ..common import (
 )
 from ..constants import MangaPublication
 from ..renamer import QualityMapping, determine_quality_suffix
+from ..utils import is_py
 from . import options
 from ._deco import check_config_first, time_program
 from .base import (
@@ -327,8 +328,13 @@ def prepare_releases(
 
         task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
+        tag_threads = threads
+        # Check if python 3.14
+        if is_py((3, 14)):
+            # Force single threaded execution because of a weird stalling issue with multiprocessing
+            tag_threads = 1
+        console.info(f"Using {tag_threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(tag_threads, precollect_images)) as (pool, log_q):
             for _ in pool.imap_unordered(
                 _threaded_tagging_star,
                 ((log_q, exiftool_exe, image, image_titling, rls_email) for image in precollect_images),
@@ -539,8 +545,13 @@ def prepare_releases_chapter(
 
         task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
-        console.info(f"Using {threads} CPU threads for processing.")
-        with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
+        tag_threads = threads
+        # Check if python 3.14
+        if is_py((3, 14)):
+            # Force single threaded execution because of a weird stalling issue with multiprocessing
+            tag_threads = 1
+        console.info(f"Using {tag_threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(tag_threads, precollect_images)) as (pool, log_q):
             for _ in pool.imap_unordered(
                 _threaded_tagging_star,
                 ((log_q, exiftool_exe, image, image_titling, rls_email) for image in precollect_images),

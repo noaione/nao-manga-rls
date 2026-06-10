@@ -33,6 +33,7 @@ __all__ = (
     "encode_or",
     "is_not_volume_number",
     "is_oneshot",
+    "is_py",
     "secure_filename",
     "unsecure_filename",
 )
@@ -143,3 +144,7 @@ def encode_or(any: str | bytes | None) -> bytes | None:
     if isinstance(any, str):
         return any.encode("utf-8")
     return any
+
+
+def is_py(want_version: tuple[int, ...]) -> bool:
+    return sys.version_info >= want_version

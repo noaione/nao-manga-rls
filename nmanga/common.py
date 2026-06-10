@@ -858,7 +858,8 @@ class RegexCollection:
         if publisher is None:
             return re.compile(cls._ChapterBasicRe.replace("CHANGETHIS", re.escape(title)))
         return re.compile(
-            cls._ChapterTitleRe.replace("CHANGETHIS", re.escape(title))
+            cls._ChapterTitleRe
+            .replace("CHANGETHIS", re.escape(title))
             .replace("CHANGEPUBLISHER", re.escape(publisher))
             .replace("PUBREPLACE", "|".join(_PublicationRegexMatch))
         )
