@@ -40,7 +40,8 @@ from ...autolevel import (
     posterize_image_with_imagemagick,
 )
 from ...common import lowest_or, threaded_worker
-from ..common import SkipActionKind, perform_skip_action
+from ...vapour import vs_prepare_image, vs_ssimulacra2
+from ..common import SkipActionKind, SSIMULACRA2CheckConfig, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
@@ -78,6 +79,7 @@ def _runner_posterize_threaded(
     imagick: str | None = None,
     is_color: bool = False,
     skip_action: SkipActionKind | None = None,
+    ssimulacra2: SSIMULACRA2CheckConfig | None = None,
 ) -> ThreadedResult:
     cnsl = term.with_thread_queue(log_q)
     if skip_action is not None:
@@ -118,6 +120,32 @@ def _runner_posterize_threaded(
             return ThreadedResult.COPIED
 
         quant = posterize_image_by_bits(img, num_bits=cast(int, real_bpc))
+
+        if ssimulacra2 is not None and ssimulacra2.enabled:
+            cnsl = term.with_thread_queue(log_q)
+            is_diff = False
+            if img.mode != quant.mode:
+                is_diff = True
+                distorted_test = quant.convert(img.mode)  # convert to same mode
+            else:
+                distorted_test = quant
+            img_reference = vs_prepare_image(img)
+            img_distorted = vs_prepare_image(distorted_test)
+            if is_diff:
+                distorted_test.close()
+            cnsl.log(f"Reference ({img.mode}): {img_reference!r}")
+            cnsl.log(f"Distorted ({quant.mode}): {img_distorted!r}")
+            score = vs_ssimulacra2(img_reference, img_distorted)
+            cnsl.log(f"SSIM score for {img_path.name}: {score}")
+            del img_reference, img_distorted
+
+            # if score is lower than minimum, copy file
+            if score < ssimulacra2.minimum:
+                img.close()
+                quant.close()
+                perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
+                return ThreadedResult.COPIED
+
         quant.save(dest_path, format="PNG")
         img.close()
         quant.close()
@@ -125,7 +153,16 @@ def _runner_posterize_threaded(
 
 
 def _runner_posterize_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, "ActionPosterize", str | None, bool, SkipActionKind | None],
+    args: tuple[
+        term.MessageQueue,
+        Path,
+        Path,
+        "ActionPosterize",
+        str | None,
+        bool,
+        SkipActionKind | None,
+        SSIMULACRA2CheckConfig | None,
+    ],
 ) -> ThreadedResult:
     return _runner_posterize_threaded(*args)
 
@@ -152,6 +189,8 @@ class ActionPosterize(BaseAction, ActionColorMixin):
     """The threshold to use when detecting bitdepth automatically"""
     pillow: bool = Field(False, title="Use Python Pillow")
     """Whether to use Pillow for posterizing instead of ImageMagick"""
+    ssimulacra2: SSIMULACRA2CheckConfig | None = Field(None, title="SSIMULACRA2 Check")
+    """Do a SSIMULACRA2 check for the posterized images, ensuring they are not lossy"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
@@ -211,7 +250,7 @@ class ActionPosterize(BaseAction, ActionColorMixin):
             for result in pool.imap_unordered(
                 _runner_posterize_threaded_star,
                 [
-                    (log_q, image, output_dir, self, imagick, is_color, is_skip_action)
+                    (log_q, image, output_dir, self, imagick, is_color, is_skip_action, self.ssimulacra2)
                     for image, is_color, is_skip_action in images_complete
                 ],
             ):

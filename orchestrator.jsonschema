@@ -830,6 +830,18 @@
                     "title": "Use Python Pillow",
                     "type": "boolean"
                 },
+                "ssimulacra2": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/SSIMULACRA2CheckConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "SSIMULACRA2 Check"
+                },
                 "threads": {
                     "minimum": 1,
                     "title": "Processing Threads",
@@ -1784,6 +1796,26 @@
             ],
             "title": "ResizeKernel",
             "type": "string"
+        },
+        "SSIMULACRA2CheckConfig": {
+            "additionalProperties": false,
+            "description": "Do a SSIMULACRA2 check for an image",
+            "properties": {
+                "enabled": {
+                    "default": false,
+                    "title": "Enable SSIMULACRA2 Check",
+                    "type": "boolean"
+                },
+                "minimum": {
+                    "default": 80.0,
+                    "maximum": 100.0,
+                    "minimum": 0.0,
+                    "title": "Minimum SSIMULACRA2 Score",
+                    "type": "number"
+                }
+            },
+            "title": "SSIMULACRA2CheckConfig",
+            "type": "object"
         },
         "SeriesMetafields": {
             "additionalProperties": false,

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from ..term import ConsoleInterface
 
 __all__ = (
+    "SSIMULACRA2CheckConfig",
     "SkipActionConfig",
     "SkipActionKind",
     "perform_skip_action",
@@ -73,6 +74,23 @@ class SkipActionConfig(BaseModel):
     """The action step name to skip, e.g. autolevel-1, optimize-2, etc."""
     pages: list[int] = Field(..., min_length=1, title="Pages to Skip On")
     """The list of page numbers to skip the action on"""
+
+
+class SSIMULACRA2CheckConfig(BaseModel):
+    """
+    Do a SSIMULACRA2 check for an image
+    """
+
+    model_config = ConfigDict(
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    enabled: bool = Field(False, title="Enable SSIMULACRA2 Check")
+    """Enable/disable the SSIMULACRA2 check"""
+    minimum: float = Field(80.0, title="Minimum SSIMULACRA2 Score", ge=0.0, le=100.0)
+    """Minimum SSIMULACRA2 score to keep the image"""
 
 
 def perform_skip_action(

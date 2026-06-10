@@ -8,7 +8,7 @@ The orchestrator module for nmanga, handling complex workflows and actions.
 """
 
 from .actions import *
-from .common import SkipActionConfig, SkipActionKind
+from .common import SkipActionConfig, SkipActionKind, SSIMULACRA2CheckConfig
 from .models import *
 
 __all__ = (
@@ -37,6 +37,7 @@ __all__ = (
     "CustomJSONEncoder",
     "MetadataNamingConfig",
     "OrchestratorConfig",
+    "SSIMULACRA2CheckConfig",
     "SkipActionConfig",
     "SkipActionKind",
     "ThreadedResult",
