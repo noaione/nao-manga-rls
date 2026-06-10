@@ -150,6 +150,13 @@ def manga_publication_type(chapter_mode: bool = False):
     )
 
 
+def half_cpu_threads():
+    return max(cpu_count() // 2, 1)
+
+
+CPU_THREADS = half_cpu_threads()
+
+
 archive_file = click.argument(
     "archive_file",
     metavar="ARCHIVE_FILE",
@@ -363,7 +370,7 @@ threads = click.option(
     "--threads",
     "threads",
     type=POSITIVE_INT,
-    default=cpu_count(),
+    default=CPU_THREADS,
     show_default=True,
     help="The number of threads to use for processing",
     panel="Performance Options",
@@ -373,7 +380,7 @@ threads_alt = click.option(
     "--threads",
     "threads",
     type=POSITIVE_INT,
-    default=cpu_count(),
+    default=CPU_THREADS,
     show_default=True,
     help="The number of threads to use for processing",
     panel="Performance Options",
