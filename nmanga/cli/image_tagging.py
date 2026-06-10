@@ -69,8 +69,8 @@ def _threaded_tagging(
     base_cmd = make_metadata_command(exiftool_exe, archive_filename, rls_email)
     proc = sp.Popen(
         [*base_cmd, str(image_path)],
-        stdout=sp.PIPE,
-        stderr=sp.PIPE,
+        stdout=sp.DEVNULL,
+        stderr=sp.DEVNULL,
     )
     proc.wait()
 
