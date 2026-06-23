@@ -103,6 +103,70 @@ def get_data_dir() -> Path:
     return cache_dir
 
 
+def _sanitize_model_path(model_path: Path) -> Path:
+    """Sanitize an ONNX model to work around ONNX Runtime quirks.
+
+    Some exporters emit negative ``perm`` values in ``Transpose`` nodes.
+    ONNX Runtime's type inference rejects these when it cannot infer concrete
+    input shapes, even though the attribute is valid ONNX. Rewriting the perms
+    to positive indices lets the model load.
+    """
+    try:
+        import onnx
+    except ImportError:
+        return model_path
+
+    try:
+        model = onnx.load(str(model_path))
+    except Exception:
+        return model_path
+
+    negative_perm_found = False
+    for node in model.graph.node:
+        if node.op_type != "Transpose":
+            continue
+        for attr in node.attribute:
+            if attr.name == "perm" and any(p < 0 for p in attr.ints):
+                negative_perm_found = True
+                break
+        if negative_perm_found:
+            break
+
+    if not negative_perm_found:
+        return model_path
+
+    data_dir = get_data_dir()
+    cache_dir = data_dir / "model_sanitizer"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    stat = model_path.stat()
+    cache_key = md5(f"{model_path.resolve()}:{stat.st_mtime}:{stat.st_size}".encode("utf-8")).hexdigest()  # noqa: S324
+    cached_path = cache_dir / f"{model_path.stem}_{cache_key}.onnx"
+    if cached_path.exists():
+        logger.info("Using sanitized model cache: %s", cached_path)
+        return cached_path
+
+    logger.warning(
+        "Model %s contains negative Transpose perm attributes; creating a sanitized copy in %s",
+        model_path,
+        cached_path,
+    )
+    for node in model.graph.node:
+        if node.op_type != "Transpose":
+            continue
+        for attr in node.attribute:
+            if attr.name == "perm":
+                old_perm = list(attr.ints)
+                rank = len(old_perm)
+                if any(p < 0 for p in old_perm):
+                    new_perm = [p if p >= 0 else rank + p for p in old_perm]
+                    attr.ClearField("ints")
+                    attr.ints.extend(new_perm)
+
+    onnx.save(model, str(cached_path))
+    return cached_path
+
+
 def _get_onnxruntime() -> "type[ort]":  # type: ignore
     global __preloaded_ort__
 
@@ -251,6 +315,8 @@ def prepare_model_runtime(
     verb_level = 0 if is_verbose else 3
     ort.set_default_logger_severity(verb_level)
     ort.set_default_logger_verbosity(verb_level)
+
+    model_path = _sanitize_model_path(model_path)
 
     sess_opt = ort.SessionOptions()
     session = cast(
@@ -456,6 +522,9 @@ def prepare_model_runtime_builders(
     cnsl.info(f"Running with ONNX Runtime v{ort.version}")
     cnsl.info("Available providers:", raw_providers)
     cnsl.info("Available EP devices:", list(ep_devices.keys()))
+
+    model_path = _sanitize_model_path(model_path)
+
     sess_opt = ort.SessionOptions()
     for ep_devices, ep_config in ep_providers:
         sess_opt.add_provider_for_devices([ep_devices], ep_config)
