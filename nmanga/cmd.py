@@ -44,6 +44,7 @@ from .cli.config import cli_config
 from .cli.debugging import simulate_progress
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.extractor import epub_extractor
+from .cli.image_operations import imops_group
 from .cli.image_optimizer import image_jpegify, image_mixmatch, image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.lookup import lookup_group
@@ -208,7 +209,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Image Utilities",
     help="Commands for optimizing and converting images",
-    commands=["forcegray", "posterize", "rescale", "jpegify", "spreads", "optimize", "mixmatch"],
+    commands=["forcegray", "posterize", "rescale", "jpegify", "spreads", "optimize", "mixmatch", "imops"],
 )
 @click.command_panel(
     name="Configuration",
@@ -313,6 +314,7 @@ main.add_command(orchestractor)
 main.add_command(lookup_group)
 main.add_command(rescale_image)
 main.add_command(epub_extractor)
+main.add_command(imops_group)
 main.add_command(show_version)
 main.add_command(install_completion)
 main.add_command(simulate_progress)

@@ -176,12 +176,13 @@ def image_jpegify(
         real_output = dest_output
         if recursive:
             real_output = dest_output / path_real.name
-        real_output.mkdir(parents=True, exist_ok=True)
 
         total_images = len(image_candidates)
         if total_images == 0:
             console.info(f"No images found in {path_real}, skipping.")
             continue
+
+        real_output.mkdir(parents=True, exist_ok=True)
         quality = max(0, min(100, jpeg_quality))
 
         progress = console.make_progress()
