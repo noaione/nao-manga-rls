@@ -52,6 +52,7 @@ __all__ = (
     "create_chapter",
     "format_archive_filename",
     "format_daiz_like_filename",
+    "format_elapsed_time",
     "format_volume_text",
     "inject_metadata",
     "inquire_chapter_ranges",
@@ -346,6 +347,29 @@ def safe_int(value: str) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def format_elapsed_time(seconds: int | float) -> str:
+    """Format elapsed seconds into a compact human-readable duration."""
+    if seconds < 0:
+        raise ValueError("Elapsed time cannot be negative.")
+
+    seconds = int(seconds)
+    days, remainder = divmod(seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if seconds or not parts:
+        parts.append(f"{seconds}s")
+
+    return "".join(parts)
 
 
 def int_or_float(value: str) -> int | float | None:

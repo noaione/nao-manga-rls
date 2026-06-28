@@ -27,6 +27,7 @@ from __future__ import annotations
 import time
 
 from .. import config, term
+from ..common import format_elapsed_time
 
 __all__ = (
     "check_config_first",
@@ -42,11 +43,11 @@ def time_program(func):
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
-        delta = end - start
+        delta_fmt = format_elapsed_time(end - start)
         if isinstance(result, int) and result > 0:
-            console.error(f"Failure! (Took {delta:.2f}s) [exit code {result}]")
+            console.error(f"Failure! (Took {delta_fmt}) [exit code {result}]")
         else:
-            console.info(f"Done! (Took {delta:.2f}s)")
+            console.info(f"Done! (Took {delta_fmt})")
         return result
 
     return wrapper

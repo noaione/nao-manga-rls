@@ -242,7 +242,7 @@ class UnrecoverableNMangaError(click.ClickException):
     def __init__(self, message, exc_info):
         super().__init__(message)
         self.exc_info = exc_info
-        self.message = message
+        self.message = message  # type: ignore
 
     def format_message(self) -> str:
         error_msg = "*** An unrecoverable error occured ***\n"

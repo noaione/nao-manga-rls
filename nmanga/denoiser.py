@@ -31,6 +31,7 @@ import logging
 import os
 import site
 import sys
+import time
 import warnings
 from enum import Enum
 from hashlib import md5
@@ -40,6 +41,7 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from PIL import Image
 
+from .common import format_elapsed_time
 from .term import get_console
 from .winml import get_winml_ep_libraries
 
@@ -475,6 +477,8 @@ def prepare_model_runtime_builders(
     cnsl.info("Available providers:", raw_providers)
     cnsl.info("Available EP devices:", list(ep_devices.keys()))
 
+    st_time = time.time()
+
     sess_opt = ort.SessionOptions()
     for ep_devices, ep_config in ep_providers:
         sess_opt.add_provider_for_devices([ep_devices], ep_config)
@@ -484,8 +488,11 @@ def prepare_model_runtime_builders(
         "InferenceSessionWithScale",
         ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers, enable_fallback=0),
     )
+    end_time = time.time()
+
+    elapsed = format_elapsed_time(end_time - st_time)
     cnsl.info("Active providers:", session.get_providers())
-    cnsl.info(f"Loaded model: {model_path}")
+    cnsl.info(f"Loaded model: {model_path} (in {elapsed})")
     scale_factor, use_halfp = get_model_scale_factor(session, tile_size=tile_size)
     session.scale_factor = scale_factor
     session.use_halfp = use_halfp
