@@ -315,6 +315,70 @@ def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, bool] | None:
         return None
 
 
+def _compile_nvrtx_model(model_path: Path, data_dir: Path, ep_name: str, ep_config: dict[str, str]) -> Path:
+    ort = _get_onnxruntime()
+
+    model_comp_dir = data_dir / "rtx_compiled"
+    model_comp_dir.mkdir(parents=True, exist_ok=True)
+
+    cnsl = get_console()
+    model_comp = model_comp_dir / f"{model_path.stem}_ctx.onnx"
+    if model_comp.exists():
+        cnsl.info(f"Found pre-compiled model {model_path.stem} for TRT-RTX engine")
+        return model_comp
+
+    sess_opt = ort.SessionOptions()
+    sess_opt.add_provider(ep_name, ep_config)
+    # get file size, if larger than 1.5gb, we don't embed ep context (although the recommended is 2gb)
+    model_stat = model_path.stat()
+    is_large_size = model_stat.st_size > 1.5 * (1024**3)
+    compiler = ort.ModelCompiler(
+        sess_opt,
+        model_path,
+        embed_compiled_data_into_model=not is_large_size,
+        graph_optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED,
+    )
+    cnsl.info(f"Pre-compiling model {model_path.stem} for TRT-RTX engine")
+    st_time = time.time()
+    compiler.compile_to_file(str(model_comp))
+    et_time = time.time()
+    elapsed_pretty = format_elapsed_time(et_time - st_time)
+    cnsl.info(f"Compiled model {model_path.stem} for TRT-RTX engine (in {elapsed_pretty})")
+    return model_comp
+
+
+def _compile_nvrtx_model_for_ep(model_path: Path, data_dir: Path, ep_device, ep_config: dict[str, str]) -> Path:
+    ort = _get_onnxruntime()
+
+    model_comp_dir = data_dir / "rtx_compiled"
+    model_comp_dir.mkdir(parents=True, exist_ok=True)
+
+    cnsl = get_console()
+    model_comp = model_comp_dir / f"{model_path.stem}_ctx.onnx"
+    if model_comp.exists():
+        cnsl.info(f"Found pre-compiled model {model_path.stem} for TRT-RTX engine")
+        return model_comp
+
+    sess_opt = ort.SessionOptions()
+    sess_opt.add_provider_for_devices([ep_device], ep_config)
+    # get file size, if larger than 1.5gb, we don't embed ep context (although the recommended is 2gb)
+    model_stat = model_path.stat()
+    is_large_size = model_stat.st_size > 1.5 * (1024**3)
+    compiler = ort.ModelCompiler(
+        sess_opt,
+        model_path,
+        embed_compiled_data_into_model=not is_large_size,
+        graph_optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED,
+    )
+    cnsl.info(f"Pre-compiling model {model_path.stem} for TRT-RTX engine")
+    st_time = time.time()
+    compiler.compile_to_file(str(model_comp))
+    et_time = time.time()
+    elapsed_pretty = format_elapsed_time(et_time - st_time)
+    cnsl.info(f"Compiled model {model_path.stem} for TRT-RTX engine (in {elapsed_pretty})")
+    return model_comp
+
+
 def prepare_model_runtime_builders(
     model_path: Path,
     *,
@@ -497,17 +561,35 @@ def prepare_model_runtime_builders(
     sess_opt = ort.SessionOptions()
     for ep_devices, ep_config in ep_providers:
         sess_opt.add_provider_for_devices([ep_devices], ep_config)
+
+    # Check if nvrtx exist, if yes we should recompile
+    selected_model_path = model_path
+    has_nvrtx_compiled_already = False
+    for ep_name, ep_config in providers:
+        if ep_name in ["nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"]:
+            selected_model_path = _compile_nvrtx_model(model_path, data_dir, ep_name, ep_config)
+            has_nvrtx_compiled_already = True
+            break
+
     if has_good_ep_devices:
         providers = None  # Use EP devices for NvRTX
+
+    if not has_nvrtx_compiled_already:
+        for ep_devices, ep_config in ep_providers:
+            if ep_devices.ep_name in ["nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"]:
+                selected_model_path = _compile_nvrtx_model_for_ep(model_path, data_dir, ep_devices, ep_config)
+                has_nvrtx_compiled_already = True
+                break
+
     session = cast(
         "InferenceSessionWithScale",
-        ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers, enable_fallback=0),
+        ort.InferenceSession(selected_model_path, sess_options=sess_opt, providers=providers, enable_fallback=0),
     )
     end_time = time.time()
 
     elapsed = format_elapsed_time(end_time - st_time)
     cnsl.info("Active providers:", session.get_providers())
-    cnsl.info(f"Loaded model: {model_path} (in {elapsed})")
+    cnsl.info(f"Loaded model: {model_path.stem} (in {elapsed})")
     scale_factor, use_halfp = get_model_scale_factor(session, tile_size=tile_size)
     session.scale_factor = scale_factor
     session.use_halfp = use_halfp
