@@ -8,7 +8,7 @@ description = "A collection of CLI function to process a manga releases."
 readme = "README.md"
 dynamic = ["version"]
 license = {text = "MIT"}
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.13,<3.15"
 authors = [{name = "noaione", email = "noaione@n4o.xyz"}]
 keywords = ["manga", "colorlevel", "spreads", "auto-splitting", "processing", "cbz", "comic"]
 classifiers = [
@@ -18,48 +18,48 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Topic :: Utilities",
 ]
 dependencies = [
     "rich==15.0.0",
     "inquirer==3.4.1",
-    "click==8.4.1",
+    "click==8.4.2",
     "ftfy==6.3.1",
     "pydantic==2.13.4",
     "typing-extensions==4.15.0",
     "Pillow==12.2.0",
     "lxml==6.1.1",
     "unrar2-cffi==0.5.0",
-    "py7zr==1.1.0",
+    "py7zr==1.1.3",
     "defusedxml==0.7.1",
     "rich-click==1.9.8",
     "cykooz.resizer[pillow]@git+https://github.com/Cykooz/cykooz.resizer.git#19dcea501f538146806764de28accda63b6a7a63",
-    "wand==0.7.1",
+    "wand==0.7.2",
     "click-pwsh==0.9.7",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==9.0.2",
-    "pytest-cov==7.0.0",
-    "ruff==0.15.13",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.15.20",
 ]
 autostuff = [
-    "numpy==2.4.6",
-    "scipy==1.17.1",
+    "numpy>=2.4.6",
+    "scipy>=1.18.0",
 ]
 denoiser = [
-    "numpy==2.4.6",
-    "onnx==1.21.0",
-    "onnxruntime==1.25.1; sys_platform != 'win32'",
-    "onnxruntime-gpu==1.24.4; sys_platform == 'win32'",
-    "einops==0.8.2",
-    "resselt==1.4.1",
+    "numpy>=2.4.6",
+    "onnx>=1.22.0",
+    "onnxruntime-ep-nv-tensorrt-rtx-cu13==0.3.0; sys_platform == 'linux' or sys_platform == 'win32'",
+    "onnxruntime-gpu==1.27.0; sys_platform == 'linux' or sys_platform == 'win32'",
+    "tensorrt-cu13==11.1.0.106; sys_platform == 'linux' or sys_platform == 'win32'",
+    "torch>=2.12.1; sys_platform == 'linux' or sys_platform == 'win32'",
+    "einops>=0.8.2",
+    "resselt>=1.4.1",
     "winrt-runtime>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-applicationmodel>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-foundation>=3.2.1; sys_platform == 'win32'",
@@ -68,7 +68,7 @@ denoiser = [
     "winrt-windows-system>=3.2.1; sys_platform == 'win32'",
 ]
 vapoursynth = [
-    "vapoursynth==76"
+    "vapoursynth==77"
 ]
 
 [tool.setuptools.dynamic]
@@ -86,6 +86,16 @@ packages = ["nmanga", "nmanga.cli", "nmanga.term", "nmanga.templates", "nmanga.o
 
 [tool.uv]
 override-dependencies = ["onnxruntime-windowsml; sys_platform == 'never'"]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu132", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true
 
 [tool.ruff]
 line-length = 120
