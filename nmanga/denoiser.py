@@ -299,11 +299,12 @@ def get_model_information(model_path: Path) -> tuple[str, int]:
     return model.graph.input[0].name, model_channel_count
 
 
-def get_torch_memory_limit(device_id: int) -> int | None:
+def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, bool] | None:
     try:
         import torch.cuda
 
-        return torch.cuda.get_device_properties(device_id).total_memory
+        cu_major, _ = torch.cuda.get_device_capability()
+        return torch.cuda.get_device_properties(device_id).total_memory, cu_major >= 8
     except (ImportError, AssertionError):
         return None
 
@@ -341,8 +342,15 @@ def prepare_model_runtime_builders(
     hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
     cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
 
-    torch_mem_limit = get_torch_memory_limit(device_id)
-    memory_limit = int(torch_mem_limit * 0.75) if torch_mem_limit else 2 * (1024**3)  # 2GB or 75% of GPU memory
+    torch_mem_limit = get_torch_memory_limit_and_rtx(device_id)
+    memory_limit = int(torch_mem_limit[0] * 0.75) if torch_mem_limit else 2 * (1024**3)  # 2GB or 75% of GPU memory
+
+    cnsl = get_console()
+
+    has_trt_rtx = torch_mem_limit[1] if torch_mem_limit else False
+    if with_nvrtx and not has_trt_rtx:
+        cnsl.warning("TensorRT RTX is not supported on this GPU. Falling back to TensorRT.")
+        with_nvrtx = False
 
     trt_ep_config = {
         "device_id": device_id,
@@ -464,7 +472,6 @@ def prepare_model_runtime_builders(
                 },
             ),
         ]
-        ep_providers = []
 
     if not providers and not ep_providers:
         raise RuntimeError(
@@ -472,7 +479,6 @@ def prepare_model_runtime_builders(
             "Ensure you have compatible hardware and the necessary dependencies installed."
         )
 
-    cnsl = get_console()
     cnsl.info(f"Running with ONNX Runtime v{ort.version}")
     cnsl.info("Available providers:", raw_providers)
     cnsl.info("Available EP devices:", list(ep_devices.keys()))
