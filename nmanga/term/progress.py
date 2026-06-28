@@ -31,6 +31,7 @@ from enum import Enum
 from typing import Any, Callable, Union, cast
 
 from rich.console import Console as RichConsole
+from rich.filesize import pick_unit_and_suffix
 from rich.progress import (
     MofNCompleteColumn,
     Progress,
@@ -244,6 +245,20 @@ class BetterSpinnerColumn(SpinnerColumn):
         return super().render(task)
 
 
+class IterationSpeedColumn(ProgressColumn):
+    def render(self, task: RichTask) -> Text:
+        speed = task.finished_speed or task.speed
+        if speed is None:
+            return Text("0.00it/s", style="progress.percentage")
+        unit, suffix = pick_unit_and_suffix(
+            int(speed),
+            ["", "×10³", "×10⁶", "×10⁹", "×10¹²"],  # noqa: RUF001
+            1000,
+        )
+        data_speed = speed / unit
+        return Text(f"{data_speed:.1f}{suffix} it/s", style="progress.percentage")
+
+
 @dataclass
 class NMRichTask(RichTask):
     finished_text: str | None = None
@@ -453,7 +468,7 @@ class NMProgress(Progress):
             BetterDescriptionColumn(),
             TrackerBarColumn(),
             MofNCompleteColumn(table_column=Column(no_wrap=True, justify="right")),
-            MaybePercentageColumn(),
+            IterationSpeedColumn(),
             TimeElapsedColumn(),
             TimeRemainingColumn(),
         )
