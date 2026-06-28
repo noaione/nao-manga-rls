@@ -36,6 +36,7 @@ import warnings
 from enum import Enum
 from hashlib import md5
 from importlib import metadata
+from importlib import util as importutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -116,6 +117,11 @@ def _get_onnxruntime() -> "type[ort]":  # type: ignore
         if ort_dll.exists() and sys.platform == "win32":
             ctypes.WinDLL(str(ort_dll))
             break
+
+    # Preload TensorRT if available
+    is_tensorrt_available = importutil.find_spec("tensorrt")
+    if is_tensorrt_available is not None:
+        import tensorrt  # noqa: F401
 
     import onnxruntime as ort  # type: ignore
     import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
@@ -352,6 +358,8 @@ def prepare_model_runtime_builders(
         cnsl.warning("TensorRT RTX is not supported on this GPU. Falling back to TensorRT.")
         with_nvrtx = False
 
+    cnsl.info(f"Memory limit is set to: {memory_limit}")
+
     trt_ep_config = {
         "device_id": device_id,
         "trt_fp16_enable": data_type == MLDataType.FP16,
@@ -370,6 +378,7 @@ def prepare_model_runtime_builders(
     }
     trtrtx_ep_config = {
         "device_id": str(device_id),
+        "enable_cuda_graph": "1",  # although by default this is already enabled
         "nv_max_workspace_size": str(memory_limit),
         "nv_detailed_build_log": "1" if is_verbose else "0",
         "nv_runtime_cache_path": str(cache_rtx_dir),
