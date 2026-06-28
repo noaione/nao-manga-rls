@@ -56,7 +56,7 @@ denoiser = [
     "onnx>=1.22.0",
     "onnxruntime-ep-nv-tensorrt-rtx-cu13==0.3.0; sys_platform == 'linux' or sys_platform == 'win32'",
     "onnxruntime-gpu==1.27.0; sys_platform == 'linux' or sys_platform == 'win32'",
-    "tensorrt-cu13==11.1.0.106; sys_platform == 'linux' or sys_platform == 'win32'",
+    "tensorrt-cu13==10.16.1.11; (sys_platform == 'linux' or sys_platform == 'win32') and python_version <= '3.13'",
     "torch>=2.12.1; sys_platform == 'linux' or sys_platform == 'win32'",
     "einops>=0.8.2",
     "resselt>=1.4.1",
