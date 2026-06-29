@@ -124,12 +124,16 @@ def _get_onnxruntime() -> "type[ort]":  # type: ignore
         import tensorrt  # noqa: F401
 
     import onnxruntime as ort  # type: ignore
-    import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
 
-    if sys.platform == "win32":
+    is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
+
+    if sys.platform != "darwin":
         ort.preload_dlls()
 
-    ort.register_execution_provider_library(trt_ep.get_ep_name(), trt_ep.get_library_path())
+    if is_trt_ep_available is not None:
+        import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
+
+        ort.register_execution_provider_library(trt_ep.get_ep_name(), trt_ep.get_library_path())  # type: ignore
     __preloaded_ort__ = ort
 
     return ort  # type: ignore
