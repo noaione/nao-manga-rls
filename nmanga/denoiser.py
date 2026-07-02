@@ -309,12 +309,12 @@ def get_model_information(model_path: Path) -> tuple[str, int]:
     return model.graph.input[0].name, model_channel_count
 
 
-def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, bool] | None:
+def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, int] | None:
     try:
-        import torch.cuda
+        import torch.cuda  # type: ignore
 
         cu_major, _ = torch.cuda.get_device_capability()
-        return torch.cuda.get_device_properties(device_id).total_memory, cu_major >= 8
+        return torch.cuda.get_device_properties(device_id).total_memory, cu_major
     except (ImportError, AssertionError):
         return None
 
@@ -416,15 +416,17 @@ def prepare_model_runtime_builders(
     hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
     cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
 
-    torch_mem_limit = get_torch_memory_limit_and_rtx(device_id)
-    memory_limit = int(torch_mem_limit[0] * 0.75) if torch_mem_limit else 2 * (1024**3)  # 2GB or 75% of GPU memory
+    torch_info = get_torch_memory_limit_and_rtx(device_id)
+    memory_limit = int(torch_info[0] * 0.75) if torch_info else 2 * (1024**3)  # 2GB or 75% of GPU memory
 
     cnsl = get_console()
 
-    has_trt_rtx = torch_mem_limit[1] if torch_mem_limit else False
+    has_trt_rtx = torch_info[1] >= 8 if torch_info else False
     if with_nvrtx and not has_trt_rtx:
         cnsl.warning("TensorRT RTX is not supported on this GPU. Falling back to TensorRT.")
         with_nvrtx = False
+
+    needs_trt_compat = torch_info[1] >= 12 if torch_info else False
 
     cnsl.info(f"Memory limit is set to: {memory_limit}")
 
@@ -437,12 +439,15 @@ def prepare_model_runtime_builders(
         "trt_engine_cache_enable": True,
         "trt_engine_cache_path": "trt_engines",
         "trt_engine_cache_prefix": cache_prefix,
+        "trt_timing_cache_enable": True,
+        "trt_timing_cache_path": "trt_engines",
         "trt_build_heuristics_enable": True,
         "trt_builder_optimization_level": 3,
         "trt_context_memory_sharing_enable": True,
         "trt_dump_ep_context_model": True,
         "trt_ep_context_file_path": str(data_dir),
         "trt_detailed_build_log": True if is_verbose else False,
+        "trt_engine_hw_compatible": needs_trt_compat,
     }
     trtrtx_ep_config = {
         "device_id": str(device_id),
