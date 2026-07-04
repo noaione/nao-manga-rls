@@ -321,10 +321,14 @@ def get_src_image_path(box: BoundingBoxImage) -> Path:
 
 def screenshot_and_merge_page(page: Page, box: BoundingBoxImage, output_path: Path) -> None:
     base_img_path = Image.open(get_src_image_path(box))
-    # create new tempfile for screenshot output
-    with tempfile.NamedTemporaryFile(suffix=".png") as fp_writer:
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    overlay_path = Path(tmp.name)
+    tmp.close()
+
+    try:
         page.screenshot(
-            path=str(fp_writer.name),
+            path=str(overlay_path),
             omit_background=True,
             scale="device",
             clip={
@@ -335,14 +339,10 @@ def screenshot_and_merge_page(page: Page, box: BoundingBoxImage, output_path: Pa
             },
         )
 
-        overlay_path = Image.open(fp_writer.name)
-
+        # read/move/use tmp_path here
         # composite overlay on top of base image
-        base_img_path.paste(overlay_path, (box["x"], box["y"]), overlay_path)
+        overlay_img = Image.open(overlay_path)
+        base_img_path.paste(overlay_img, (box["x"], box["y"]), overlay_img)
         base_img_path.save(output_path, format="PNG")
-
-        temp_path = Path(fp_writer.name)
-        try:
-            temp_path.unlink()
-        except OSError:
-            pass
+    finally:
+        overlay_path.unlink(missing_ok=True)
