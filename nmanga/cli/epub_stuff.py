@@ -29,6 +29,7 @@ SOFTWARE.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -38,17 +39,20 @@ from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from .. import term
+from ..autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
 from ..epub_render import (
     find_root_file_path,
     get_base_image_scale,
     get_image_bounding_box_and_hide,
+    get_src_image_path,
     launch_chromium,
     load_xhtml,
     map_spine_to_xhtml_path,
     read_view_port_from_xhtml_bs4,
-    screenshot_and_merge_page,
+    screenshot_overlay_page,
     solve_epub_path,
 )
+from ..lazy import get_numpy
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -235,6 +239,53 @@ def epub_extractor(
         console.info(f"Extracted {img_counters} images to {dest_output}")
 
 
+def overlay_level_image(
+    overlay_img: Image.Image,
+    *,
+    upper_limit: int,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
+    peak_offset: int,
+    no_white: bool,
+    is_legacy: bool,
+) -> Image.Image:
+    comp_image = Image.new(overlay_img.mode, (overlay_img.width, overlay_img.height), color=255)
+    comp_image.paste(overlay_img, (0, 0), overlay_img)
+
+    if not is_legacy:
+        black_level, white_level, _ = find_local_peak(
+            comp_image,
+            upper_limit=upper_limit,
+            peak_percentage=peak_min_pct,
+            peak_prominence=peak_prom_pct,
+            skip_white_check=no_white,
+        )
+    else:
+        black_level, white_level, _ = find_local_peak_legacy(
+            comp_image, upper_limit=upper_limit, skip_white_peaks=no_white
+        )
+
+    is_black_bad = black_level <= 0
+    is_white_bad = white_level >= 255 if not no_white else False
+
+    if (
+        (is_black_bad and is_white_bad and not no_white)  # both levels are bad
+        or (is_black_bad and no_white)
+        or black_level > upper_limit
+    ):
+        return overlay_img.copy()
+
+    gamma_correct = gamma_correction(black_level)
+    adjusted_img = apply_levels(
+        overlay_img,
+        black_point=black_level + peak_offset,
+        white_point=255 if no_white else white_level,
+        gamma=gamma_correct,
+    )
+
+    return adjusted_img
+
+
 @epub_group.command(
     name="render",
     help="Render all pages from an EPUB file to a folder of images",
@@ -256,12 +307,74 @@ def epub_extractor(
     required=True,
     help="The default height of the image",
 )
+@click.option(
+    "-ul",
+    "--upper-limit",
+    "upper_limit",
+    type=click.IntRange(1, 255),
+    default=60,
+    show_default=True,
+    help="The upper limit for finding local peaks in the histogram",
+)
+@click.option(
+    "-pmp",
+    "--peak-min-pct",
+    "peak_min_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.25,
+    show_default=True,
+    help="The minimum percentage of pixels for a peak to be considered valid",
+)
+@click.option(
+    "-ppm",
+    "--peak-prominence-pct",
+    "peak_prom_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=None,
+    show_default=True,
+    help="Minimum prominence relative to nearby shades to be considered a peak.",
+)
+@click.option(
+    "-po",
+    "--peak-offset",
+    "peak_offset",
+    type=click.IntRange(-100, 100),
+    default=0,
+    show_default=True,
+    help="The offset to add to the detected black level percentage",
+)
+@click.option(
+    "--no-white",
+    "no_white",
+    is_flag=True,
+    default=False,
+    help="Do not adjust white level, only adjust black level",
+)
+@click.option(
+    "--legacy",
+    is_flag=True,
+    default=False,
+    help="Use legacy autolevel analysis",
+)
+@click.option(
+    "--no-autolevel",
+    is_flag=True,
+    default=False,
+    help="Skip autolevel analysis",
+)
 @time_program
 def epub_render(
     path_or_archive: Path,
     dest_output: Path,
     default_w: int,
     default_h: int,
+    upper_limit: int,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
+    peak_offset: int,
+    no_white: bool,
+    legacy: bool,
+    no_autolevel: bool,
 ) -> None:
     """
     Render all pages from an EPUB file to a folder of images.
@@ -286,6 +399,14 @@ def epub_render(
     package_xml = package_xml_path.read_text("utf-8")
     spine_mappings = map_spine_to_xhtml_path(package_xml, root_file_path)
     console.info(f"Spine contains {len(spine_mappings)} XHTML files.")
+
+    has_numpy = False
+    try:
+        get_numpy()
+        has_numpy = True
+    except ImportError:
+        console.warning("numpy is not installed. The text will not be leveled.")
+        has_numpy = False
 
     with sync_playwright() as playwright:
         console.info("Launching Chromium...")
@@ -312,9 +433,28 @@ def epub_render(
             load_xhtml(page, xhtml_full_path)
 
             box = get_image_bounding_box_and_hide(page)
-            dest_image_path = dest_output / f"i_{img_counters:04d}.png"
+            src_image_path = get_src_image_path(box)
 
-            screenshot_and_merge_page(page, box, dest_image_path)
+            src_img = Image.open(src_image_path)
+            dest_image_path = dest_output / f"i_{img_counters:04d}.png"
+            overlay_pg = screenshot_overlay_page(page, box)
+            overlay_img = Image.open(BytesIO(overlay_pg))
+
+            # level the image
+            if has_numpy and not no_autolevel:
+                overlay_img = overlay_level_image(
+                    overlay_img,
+                    upper_limit=upper_limit,
+                    peak_min_pct=peak_min_pct,
+                    peak_prom_pct=peak_prom_pct,
+                    peak_offset=peak_offset,
+                    no_white=no_white,
+                    is_legacy=legacy,
+                )
+
+            src_img.paste(overlay_img, (box["x"], box["y"]), overlay_img)
+            src_img.save(dest_image_path, format="PNG")
+
             img_counters += 1
             progress.update(task, advance=1)
             console.stop_progress(progress)

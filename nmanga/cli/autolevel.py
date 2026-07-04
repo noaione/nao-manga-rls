@@ -355,10 +355,16 @@ def _autolevel2_wrapper(
     img = Image.open(img_path)
     if not is_legacy:
         black_level, white_level, _ = find_local_peak(
-            img, upper_limit=60, peak_percentage=config.peak_min_pct, skip_white_check=config.no_white
+            img,
+            upper_limit=config.upper_limit,
+            peak_percentage=config.peak_min_pct,
+            peak_prominence=config.peak_prom_pct,
+            skip_white_check=config.no_white,
         )
     else:
-        black_level, white_level, _ = find_local_peak_legacy(img, upper_limit=60, skip_white_peaks=config.no_white)
+        black_level, white_level, _ = find_local_peak_legacy(
+            img, upper_limit=config.upper_limit, skip_white_peaks=config.no_white
+        )
 
     cnsl = term.with_thread_queue(log_q)
 

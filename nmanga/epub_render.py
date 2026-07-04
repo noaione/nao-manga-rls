@@ -35,7 +35,6 @@ from urllib.request import url2pathname
 
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET  # noqa: N817
-from PIL import Image
 from playwright.sync_api import Browser, Error, Page, Playwright
 
 from . import term
@@ -51,7 +50,7 @@ __all__ = (
     "load_xhtml",
     "map_spine_to_xhtml_path",
     "read_view_port_from_xhtml_bs4",
-    "screenshot_and_merge_page",
+    "screenshot_overlay_page",
     "solve_epub_path",
 )
 
@@ -319,9 +318,7 @@ def get_src_image_path(box: BoundingBoxImage) -> Path:
     return Path(parsed_path).resolve()
 
 
-def screenshot_and_merge_page(page: Page, box: BoundingBoxImage, output_path: Path) -> None:
-    base_img_path = Image.open(get_src_image_path(box))
-
+def screenshot_overlay_page(page: Page, box: BoundingBoxImage) -> bytes:
     tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     overlay_path = Path(tmp.name)
     tmp.close()
@@ -330,6 +327,8 @@ def screenshot_and_merge_page(page: Page, box: BoundingBoxImage, output_path: Pa
         page.screenshot(
             path=str(overlay_path),
             omit_background=True,
+            type="png",
+            quality=100,
             scale="device",
             clip={
                 "x": box["x"],
@@ -339,10 +338,6 @@ def screenshot_and_merge_page(page: Page, box: BoundingBoxImage, output_path: Pa
             },
         )
 
-        # read/move/use tmp_path here
-        # composite overlay on top of base image
-        overlay_img = Image.open(overlay_path)
-        base_img_path.paste(overlay_img, (box["x"], box["y"]), overlay_img)
-        base_img_path.save(output_path, format="PNG")
+        return overlay_path.read_bytes()
     finally:
         overlay_path.unlink(missing_ok=True)
