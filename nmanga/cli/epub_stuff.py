@@ -35,17 +35,38 @@ from zipfile import ZipFile
 import rich_click as click
 from defusedxml import ElementTree as ET  # noqa: N817
 from PIL import Image
+from playwright.sync_api import sync_playwright
 
 from .. import term
+from ..epub_render import (
+    find_root_file_path,
+    get_base_image_scale,
+    get_image_bounding_box_and_hide,
+    launch_chromium,
+    load_xhtml,
+    map_spine_to_xhtml_path,
+    read_view_port_from_xhtml_bs4,
+    screenshot_and_merge_page,
+    solve_epub_path,
+)
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
 
-__all__ = ("epub_extractor",)
+__all__ = ("epub_group",)
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
 Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 console = term.get_console()
+
+
+@click.group(
+    name="epub",
+    help="EPUB operation toolsets",
+)
+def epub_group():
+    """EPUB operation toolsets"""
+    pass
 
 
 @dataclass
@@ -57,79 +78,6 @@ class ExtractedImage:
     @classmethod
     def make_blank(cls, ext: str) -> ExtractedImage:
         return cls(data=b"", ext=ext, blank=True)
-
-
-def solve_path(base_path: Path, relative_path: str) -> Path:
-    """Resolve a relative path against a base path within an EPUB archive"""
-
-    base_path_parts = base_path.parts[:-1]  # exclude the file itself
-    relative_parts = Path(relative_path).parts
-
-    combined_parts = list(base_path_parts)
-
-    for part in relative_parts:
-        if part == ".":
-            continue
-        elif part == "..":
-            if len(combined_parts) > 0:
-                combined_parts.pop()
-        else:
-            combined_parts.append(part)
-
-    return Path(*combined_parts)
-
-
-def find_root_file_path(epub_zip: ZipFile) -> str:
-    """Find the rootfile path from the EPUB's container.xml"""
-
-    target_file = "META-INF/container.xml"
-    with epub_zip.open(target_file) as container_file:
-        container_xml = container_file.read().decode("utf-8")
-
-    root = ET.fromstring(container_xml)
-    namespace = {"ns": "urn:oasis:names:tc:opendocument:xmlns:container"}
-    rootfile_element = root.find("ns:rootfiles/ns:rootfile", namespace)
-    if rootfile_element is None:
-        raise ValueError("Rootfile element not found in container.xml")
-
-    full_path_attr = rootfile_element.get("full-path")
-    if full_path_attr is None:
-        raise ValueError("full-path attribute not found in rootfile element")
-    return full_path_attr
-
-
-def map_spine_to_xhtml_path(epub_zip: ZipFile, root_file_path: str) -> list[str]:
-    """Extract the spine mapping to XHTML file paths from the EPUB's package document"""
-
-    opf_path = Path(root_file_path)
-
-    with epub_zip.open(root_file_path) as package_file:
-        package_xml = package_file.read().decode("utf-8")
-
-    root = ET.fromstring(package_xml)
-    namespace = {"ns": "http://www.idpf.org/2007/opf"}
-
-    # Map item IDs to their hrefs
-    id_to_href = {}
-    for item in root.findall("ns:manifest/ns:item", namespace):
-        item_id = item.get("id")
-        href = item.get("href")
-        if item_id and href:
-            id_to_href[item_id] = href
-
-    # Extract spine order of XHTML files
-    spine_xhtml_paths = []
-    for itemref in root.findall("ns:spine/ns:itemref", namespace):
-        idref = itemref.get("idref")
-        if idref and idref in id_to_href:
-            href_data = Path(id_to_href[idref])
-            resolved_path = (opf_path.parent / href_data).as_posix()
-            spine_xhtml_paths.append(resolved_path)
-        else:
-            # Raise to ensure integrity
-            raise ValueError(f"Item with idref '{idref}' not found in manifest")
-
-    return spine_xhtml_paths
 
 
 def is_xhtml_blank(xhtml_content: str) -> bool:
@@ -173,7 +121,7 @@ def try_extract_images_from_xhtml(
             continue
 
         try:
-            img_resolved = solve_path(xhtml_path_real, img_src).as_posix()
+            img_resolved = solve_epub_path(xhtml_path_real, img_src).as_posix()
             with epub_zip.open(img_resolved) as img_file:
                 img_data = img_file.read()
                 img_ext = Path(img_resolved).suffix.lstrip(".").lower()
@@ -195,7 +143,7 @@ def try_extract_images_from_xhtml(
             img_href = image_child.get("{http://www.w3.org/1999/xlink}href")
             if img_href:
                 try:
-                    img_resolved = solve_path(xhtml_path_real, img_href).as_posix()
+                    img_resolved = solve_epub_path(xhtml_path_real, img_href).as_posix()
                     with epub_zip.open(img_resolved) as img_file:
                         img_data = img_file.read()
                         img_ext = Path(img_resolved).suffix.lstrip(".").lower()
@@ -215,8 +163,8 @@ def make_blank_image(original_img: Path, target_path: Path) -> None:
         blank_img.close()
 
 
-@click.command(
-    name="epub-extract",
+@epub_group.command(
+    name="extract",
     help="Extract all referenced images from an EPUB file",
     cls=NMangaCommandHandler,
 )
@@ -247,10 +195,15 @@ def epub_extractor(
 
     with ZipFile(path_or_archive, "r") as epub_zip:
         # Get META-INF/container.xml to find the rootfile
-        root_file_path = find_root_file_path(epub_zip)
+        container_file = "META-INF/container.xml"
+        with epub_zip.open(container_file) as container_fp:
+            container_xml = container_fp.read().decode("utf-8")
+        root_file_path = find_root_file_path(container_xml)
         console.info(f"Rootfile located at: {root_file_path}")
 
-        spine_mappings = map_spine_to_xhtml_path(epub_zip, root_file_path)
+        with epub_zip.open(root_file_path) as root_fp:
+            package_xml = root_fp.read().decode("utf-8")
+        spine_mappings = map_spine_to_xhtml_path(package_xml, root_file_path)
         console.info(f"Spine contains {len(spine_mappings)} XHTML files.")
 
         progress = console.make_progress()
@@ -280,3 +233,89 @@ def epub_extractor(
             progress.update(task, advance=1)
         console.stop_progress(progress)
         console.info(f"Extracted {img_counters} images to {dest_output}")
+
+
+@epub_group.command(
+    name="render",
+    help="Render all pages from an EPUB file to a folder of images",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True, disable_folder=False)
+@options.dest_output(optional=False)
+@click.option(
+    "--default-w",
+    "default_w",
+    type=options.POSITIVE_INT,
+    required=True,
+    help="The default width of the image",
+)
+@click.option(
+    "--default-h",
+    "default_h",
+    type=options.POSITIVE_INT,
+    required=True,
+    help="The default height of the image",
+)
+@time_program
+def epub_render(
+    path_or_archive: Path,
+    dest_output: Path,
+    default_w: int,
+    default_h: int,
+) -> None:
+    """
+    Render all pages from an EPUB file to a folder of images.
+    """
+
+    if path_or_archive.is_file():
+        raise click.BadParameter(
+            f"{path_or_archive} should be a folder from an extracted EPUB file",
+            param_hint="path_or_archive",
+        )
+
+    console.info(f"Opening EPUB file: {path_or_archive}")
+    dest_output.mkdir(parents=True, exist_ok=True)
+
+    # Get META-INF/container.xml to find the rootfile
+    container_file = path_or_archive / "META-INF" / "container.xml"
+    container_xml = container_file.read_text("utf-8")
+    root_file_path = find_root_file_path(container_xml)
+    console.info(f"Rootfile located at: {root_file_path}")
+
+    package_xml_path = path_or_archive / root_file_path
+    package_xml = package_xml_path.read_text("utf-8")
+    spine_mappings = map_spine_to_xhtml_path(package_xml, root_file_path)
+    console.info(f"Spine contains {len(spine_mappings)} XHTML files.")
+
+    with sync_playwright() as playwright:
+        console.info("Launching Chromium...")
+        browser = launch_chromium(playwright, args=["--allow-file-access-from-files"])
+
+        progress = console.make_progress()
+        task = progress.add_task("Rendering pages...", total=len(spine_mappings))
+        img_counters = 0
+        for xhtml_path in spine_mappings:
+            # solve with solve_epub_path
+            xhtml_full_path = solve_epub_path(package_xml_path, xhtml_path)
+            vw_w, vw_h = read_view_port_from_xhtml_bs4(xhtml_full_path, (default_w, default_h))
+
+            img_scale = get_base_image_scale(browser, xhtml_full_path, vw_w, vw_h)
+
+            page = browser.new_page(
+                viewport={
+                    "width": vw_w,
+                    "height": vw_h,
+                },
+                device_scale_factor=img_scale,
+            )
+
+            load_xhtml(page, xhtml_full_path)
+
+            box = get_image_bounding_box_and_hide(page)
+            dest_image_path = dest_output / f"i_{img_counters:04d}.png"
+
+            screenshot_and_merge_page(page, box, dest_image_path)
+            img_counters += 1
+            progress.update(task, advance=1)
+            console.stop_progress(progress)
+            console.info(f"Extracted {img_counters} images to {dest_output}")
