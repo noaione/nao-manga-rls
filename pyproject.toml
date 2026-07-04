@@ -39,6 +39,8 @@ dependencies = [
     "cykooz.resizer[pillow]@git+https://github.com/Cykooz/cykooz.resizer.git#19dcea501f538146806764de28accda63b6a7a63",
     "wand==0.7.2",
     "click-pwsh==0.9.7",
+    "playwright>=1.61.0",
+    "beautifulsoup4>=4.15.0",
 ]
 
 [project.optional-dependencies]
