@@ -36,7 +36,6 @@ from zipfile import ZipFile
 import rich_click as click
 from defusedxml import ElementTree as ET  # noqa: N817
 from PIL import Image
-from playwright.sync_api import sync_playwright
 
 from .. import term
 from ..autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
@@ -385,6 +384,13 @@ def epub_render(
             f"{path_or_archive} should be a folder from an extracted EPUB file",
             param_hint="path_or_archive",
         )
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise click.ClickException(
+            "playwright is not installed. Please install nmanga with `epub-render` extras"
+        ) from None
 
     console.info(f"Opening EPUB file: {path_or_archive}")
     dest_output.mkdir(parents=True, exist_ok=True)

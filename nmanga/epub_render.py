@@ -29,13 +29,15 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET  # noqa: N817
-from playwright.sync_api import Browser, Error, Page, Playwright
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Browser, Page, Playwright
 
 from . import term
 
@@ -72,10 +74,10 @@ def install_chromium() -> None:
     )
 
 
-def launch_chromium(playwright: Playwright, *, args: list[str] | None = None) -> Browser:
+def launch_chromium(playwright: "Playwright", *, args: list[str] | None = None) -> "Browser":
     try:
         return playwright.chromium.launch(args=args)
-    except Error as e:
+    except Exception as e:
         if "Executable doesn't exist" not in str(e):
             raise
 
@@ -159,7 +161,7 @@ def html_with_local_base(xhtml_path: Path) -> str:
     return re.sub(r"(<head\b[^>]*>)", r"\1" + base, text, count=1, flags=re.IGNORECASE)
 
 
-def load_xhtml(page: Page, xhtml_path: Path) -> None:
+def load_xhtml(page: "Page", xhtml_path: Path) -> None:
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".html", delete=False) as fp:
         fp.write(html_with_local_base(xhtml_path))
         temp_path = Path(fp.name)
@@ -215,7 +217,7 @@ def read_view_port_from_xhtml_bs4(xhtml_path: Path, fallback: tuple[int, int]) -
     return width, height
 
 
-def get_base_image_scale(browser: Browser, input_xhtml: Path, viewport_width: int, viewport_height: int) -> float:
+def get_base_image_scale(browser: "Browser", input_xhtml: Path, viewport_width: int, viewport_height: int) -> float:
     page = browser.new_page(
         viewport={
             "width": viewport_width,
@@ -263,7 +265,7 @@ def get_base_image_scale(browser: Browser, input_xhtml: Path, viewport_width: in
     return scale_x
 
 
-def get_image_bounding_box_and_hide(page: Page) -> BoundingBoxImage:
+def get_image_bounding_box_and_hide(page: "Page") -> BoundingBoxImage:
     return page.evaluate("""
         () => {
             document.documentElement.style.background = "transparent";
@@ -318,7 +320,7 @@ def get_src_image_path(box: BoundingBoxImage) -> Path:
     return Path(parsed_path).resolve()
 
 
-def screenshot_overlay_page(page: Page, box: BoundingBoxImage) -> bytes:
+def screenshot_overlay_page(page: "Page", box: BoundingBoxImage) -> bytes:
     tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     overlay_path = Path(tmp.name)
     tmp.close()
