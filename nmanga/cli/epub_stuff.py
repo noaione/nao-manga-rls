@@ -246,40 +246,32 @@ def overlay_level_image(
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
     peak_offset: int,
-    no_white: bool,
     is_legacy: bool,
 ) -> Image.Image:
     comp_image = Image.new(overlay_img.mode, (overlay_img.width, overlay_img.height), color=255)
     comp_image.paste(overlay_img, (0, 0), overlay_img)
 
     if not is_legacy:
-        black_level, white_level, _ = find_local_peak(
+        black_level, _, _ = find_local_peak(
             comp_image,
             upper_limit=upper_limit,
             peak_percentage=peak_min_pct,
             peak_prominence=peak_prom_pct,
-            skip_white_check=no_white,
+            skip_white_check=True,
         )
     else:
-        black_level, white_level, _ = find_local_peak_legacy(
-            comp_image, upper_limit=upper_limit, skip_white_peaks=no_white
-        )
+        black_level, _, _ = find_local_peak_legacy(comp_image, upper_limit=upper_limit, skip_white_peaks=True)
 
     is_black_bad = black_level <= 0
-    is_white_bad = white_level >= 255 if not no_white else False
 
-    if (
-        (is_black_bad and is_white_bad and not no_white)  # both levels are bad
-        or (is_black_bad and no_white)
-        or black_level > upper_limit
-    ):
+    if is_black_bad or black_level > upper_limit:
         return overlay_img.copy()
 
     gamma_correct = gamma_correction(black_level)
     adjusted_img = apply_levels(
         overlay_img,
         black_point=black_level + peak_offset,
-        white_point=255 if no_white else white_level,
+        white_point=255,
         gamma=gamma_correct,
     )
 
@@ -344,13 +336,6 @@ def overlay_level_image(
     help="The offset to add to the detected black level percentage",
 )
 @click.option(
-    "--no-white",
-    "no_white",
-    is_flag=True,
-    default=False,
-    help="Do not adjust white level, only adjust black level",
-)
-@click.option(
     "--legacy",
     is_flag=True,
     default=False,
@@ -372,7 +357,6 @@ def epub_render(
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
     peak_offset: int,
-    no_white: bool,
     legacy: bool,
     no_autolevel: bool,
 ) -> None:
@@ -466,7 +450,6 @@ def epub_render(
                     peak_min_pct=peak_min_pct,
                     peak_prom_pct=peak_prom_pct,
                     peak_offset=peak_offset,
-                    no_white=no_white,
                     is_legacy=legacy,
                 )
 
