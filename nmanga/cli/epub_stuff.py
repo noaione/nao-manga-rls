@@ -40,6 +40,7 @@ from PIL import Image
 from .. import term
 from ..autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
 from ..epub_render import (
+    attach_chromium_console,
     find_root_file_path,
     get_base_image_scale,
     get_image_bounding_box_and_hide,
@@ -423,10 +424,21 @@ def epub_render(
         img_counters = 0
         for xhtml_path in spine_mappings:
             # solve with solve_epub_path
+            dest_image_path = dest_output / f"i_{img_counters:04d}.png"
             xhtml_full_path = solve_epub_path(package_xml_path, xhtml_path)
+            console.log(f"Opening: {xhtml_full_path}")
             vw_w, vw_h = read_view_port_from_xhtml_bs4(xhtml_full_path, (default_w, default_h))
 
-            img_scale = get_base_image_scale(browser, xhtml_full_path, vw_w, vw_h)
+            img_scale = get_base_image_scale(browser, xhtml_full_path, vw_w, vw_h, cnsl=console)
+            if img_scale is None:
+                # Make blank white image?
+                console.warning(f"No image found in {xhtml_path}")
+                blank_img = Image.new("L", (default_w, default_h), color=255)  # white for L mode
+                blank_img.save(dest_image_path, format="PNG")
+                blank_img.close()
+                img_counters += 1
+                progress.update(task, advance=1)
+                continue
 
             page = browser.new_page(
                 viewport={
@@ -435,6 +447,7 @@ def epub_render(
                 },
                 device_scale_factor=img_scale,
             )
+            attach_chromium_console(page, console)
 
             load_xhtml(page, xhtml_full_path)
 
@@ -442,7 +455,6 @@ def epub_render(
             src_image_path = get_src_image_path(box)
 
             src_img = Image.open(src_image_path)
-            dest_image_path = dest_output / f"i_{img_counters:04d}.png"
             overlay_pg = screenshot_overlay_page(page, box)
             overlay_img = Image.open(BytesIO(overlay_pg))
 
@@ -463,5 +475,4 @@ def epub_render(
 
             img_counters += 1
             progress.update(task, advance=1)
-            console.stop_progress(progress)
-            console.info(f"Extracted {img_counters} images to {dest_output}")
+        console.stop_progress(progress)

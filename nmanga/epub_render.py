@@ -47,7 +47,6 @@ __all__ = (
     "get_base_image_scale",
     "get_image_bounding_box_and_hide",
     "get_src_image_path",
-    "html_with_local_base",
     "launch_chromium",
     "load_xhtml",
     "map_spine_to_xhtml_path",
@@ -151,25 +150,12 @@ def map_spine_to_xhtml_path(package_xml: str, root_file_path: str) -> list[str]:
     return spine_xhtml_paths
 
 
-def html_with_local_base(xhtml_path: Path) -> str:
-    text = xhtml_path.read_text(encoding="utf-8", errors="ignore")
-    base = f'<base href="{xhtml_path.as_uri()}" target="_blank">'
-
-    if BASE_HTML_RE.search(text):
-        return BASE_HTML_RE.sub(base, text, count=1)
-
-    return re.sub(r"(<head\b[^>]*>)", r"\1" + base, text, count=1, flags=re.IGNORECASE)
+def attach_chromium_console(page: "Page", cnsl: "term.ConsoleInterface"):
+    page.on("console", lambda pp: cnsl.log(f"[CHROME-{pp.type.upper()}]", pp.text))
 
 
 def load_xhtml(page: "Page", xhtml_path: Path) -> None:
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".html", delete=False) as fp:
-        fp.write(html_with_local_base(xhtml_path))
-        temp_path = Path(fp.name)
-    page.goto(temp_path.as_uri(), wait_until="load")
-    try:
-        temp_path.unlink()
-    except OSError:
-        pass
+    page.goto(xhtml_path.as_uri(), wait_until="load")
     page.evaluate("""
         async () => {
             const timeout = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -217,7 +203,14 @@ def read_view_port_from_xhtml_bs4(xhtml_path: Path, fallback: tuple[int, int]) -
     return width, height
 
 
-def get_base_image_scale(browser: "Browser", input_xhtml: Path, viewport_width: int, viewport_height: int) -> float:
+def get_base_image_scale(
+    browser: "Browser",
+    input_xhtml: Path,
+    viewport_width: int,
+    viewport_height: int,
+    *,
+    cnsl: "term.ConsoleInterface | None" = None,
+) -> float | None:
     page = browser.new_page(
         viewport={
             "width": viewport_width,
@@ -226,10 +219,16 @@ def get_base_image_scale(browser: "Browser", input_xhtml: Path, viewport_width: 
         device_scale_factor=1,
     )
 
+    if cnsl is not None:
+        attach_chromium_console(page, cnsl)
+
     load_xhtml(page, input_xhtml)
 
     box = page.evaluate("""
         () => {
+            console.log(document.body.outerHTML);
+            console.log("Loaded base scale", document.images);
+            console.log("all images", document.querySelectorAll("img"));
             const images = Array.from(document.images)
                 .map(img => {
                     const rect = img.getBoundingClientRect();
@@ -246,12 +245,15 @@ def get_base_image_scale(browser: "Browser", input_xhtml: Path, viewport_width: 
                 .sort((a, b) => b.area - a.area);
 
             if (images.length === 0) {
-                throw new Error("No image found on page");
+                return null;
             }
 
             return images[0];
         }
     """)
+
+    if box is None:
+        return None
 
     page.close()
 
@@ -330,7 +332,7 @@ def screenshot_overlay_page(page: "Page", box: BoundingBoxImage) -> bytes:
             path=str(overlay_path),
             omit_background=True,
             type="png",
-            quality=100,
+            # quality=100,
             scale="device",
             clip={
                 "x": box["x"],
