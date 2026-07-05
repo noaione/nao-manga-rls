@@ -24,14 +24,19 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from typing import Literal, cast, overload
 
-from cykooz_resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
 from PIL import Image
 from wand.image import Image as WandImage
+
+if sys.version_info >= (3, 14):
+    from cykooz_resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
+else:
+    from cykooz.resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
 
 from .lazy import get_numpy
 

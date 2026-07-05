@@ -2,9 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.13, <3.15"
 resolution-markers = [
-    "sys_platform == 'linux' or sys_platform == 'win32'",
-    "sys_platform == 'darwin'",
-    "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "(python_full_version >= '3.14' and sys_platform == 'linux') or (python_full_version >= '3.14' and sys_platform == 'win32')",
+    "(python_full_version < '3.14' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform == 'win32')",
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 
 [manifest]
@@ -363,12 +366,29 @@ nvtx = [
 
 [[package]]
 name = "cykooz-resizer"
-version = "4.0.0"
-source = { git = "https://github.com/Cykooz/cykooz.resizer.git#19dcea501f538146806764de28accda63b6a7a63" }
+version = "3.1.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version < '3.14' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform == 'win32')",
+    "python_full_version < '3.14' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2c/bd/841fc97e51c9f69d8d6960163b07246e2df8bb6190145f2a5ce3279accde/cykooz.resizer-3.1.1.tar.gz", hash = "sha256:c99130c979ffcbcbc5b114e32d82c06b3544f0ddcd8c80b628befc8853e2f4bf", size = 27850, upload-time = "2025-02-17T11:33:40.661Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/2b/2dcd9888201029db0a46eaf29390cfd07bf0cef67f56e24d11be619a0185/cykooz.resizer-3.1.1-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:f9e6cad31228076fa3bb6d391c8fc7f496d083b7c5bb33fad64ad30dcbcfd098", size = 2565792, upload-time = "2025-02-17T11:33:20.048Z" },
+    { url = "https://files.pythonhosted.org/packages/88/35/7546d50c0cd29561a59d226ec0ee6b651fa1f04cfe37fb7fdb6eaa1d2ed6/cykooz.resizer-3.1.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:aefec9429f0fba70871f3c1336e3cffd0c0e98d3df1db9bdc79bb9bc9db4b860", size = 1595862, upload-time = "2025-02-17T11:33:23.319Z" },
+    { url = "https://files.pythonhosted.org/packages/84/54/b8bd2623458f487fccca3f20c72ef42be2b8dca656b216f5a821f21869d6/cykooz.resizer-3.1.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:934ab7c4a9c0591e37ff787da2368fadc9b347ec36fffdea7511abd90dfa9d4d", size = 2767805, upload-time = "2025-02-17T11:33:26.447Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/ae/4d7410382036127f6a916954f898b2897f2801b84053f01994882007e364/cykooz.resizer-3.1.1-cp313-cp313-win_amd64.whl", hash = "sha256:9134c1d33d4dd5e406add5e58e5f533eed95e46ab1147748d300487f73648955", size = 2682931, upload-time = "2025-02-17T11:33:28.638Z" },
+]
 
-[package.optional-dependencies]
-pillow = [
-    { name = "pillow" },
+[[package]]
+name = "cykooz-resizer"
+version = "4.0.0"
+source = { git = "https://github.com/Cykooz/cykooz.resizer.git?rev=19dcea501f538146806764de28accda63b6a7a63#19dcea501f538146806764de28accda63b6a7a63" }
+resolution-markers = [
+    "(python_full_version >= '3.14' and sys_platform == 'linux') or (python_full_version >= '3.14' and sys_platform == 'win32')",
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 
 [[package]]
@@ -763,7 +783,8 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "click" },
     { name = "click-pwsh" },
-    { name = "cykooz-resizer", extra = ["pillow"] },
+    { name = "cykooz-resizer", version = "3.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
+    { name = "cykooz-resizer", version = "4.0.0", source = { git = "https://github.com/Cykooz/cykooz.resizer.git?rev=19dcea501f538146806764de28accda63b6a7a63#19dcea501f538146806764de28accda63b6a7a63" }, marker = "python_full_version >= '3.14'" },
     { name = "defusedxml" },
     { name = "ftfy" },
     { name = "inquirer" },
@@ -820,7 +841,8 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "click", specifier = "==8.4.2" },
     { name = "click-pwsh", specifier = "==0.9.7" },
-    { name = "cykooz-resizer", extras = ["pillow"], git = "https://github.com/Cykooz/cykooz.resizer.git" },
+    { name = "cykooz-resizer", marker = "python_full_version < '3.14'", specifier = ">=0.3.1" },
+    { name = "cykooz-resizer", marker = "python_full_version >= '3.14'", git = "https://github.com/Cykooz/cykooz.resizer.git?rev=19dcea501f538146806764de28accda63b6a7a63" },
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "einops", marker = "extra == 'denoiser'", specifier = ">=0.8.2" },
     { name = "ftfy", specifier = "==6.3.1" },
@@ -1717,8 +1739,8 @@ name = "tensorrt-cu13"
 version = "10.16.1.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tensorrt-cu13-bindings", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-    { name = "tensorrt-cu13-libs", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "tensorrt-cu13-bindings", marker = "(python_full_version < '3.14' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform == 'win32')" },
+    { name = "tensorrt-cu13-libs", marker = "(python_full_version < '3.14' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7c/9a/dfe6c293faa625457563c293d165f8948532d71b29a490e4f59773edf2aa/tensorrt_cu13-10.16.1.11.tar.gz", hash = "sha256:5d34203a92f38851b150c4eddd32b9b55c01fd40fc4d19bff83e8dfef1d8f69e", size = 17916, upload-time = "2026-04-07T19:37:15.536Z" }
 
@@ -1752,7 +1774,8 @@ name = "torch"
 version = "2.12.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
     { name = "filelock", marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
@@ -1769,7 +1792,8 @@ name = "torch"
 version = "2.12.1"
 source = { registry = "https://pypi.org/simple/" }
 resolution-markers = [
-    "sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and sys_platform == 'darwin'",
+    "python_full_version < '3.14' and sys_platform == 'darwin'",
 ]
 dependencies = [
     { name = "filelock", marker = "sys_platform == 'darwin'" },
@@ -1791,7 +1815,8 @@ name = "torch"
 version = "2.12.1+cu132"
 source = { registry = "https://download.pytorch.org/whl/cu132" }
 resolution-markers = [
-    "sys_platform == 'linux' or sys_platform == 'win32'",
+    "(python_full_version >= '3.14' and sys_platform == 'linux') or (python_full_version >= '3.14' and sys_platform == 'win32')",
+    "(python_full_version < '3.14' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform == 'win32')",
 ]
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform == 'linux'" },
