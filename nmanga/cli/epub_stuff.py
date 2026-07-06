@@ -41,16 +41,18 @@ from .. import term
 from ..autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
 from ..epub_render import (
     attach_chromium_console,
+    copy_image_only_page,
     find_root_file_path,
     get_base_image_scale,
     get_image_bounding_box_and_hide,
+    get_image_only_page_path,
     get_src_image_path,
     launch_chromium,
     load_xhtml,
     map_spine_to_xhtml_path,
     read_view_port_from_xhtml_bs4,
+    resolve_epub_href,
     screenshot_overlay_page,
-    solve_epub_path,
 )
 from ..lazy import get_numpy
 from . import options
@@ -125,7 +127,7 @@ def try_extract_images_from_xhtml(
             continue
 
         try:
-            img_resolved = solve_epub_path(xhtml_path_real, img_src).as_posix()
+            img_resolved = resolve_epub_href(xhtml_path_real, img_src).as_posix()
             with epub_zip.open(img_resolved) as img_file:
                 img_data = img_file.read()
                 img_ext = Path(img_resolved).suffix.lstrip(".").lower()
@@ -147,7 +149,7 @@ def try_extract_images_from_xhtml(
             img_href = image_child.get("{http://www.w3.org/1999/xlink}href")
             if img_href:
                 try:
-                    img_resolved = solve_epub_path(xhtml_path_real, img_href).as_posix()
+                    img_resolved = resolve_epub_href(xhtml_path_real, img_href).as_posix()
                     with epub_zip.open(img_resolved) as img_file:
                         img_data = img_file.read()
                         img_ext = Path(img_resolved).suffix.lstrip(".").lower()
@@ -399,6 +401,9 @@ def epub_render(
         console.warning("numpy is not installed. The text will not be leveled.")
         has_numpy = False
 
+    copied_page = 0
+    blank_page = 0
+    rendered_page = 0
     with sync_playwright() as playwright:
         console.info("Launching Chromium...")
         browser = launch_chromium(playwright, args=["--allow-file-access-from-files"])
@@ -409,18 +414,30 @@ def epub_render(
         for xhtml_path in spine_mappings:
             # solve with solve_epub_path
             dest_image_path = dest_output / f"i_{img_counters:04d}.png"
-            xhtml_full_path = solve_epub_path(package_xml_path, xhtml_path)
-            console.log(f"Opening: {xhtml_full_path}")
+            xhtml_full_path = resolve_epub_href(package_xml_path, xhtml_path, epub_root=path_or_archive)
+            console.log(f"Opening: {xhtml_full_path} - {xhtml_path} - {package_xml_path} - {path_or_archive}")
+
+            image_only_path = get_image_only_page_path(xhtml_full_path, path_or_archive)
+            if image_only_path is not None:
+                dest_image_path = copy_image_only_page(image_only_path, dest_output, img_counters)
+                console.log(f"Copied image-only page to {dest_image_path}")
+                img_counters += 1
+                copied_page += 1
+                progress.update(task, advance=1)
+                continue
+
             vw_w, vw_h = read_view_port_from_xhtml_bs4(xhtml_full_path, (default_w, default_h))
 
             img_scale = get_base_image_scale(browser, xhtml_full_path, vw_w, vw_h, cnsl=console)
+            console.log(f"Page scale is: {img_scale}, with viewport {vw_w}x{vw_h}")
             if img_scale is None:
                 # Make blank white image?
-                console.warning(f"No image found in {xhtml_path}")
+                console.warning(f"No image found in {xhtml_path}, making blank page")
                 blank_img = Image.new("L", (default_w, default_h), color=255)  # white for L mode
                 blank_img.save(dest_image_path, format="PNG")
                 blank_img.close()
                 img_counters += 1
+                blank_page += 1
                 progress.update(task, advance=1)
                 continue
 
@@ -457,5 +474,13 @@ def epub_render(
             src_img.save(dest_image_path, format="PNG")
 
             img_counters += 1
+            rendered_page += 1
             progress.update(task, advance=1)
         console.stop_progress(progress)
+
+    if rendered_page > 0:
+        console.info(f"Rendered {rendered_page} pages")
+    if copied_page > 0:
+        console.info(f"Copied {copied_page} pages")
+    if blank_page > 0:
+        console.info(f"Generate {blank_page} blank pages")
