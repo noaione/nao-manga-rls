@@ -457,7 +457,7 @@ def epub_render(
 
             src_img = Image.open(src_image_path)
             overlay_pg = screenshot_overlay_page(page, box)
-            overlay_img = Image.open(BytesIO(overlay_pg))
+            overlay_img = Image.open(BytesIO(overlay_pg)).convert("RGBA")
 
             # level the image
             if has_numpy and not no_autolevel:
@@ -470,7 +470,7 @@ def epub_render(
                     is_legacy=legacy,
                 )
 
-            src_img.paste(overlay_img, (box["x"], box["y"]), overlay_img)
+            src_img.paste(overlay_img, (round(box["x"]), round(box["y"])), overlay_img.getchannel("A"))
             src_img.save(dest_image_path, format="PNG")
 
             img_counters += 1

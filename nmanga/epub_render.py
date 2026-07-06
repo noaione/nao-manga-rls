@@ -476,6 +476,33 @@ def get_image_bounding_box_and_hide(page: "Page") -> BoundingBoxImage:
             base.img.style.visibility = "hidden";
             base.img.classList.add("playwright-hidden");
 
+            const baseUrl = new URL(base.src, document.baseURI).href;
+            const basePath = new URL(baseUrl).pathname;
+            const cssUrls = value => {
+                const urls = [];
+                const pattern = /url\\((['"]?)(.*?)\\1\\)/g;
+                let match;
+                while ((match = pattern.exec(value)) !== null) {
+                    urls.push(new URL(match[2], document.baseURI).href);
+                }
+                return urls;
+            };
+
+            for (const elem of document.querySelectorAll("*")) {
+                const bgImage = window.getComputedStyle(elem).backgroundImage;
+                if (!bgImage || bgImage === "none") {
+                    continue;
+                }
+
+                const hasBaseBackground = cssUrls(bgImage).some(url => {
+                    const parsed = new URL(url);
+                    return parsed.href === baseUrl || parsed.pathname === basePath;
+                });
+                if (hasBaseBackground) {
+                    elem.style.setProperty("background-image", "none", "important");
+                }
+            }
+
             console.log("Base image hidden", document.body.outerHTML);
 
             return {
