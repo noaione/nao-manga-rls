@@ -27,11 +27,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 import pikepdf
 
-__all__ = ("PdfBoxExpansion", "expand_page_cropping", "get_pdf_box")
+__all__ = (
+    "PdfBoxExpansion",
+    "expand_page_cropping",
+    "expand_wide_page",
+    "get_pdf_box",
+    "is_wide_spread_page",
+)
 
 BoxArea: TypeAlias = tuple[float, float, float, float]
 
@@ -84,3 +90,34 @@ def expand_page_cropping(page: pikepdf.Page, box: PdfBoxExpansion, *, box_type: 
     ]
 
     page[box_type.value] = pikepdf.Array(new_crop_box)
+
+
+def is_wide_spread_page(page: pikepdf.Page, *, box_type: PdfCropKind = PdfCropKind.Crop, factor: float = 2.0) -> bool:
+    """Check whether a page's box is a lot narrower than its MediaBox, indicating a spread that got cropped down."""
+
+    mx0, _, mx1, _ = get_pdf_box(page, PdfCropKind.Media)
+    cx0, _, cx1, _ = get_pdf_box(page, box_type)
+
+    media_width = mx1 - mx0
+    box_width = cx1 - cx0
+
+    return media_width > box_width * factor
+
+
+def expand_wide_page(
+    page: pikepdf.Page,
+    *,
+    box_type: PdfCropKind = PdfCropKind.Crop,
+    side: Literal["left", "right"] = "right",
+) -> None:
+    """Expand a box outward (mirroring the opposite margin) to reveal the rest of a cropped-down spread."""
+
+    mx0, _, mx1, _ = get_pdf_box(page, PdfCropKind.Media)
+    cx0, cy0, cx1, cy1 = get_pdf_box(page, box_type)
+
+    if side == "right":
+        new_box = (cx0, cy0, min(mx1, mx1 - (cx0 - mx0)), cy1)
+    else:
+        new_box = (max(mx0, mx0 + (mx1 - cx1)), cy0, cx1, cy1)
+
+    page[box_type.value] = pikepdf.Array([_float_dec(v) for v in new_box])
