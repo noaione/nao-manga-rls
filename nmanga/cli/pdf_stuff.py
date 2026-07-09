@@ -130,7 +130,7 @@ def pdf_expand(
     kind = BOX_KIND_NAMES[box_type]
 
     console.info(f"Opening PDF file: {path_or_archive}")
-    with pikepdf.open(path_or_archive) as pdf:
+    with pikepdf.open(path_or_archive, allow_overwriting_input=force) as pdf:
         total = len(pdf.pages)
         target_pages = set(pages.iterate(total)) if pages is not None else set(range(total))
 
@@ -233,7 +233,7 @@ def pdf_wide(
     kind = BOX_KIND_NAMES[box_type]
 
     console.info(f"Opening PDF file: {path_or_archive}")
-    with pikepdf.open(path_or_archive) as pdf:
+    with pikepdf.open(path_or_archive, allow_overwriting_input=force) as pdf:
         total = len(pdf.pages)
         target_pages = set(pages.iterate(total)) if pages is not None else set(range(total))
 
