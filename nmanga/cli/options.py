@@ -24,8 +24,10 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import re
 from multiprocessing import cpu_count
 from pathlib import Path
+from typing import Generator, Literal
 
 import rich_click as click
 from click.shell_completion import CompletionItem
@@ -33,8 +35,61 @@ from click.shell_completion import CompletionItem
 from ..config import get_config
 from ..constants import MANGA_PUBLICATION_TYPES
 from ..exporter import ExporterType
+from ..pdfs import PdfBoxExpansion
 
 config = get_config()
+
+
+class MarkerRange:
+    def __init__(self, kind: Literal["odd", "even"]):
+        self.kind = kind
+
+    def with_total(self, total: int) -> Generator[int, None, None]:
+        start_pg = 0 if self.kind == "odd" else 1
+        for pg in range(start_pg, total, 2):
+            yield pg
+
+    def __str__(self):
+        return self.kind
+
+    def __repr__(self):
+        return f"MarkerRange({self.kind})"
+
+    def __eq__(self, other):
+        return self.kind == other.kind
+
+    def __hash__(self):
+        return hash(("MarkerRange", self.kind))
+
+
+class AnyPageRange:
+    __slots__ = ("__markers", "__ranges")
+
+    def __init__(self):
+        self.__ranges: set[int] = set()
+        self.__markers: set[MarkerRange] = set()  # so no duplicates
+
+    def __repr__(self) -> str:
+        return f"AnyPageRange({len(self.__ranges)!r} total, {self.__markers!r})"
+
+    def add(self, thing: int | range | MarkerRange):
+        if isinstance(thing, range):
+            self.__ranges.update(thing)
+        elif isinstance(thing, int):
+            self.__ranges.add(thing)
+        elif isinstance(thing, MarkerRange):
+            self.__markers.add(thing)
+        else:
+            raise TypeError(f"Expected range or MarkerRange, got {type(thing)}")
+
+    def iterate(self, total: int) -> Generator[int, None, None]:
+        # sort everything
+        pages: set[int] = set(self.__ranges)
+
+        for marker in self.__markers:
+            pages.update(marker.with_total(total))
+
+        yield from sorted(pages)
 
 
 def path_or_archive(
@@ -127,10 +182,107 @@ class MangaPublicationParamType(click.ParamType):
         return [CompletionItem(key) for key in MANGA_PUBLICATION_TYPES.keys()]
 
 
+class PdfBoxShorthand(click.ParamType):
+    name = "pdf_box"
+
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str | None:
+        return "[x0 / y0 / x1 / y1]"
+
+    def convert(self, value, param, ctx) -> PdfBoxExpansion:
+        if isinstance(value, PdfBoxExpansion):
+            return value
+
+        raw = str(value).strip()
+
+        if not raw:
+            self.fail("Expected 1 to 4 numbers.", param, ctx)
+
+        # Supports:
+        #   "10"
+        #   "10 20"
+        #   "10 20 30"
+        #   "10 20 30 40"
+        #   "10/20"
+        #   "10/20/30/40"
+        #   "10 / 20 / 30 / 40"
+        parts = re.split(r"(?:\s+|/)+", raw)
+
+        try:
+            values = [float(part) for part in parts if part]
+        except ValueError:
+            self.fail(
+                f"Invalid box shorthand {value!r}. Expected 1 to 4 float numbers.",
+                param,
+                ctx,
+            )
+
+        if not 1 <= len(values) <= 4:
+            self.fail(
+                f"Invalid box shorthand {value!r}. Expected 1 to 4 numbers.",
+                param,
+                ctx,
+            )
+
+        top = values[0]
+
+        if len(values) == 1:
+            right = bottom = left = top
+        elif len(values) == 2:
+            right = left = values[1]
+            bottom = top
+        elif len(values) == 3:
+            right = left = values[1]
+            bottom = values[2]
+        else:
+            right = values[1]
+            bottom = values[2]
+            left = values[3]
+
+        return PdfBoxExpansion(
+            top=top,
+            right=right,
+            bottom=bottom,
+            left=left,
+        )
+
+
+class PagesRange(click.ParamType):
+    name = "pages_range"
+
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str | None:
+        return "1-5,10,odd,even,..."
+
+    def convert(self, value, param, ctx) -> AnyPageRange:
+        if not isinstance(value, str):
+            self.fail(f"{value!r} is not a valid string", param, ctx)
+
+        page_range = AnyPageRange()
+        for part in value.split(","):
+            part = part.strip().lower()
+            if part == "odd":
+                page_range.add(MarkerRange("odd"))
+            elif part == "even":
+                page_range.add(MarkerRange("even"))
+            elif "-" in part:
+                start, end = part.split("-", 1)
+                start, end = int(start.strip()), int(end.strip())
+                if start < 1:
+                    self.fail(f"Invalid page range {part!r}. Start must be greater than 0", param, ctx)
+                page_range.add(range(start - 1, end))
+            else:
+                start = int(part)
+                if start < 1:
+                    self.fail(f"Invalid page index {part!r}. Must be greater than 0", param, ctx)
+                page_range.add(start - 1)
+        return page_range
+
+
 FLOAT_INT = FloatIntParamType()
 POSITIVE_INT = PositiveIntParamType()
 ZERO_POSITIVE_INT = PositiveIntParamType(start_from_zero=True)
 PUBLICATION_TYPE = MangaPublicationParamType()
+PDF_BOX = PdfBoxShorthand()
+PAGES_RANGE = PagesRange()
 
 
 def manga_publication_type(chapter_mode: bool = False):

@@ -51,6 +51,7 @@ from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.orchestrator import orchestractor
+from .cli.pdf_stuff import pdf_group
 from .cli.posterize import analyze_shades, auto_posterize, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
@@ -178,7 +179,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Archive Processing",
     help="Commands for processing archive like EPUB and (maybe) PDF",
-    commands=["epub"],
+    commands=["epub", "pdf"],
 )
 @click.command_panel(
     name="Release Management",
@@ -314,6 +315,7 @@ main.add_command(orchestractor)
 main.add_command(lookup_group)
 main.add_command(rescale_image)
 main.add_command(epub_group)
+main.add_command(pdf_group)
 main.add_command(imops_group)
 main.add_command(show_version)
 main.add_command(install_completion)

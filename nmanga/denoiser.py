@@ -301,7 +301,7 @@ def get_model_information(model_path: Path) -> tuple[str, int]:
         )
         return "input", 3  # Default input name and channel count
 
-    model = onnx.load(str(model_path))
+    model = onnx.load_model(str(model_path))
     # input channel count
     if len(model.graph.input) != 1:
         raise ValueError("Model has multiple inputs, cannot determine input name.")

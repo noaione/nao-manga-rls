@@ -41,6 +41,7 @@ dependencies = [
     "wand==0.7.2",
     "click-pwsh==0.9.7",
     "beautifulsoup4>=4.15.0",
+    "pikepdf>=10.9.1",
 ]
 
 [project.optional-dependencies]

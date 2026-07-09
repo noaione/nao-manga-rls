@@ -92,26 +92,26 @@ def vs_prepare_image(img: str | PathLike | Image.Image) -> "VideoNode":
 
     if isinstance(img, Image.Image):
         callback, vs_fmt = get_pil_image_with_callback(img)
-        clip = core.std.BlankClip(width=img.width, height=img.height, format=vs_fmt, length=1)
-        clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=callback)
+        clip = core.std.BlankClip(width=img.width, height=img.height, format=vs_fmt, length=1)  # type: ignore
+        clip = core.std.ModifyFrame(clip=clip, clips=clip, selector=callback)  # type: ignore
 
         # we only support two now
         match vs_fmt:
             case vs.RGB24:
                 # We need to add color information
-                clip = core.resize.Bicubic(clip, format=vs.RGBS)
+                clip = cast(Any, core).resize.Bicubic(clip, format=vs.RGBS)
             case vs.GRAY8:
                 # We need to add color information
-                clip = core.resize.Bicubic(clip, format=vs.GRAYS)
+                clip = cast(Any, core).resize.Bicubic(clip, format=vs.GRAYS)
             case _:
                 raise ValueError(f"Unsupported image mode: {img.mode}")
     else:
-        clip = core.bs.VideoSource(str(img))
+        clip = core.bs.VideoSource(str(img))  # type: ignore
     return clip
 
 
 def vs_ssimulacra2(reference: "VideoNode", distorted: "VideoNode") -> float:
-    result = reference.vship.SSIMULACRA2(distorted, numStream=1)
+    result = reference.vship.SSIMULACRA2(distorted, numStream=1)  # type: ignore
     with result.get_frame(0) as f:
         ssim_score = cast(float, f.props["_SSIMULACRA2"])
     return ssim_score
