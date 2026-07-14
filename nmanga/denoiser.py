@@ -121,7 +121,7 @@ def _get_onnxruntime() -> "type[ort]":  # type: ignore
     # Preload TensorRT if available
     is_tensorrt_available = importutil.find_spec("tensorrt")
     if is_tensorrt_available is not None:
-        import tensorrt  # noqa: F401
+        import tensorrt  # type: ignore # noqa: F401
 
     import onnxruntime as ort  # type: ignore
 

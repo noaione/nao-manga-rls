@@ -70,9 +70,9 @@ def find_metapackage() -> Optional[Path]:
     if not win():
         return None
 
-    from winrt.windows.applicationmodel import Package
-    from winrt.windows.management.deployment import PackageManager
-    from winrt.windows.system import ProcessorArchitecture
+    from winrt.windows.applicationmodel import Package  # type: ignore
+    from winrt.windows.management.deployment import PackageManager  # type: ignore
+    from winrt.windows.system import ProcessorArchitecture  # type: ignore
 
     matching_arch = None
     match platform.machine().upper():
@@ -123,12 +123,12 @@ def get_winml_ep_libraries() -> list[tuple[str, Path]]:
         return []
 
     try:
-        winml = ctypes.WinDLL(wasdk_path / "Microsoft.Windows.AI.MachineLearning.dll")
+        winml = ctypes.WinDLL(wasdk_path / "Microsoft.Windows.AI.MachineLearning.dll")  # type: ignore
     except OSError:
         return []
 
     WinMLEpCatalogCreate = winml.WinMLEpCatalogCreate
-    WinMLEpCatalogCreate.restype = ctypes.HRESULT
+    WinMLEpCatalogCreate.restype = ctypes.HRESULT  # type: ignore
     WinMLEpCatalogCreate.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
 
     WinMLEpCatalogRelease = winml.WinMLEpCatalogRelease
@@ -136,22 +136,22 @@ def get_winml_ep_libraries() -> list[tuple[str, Path]]:
     WinMLEpCatalogRelease.argtypes = [ctypes.c_void_p]
 
     WinMLEpCatalogEnumProviders = winml.WinMLEpCatalogEnumProviders
-    WinMLEpCatalogEnumProviders.restype = ctypes.HRESULT
+    WinMLEpCatalogEnumProviders.restype = ctypes.HRESULT  # type: ignore
     WinMLEpCatalogEnumProviders.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
 
     WinMLEpEnsureReady = winml.WinMLEpEnsureReady
-    WinMLEpEnsureReady.restype = ctypes.HRESULT
+    WinMLEpEnsureReady.restype = ctypes.HRESULT  # type: ignore
     WinMLEpEnsureReady.argtypes = [ctypes.c_void_p]
     WinMLEpGetReadyState = winml.WinMLEpGetReadyState
-    WinMLEpGetReadyState.restype = ctypes.HRESULT
+    WinMLEpGetReadyState.restype = ctypes.HRESULT  # type: ignore
     WinMLEpGetReadyState.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int)]
 
     WinMLEpGetLibraryPathSize = winml.WinMLEpGetLibraryPathSize
-    WinMLEpGetLibraryPathSize.restype = ctypes.HRESULT
+    WinMLEpGetLibraryPathSize.restype = ctypes.HRESULT  # type: ignore
     WinMLEpGetLibraryPathSize.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
 
     WinMLEpGetLibraryPath = winml.WinMLEpGetLibraryPath
-    WinMLEpGetLibraryPath.restype = ctypes.HRESULT
+    WinMLEpGetLibraryPath.restype = ctypes.HRESULT  # type: ignore
     WinMLEpGetLibraryPath.argtypes = [
         ctypes.c_void_p,
         ctypes.c_size_t,
@@ -159,7 +159,7 @@ def get_winml_ep_libraries() -> list[tuple[str, Path]]:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
-    ENUM_CALLBACK = ctypes.WINFUNCTYPE(
+    ENUM_CALLBACK = ctypes.WINFUNCTYPE(  # type: ignore
         ctypes.wintypes.BOOL,
         ctypes.c_void_p,  # WinMLEpHandle ep
         ctypes.POINTER(WinMLEpInfo),  # const WinMLEpInfo* info
