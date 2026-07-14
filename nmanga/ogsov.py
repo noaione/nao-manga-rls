@@ -223,9 +223,98 @@ class OGSOV:
         # Retun the clean vectors
         return output_features
 
-    def predict(self, bgr_image: "ndarray") -> tuple[bool, int]:
+    def compute_image_vectors_hist(self, bgr_array: "ndarray") -> "ndarray":
+        fi = bgr_array.reshape(-1, 3).astype(self.__np.int32)
+        b, g, r = fi[:, 0], fi[:, 1], fi[:, 2]
+
+        rg = r - g
+        yb2 = r + g - 2 * b
+        d2 = 4 * rg * rg + yb2 * yb2
+
+        hist = self.__np.bincount(d2)  # length = max_d2 + 1
+        n = d2.shape[0]
+
+        # bin values, bit-identical to the original float32 path
+        vals = self.__np.minimum(
+            self.__np.sqrt(self.__np.arange(len(hist), dtype=self.__np.float32)) * self.__np.float32(0.5),
+            self.__np.float32(285.0),
+        ) / self.__np.float32(285.0)
+
+        # top 17 (descending), removed from the histogram
+        top_n = 17
+        h2 = hist.copy()
+        nz = self.__np.flatnonzero(h2)
+        top = self.__np.empty(top_n, dtype=self.__np.float32)
+        got = 0
+        for bin_ in nz[::-1]:
+            take = min(int(h2[bin_]), top_n - got)
+            top[got : got + take] = vals[bin_]
+            h2[bin_] -= take
+            got += take
+            if got == top_n:
+                break
+
+        m = n - top_n
+        mf = float(m)
+
+        # order statistics via cumulative counts
+        cum = self.__np.cumsum(h2)
+
+        def elem(k):  # value at 0-based sorted position k
+            return float(vals[self.__np.searchsorted(cum, k, side="right")])
+
+        def lerp(q):
+            pos = q / 100.0 * (mf - 1.0)
+            lo, hi = int(self.__np.floor(pos)), int(self.__np.ceil(pos))
+            a, bb = elem(lo), elem(hi)
+            return a + (pos - lo) * (bb - a)
+
+        quantiles = self.__np.array([elem(0), lerp(25.0), lerp(50.0), lerp(75.0), elem(m - 1)])
+        iqr = quantiles[3] - quantiles[1]
+
+        # weighted moments in float64
+        cnt = h2.astype(self.__np.float64)
+        vd = vals.astype(self.__np.float64)
+        s1 = float(cnt @ vd)
+        mean = s1 / mf
+        l2_norm = float(self.__np.sqrt(cnt @ (vd * vd)))
+        dv = vd - mean
+        dv2 = dv * dv
+        m2 = float(cnt @ dv2) / mf
+        m3 = float(cnt @ (dv2 * dv)) / mf
+        m4 = float(cnt @ (dv2 * dv2)) / mf
+        std = float(self.__np.sqrt(m2))
+        if m2 > 0.0:
+            skw = m3 / m2**1.5
+            krt = m4 / (m2 * m2) - 3.0
+        else:
+            skw = 0.0
+            krt = 0.0
+
+        # median of round(v*1000) integers (banker's rounding, np.round)
+        scaler = 1000.0
+        if m % 2 == 1:
+            med = float(self.__np.round(elem(m // 2) * scaler)) / scaler
+        else:
+            med = (
+                (float(self.__np.round(elem(m // 2 - 1) * scaler)) + float(self.__np.round(elem(m // 2) * scaler)))
+                / 2.0
+                / scaler
+            )
+
+        # mask hits (unchanged: one fancy-index gather)
+        hits = int(self.__np.sum(self.lookup_mask[fi[:, 0], fi[:, 1], fi[:, 2]]))
+        tc = [min(hits, k) / k for k in (2.0, 16.0, 128.0, 1024.0)]
+
+        out = self.__np.concatenate([top, [std, med, skw, krt, iqr, l2_norm], quantiles, tc])
+        return self.__np.nan_to_num(out, True, 0.0, 0.0, 0.0).astype(self.__np.float32)
+
+    def predict(self, bgr_image: "ndarray", *, fast_method: bool = False) -> tuple[bool, int]:
         # extract the feature vectores
-        feature_vectors = self.compute_image_vectors(bgr_image)
+        if fast_method:
+            feature_vectors = self.compute_image_vectors_hist(bgr_image)
+        else:
+            feature_vectors = self.compute_image_vectors(bgr_image)
 
         # ensure batch
         feature_vectors = self.__np.expand_dims(feature_vectors, axis=0)
@@ -280,7 +369,7 @@ def detect_image_color(img: Image.Image) -> DetectedColor:
     return DetectedColor(True, 0, None, False)
 
 
-def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike) -> DetectedColor:
+def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike, fast_method: bool = False) -> DetectedColor:
     """
     ML-version of color detection, more accurate but slower than the basic one.
     """
@@ -309,6 +398,6 @@ def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike) -> Det
     bgr_array = rgb_array[:, :, ::-1]
 
     # predict the colorfulness
-    is_color, confidence = instance.predict(bgr_array)
+    is_color, confidence = instance.predict(bgr_array, fast_method=fast_method)
     image.close()
     return DetectedColor(is_color, confidence, "ML-based detection", is_color)
