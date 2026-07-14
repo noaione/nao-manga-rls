@@ -220,6 +220,13 @@ def lookup_nongray_images(
     type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
     help="The path to the color model file to use for our lookup.",
 )
+@click.option(
+    "--fast",
+    "fast_lookup",
+    is_flag=True,
+    default=False,
+    help="Use faster image features vector computation, use more memory with similar accuracy",
+)
 @options.recursive
 @options.force
 @time_program
@@ -227,6 +234,7 @@ def lookup_color_images(
     path_or_archive: Path,
     dest_output: Path,
     color_model_path: Path | None,
+    fast_lookup: bool,
     recursive: bool,
     force: bool,
 ):
@@ -278,7 +286,7 @@ def lookup_color_images(
         for img_path in all_images:
             if color_model_path is not None:
                 img_bytes = img_path.read_bytes()
-                detected = detect_image_color_ogsov(img_bytes, weights_file=color_model_path)
+                detected = detect_image_color_ogsov(img_bytes, weights_file=color_model_path, fast_method=fast_lookup)
                 del img_bytes
             else:
                 img = Image.open(img_path)
