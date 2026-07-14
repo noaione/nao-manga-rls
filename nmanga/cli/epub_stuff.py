@@ -39,6 +39,7 @@ from PIL import Image
 
 from .. import term
 from ..autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
+from ..epub_merge import merge_images_into_extracted_epub
 from ..epub_render import (
     attach_chromium_console,
     copy_image_only_page,
@@ -239,6 +240,44 @@ def epub_extractor(
             progress.update(task, advance=1)
         console.stop_progress(progress)
         console.info(f"Extracted {img_counters} images to {dest_output}")
+
+
+@epub_group.command(
+    name="merge-images",
+    help="Merge replacement images into an extracted EPUB",
+    cls=NMangaCommandHandler,
+)
+@click.argument(
+    "extracted_folder",
+    type=click.Path(exists=True, file_okay=False, resolve_path=True, path_type=Path),
+)
+@click.argument(
+    "image_folder",
+    type=click.Path(exists=True, file_okay=False, resolve_path=True, path_type=Path),
+)
+@click.option(
+    "--remove-originals",
+    is_flag=True,
+    help="Delete the old image files after references are updated",
+)
+@time_program
+def epub_merge_images(extracted_folder: Path, image_folder: Path, remove_originals: bool) -> None:
+    """Merge same-named replacement images into an extracted EPUB."""
+
+    try:
+        replacements = merge_images_into_extracted_epub(
+            extracted_folder,
+            image_folder,
+            remove_originals=remove_originals,
+        )
+    except (FileExistsError, FileNotFoundError, UnicodeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    for replacement in replacements:
+        old_name = replacement.old_path.relative_to(extracted_folder)
+        new_name = replacement.new_path.relative_to(extracted_folder)
+        console.log(f"Replaced {old_name} with {new_name}")
+    console.info(f"Merged {len(replacements)} replacement images into {extracted_folder}")
 
 
 def overlay_level_image(
