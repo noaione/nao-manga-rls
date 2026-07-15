@@ -191,7 +191,8 @@ class ActionRename(BaseAction):
 
             vol_str = title_match.group("vol")
             vol_str_ex = title_match.group("volex")
-            vol_actual = volume.number if not volume.oneshot else None
+            # Daiz-like renaming doesn't support omnibus ranges, fall back to the starting volume number
+            vol_actual = volume.number_fallback if not volume.oneshot else None
             if not volume.oneshot:
                 if vol_str is not None:
                     if vol_str.startswith("v"):

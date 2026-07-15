@@ -143,7 +143,7 @@ class ActionSpreads(BaseAction):
             return
 
         if not volume.spreads:
-            context.terminal.warning(f"No spreads found for volume {volume.number}, skipping spreads action.")
+            context.terminal.warning(f"No spreads found for volume {volume.number_display}, skipping spreads action.")
             return
 
         if not context.current_dir.exists():

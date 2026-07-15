@@ -33,10 +33,11 @@ from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FilePath, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, FilePath, model_validator
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
+from .._ntypes import VolumeNumberT
 from ..common import ChapterRange
 from ..constants import MANGA_PUBLICATION_TYPES, MangaPublication
 from ..renamer import QualityMapping
@@ -64,6 +65,21 @@ def is_publication_type(pub_type: str) -> str:
     if pub_type not in MANGA_PUBLICATION_TYPES:
         raise ValueError(f"Invalid publication type: {pub_type}")
     return pub_type
+
+
+def coerce_volume_number(number: object) -> object:
+    if isinstance(number, list):
+        return tuple(number)
+    return number
+
+
+def normalize_volume_number(number: VolumeNumberT) -> VolumeNumberT:
+    if isinstance(number, tuple):
+        start, end = number
+        if start == end:
+            raise ValueError("Omnibus volume range must have two different numbers")
+        return (start, end) if start < end else (end, start)
+    return number
 
 
 class ChapterConfig(BaseModel):
@@ -163,8 +179,18 @@ class VolumeConfig(BaseModel):
 
     path: str = Field(..., title="Volume Directory")
     """The directory of the volume, relative to the base_path"""
-    number: int | float = Field(..., title="Volume Number")
-    """The volume number, can be float for decimals"""
+    number: Annotated[
+        VolumeNumberT,
+        BeforeValidator(coerce_volume_number),
+        AfterValidator(normalize_volume_number),
+    ] = Field(..., title="Volume Number", examples=[1, 1.5, [1, 2]])
+    """
+    The volume number, can be float for decimals.
+
+    Can also be a two-element range (e.g. `[1, 2]`) to mark this volume entry as an omnibus
+    covering multiple volume numbers. The archive filename and tagging metadata would then
+    automatically render this as an omnibus range (e.g. `v01-02`).
+    """
     title: str | None = Field(None, title="Volume Title")
     """The title of the volume, this is used for tagging + renaming, if not provided would use the manga title"""
     year: int = Field(default_factory=current_year, ge=1000, le=9999, title="Volume Year")
@@ -213,6 +239,35 @@ class VolumeConfig(BaseModel):
         A cached property to get the MangaPublication for the volume
         """
         return MANGA_PUBLICATION_TYPES[self.pub_type]
+
+    @cached_property
+    def is_omnibus(self) -> bool:
+        """
+        Whether this volume entry represents an omnibus range of multiple volumes
+        """
+        return isinstance(self.number, tuple)
+
+    @cached_property
+    def number_fallback(self) -> int | float:
+        """
+        A single representative volume number.
+
+        Used in places that don't support an omnibus range (e.g. daiz-like renaming),
+        falls back to the starting number of the range.
+        """
+        if isinstance(self.number, tuple):
+            return self.number[0]
+        return self.number
+
+    @cached_property
+    def number_display(self) -> str:
+        """
+        A human friendly display representation of the volume number(s)
+        """
+        if isinstance(self.number, tuple):
+            start, end = self.number
+            return f"{start}-{end}"
+        return str(self.number)
 
     @cached_property
     def meta_name_maps(self) -> dict[int, str]:

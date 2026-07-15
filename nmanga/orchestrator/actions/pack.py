@@ -86,7 +86,7 @@ class ActionPack(BaseAction):
 
         prefer_title = volume.title or orchestrator.title
 
-        context.terminal.info(f"Packing volume {volume.number} in {source_dir}...")
+        context.terminal.info(f"Packing volume {volume.number_display} in {source_dir}...")
         archive_filename = format_archive_filename(
             manga_title=prefer_title,
             manga_year=volume.year,
@@ -117,5 +117,7 @@ class ActionPack(BaseAction):
         for img_file in precollected_images:
             arc_target.add_image(img_file.name, img_file)
             progress.update(task, advance=1)
-        context.terminal.stop_progress(progress, f"Finished packing volume {volume.number} to {archive_filename}")
+        context.terminal.stop_progress(
+            progress, f"Finished packing volume {volume.number_display} to {archive_filename}"
+        )
         arc_target.close()

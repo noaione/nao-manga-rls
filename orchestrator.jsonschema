@@ -1963,7 +1963,42 @@
                         },
                         {
                             "type": "number"
+                        },
+                        {
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "prefixItems": [
+                                {
+                                    "anyOf": [
+                                        {
+                                            "type": "integer"
+                                        },
+                                        {
+                                            "type": "number"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "anyOf": [
+                                        {
+                                            "type": "integer"
+                                        },
+                                        {
+                                            "type": "number"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "type": "array"
                         }
+                    ],
+                    "examples": [
+                        1,
+                        1.5,
+                        [
+                            1,
+                            2
+                        ]
                     ],
                     "title": "Volume Number"
                 },

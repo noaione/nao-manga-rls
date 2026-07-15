@@ -239,7 +239,7 @@ def orchestrator_runner(
         skips_mappings: dict[str, SkipActionConfig] = {}
         for skips in volume.skip_actions:
             skips_mappings[skips.step] = skips
-        console.info(f"Processing volume {volume.number} {chapter_path}...")
+        console.info(f"Processing volume {volume.number_display} {chapter_path}...")
 
         context = WorkerContext(
             root_dir=full_base,
@@ -264,7 +264,7 @@ def orchestrator_runner(
             console.info(f" - Finished action {action.kind.name} in {end_action - start_action:.2f}s")
             console.enter()
         volume_end = time()
-        console.info(f"Finished processing volume {volume.number} in {volume_end - volume_start:.2f}s")
+        console.info(f"Finished processing volume {volume.number_display} in {volume_end - volume_start:.2f}s")
     console.info("Orchestrator finished all tasks.")
 
 
@@ -314,7 +314,7 @@ def orchestrator_validate(
     # Simulate the volume processing
     console.info(f" - Volumes: {len(config.volumes)}")
     for volume in config.volumes:
-        console.info(f"   - Volume {volume.number}:")
+        console.info(f"   - Volume {volume.number_display}:")
         console.info(f"     - Path: {volume.path}")
         if volume.title:
             console.info(f"     - Title: {volume.title}")
