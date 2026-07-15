@@ -697,6 +697,15 @@ class TestFormatVolumeText:
     def test_manga_volume_float(self):
         assert format_volume_text(manga_volume=1.5) == "v01.5"
 
+    def test_manga_volume_omnibus_range(self):
+        assert format_volume_text(manga_volume=(1, 2)) == "v01-02"
+
+    def test_manga_volume_omnibus_range_double_digit(self):
+        assert format_volume_text(manga_volume=(1, 12)) == "v01-12"
+
+    def test_manga_volume_omnibus_range_float(self):
+        assert format_volume_text(manga_volume=(1.1, 2)) == "v01.1-02"
+
     def test_manga_chapter_int(self):
         pre = "c" if self.conf.defaults.ch_add_c_prefix else ""
         assert format_volume_text(manga_chapter=1) == f"{pre}001"

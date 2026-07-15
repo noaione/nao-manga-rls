@@ -35,6 +35,7 @@ from typing import Literal
 import rich_click as click
 
 from .. import term
+from .._ntypes import VolumeNumberT
 from ..orchestrator import *
 from . import options
 from ._deco import check_config_first, time_program
@@ -89,7 +90,7 @@ def orchestrator_generate(
     rls_credit: str,
     rls_email: str,
     bracket_type: Literal["square", "round", "curly"],
-    manga_volume: int | float | None,
+    manga_volume: VolumeNumberT | None,
     image_quality: Literal["LQ", "HQ"] | None,
 ):
     if output_file.exists():
@@ -98,6 +99,8 @@ def orchestrator_generate(
 
     generated_volumes = []
     if manga_volume is not None:
+        if isinstance(manga_volume, tuple):
+            raise click.BadParameter("Volume number cannot be an omnibus range here", param_hint="manga_volume")
         if isinstance(manga_volume, float):
             raise click.BadParameter("Volume number cannot be a float", param_hint="manga_volume")
         for vol_num in range(1, manga_volume + 1):

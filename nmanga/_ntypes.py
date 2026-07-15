@@ -6,10 +6,13 @@ __all__ = (
     "STOP_SIGNAL",
     "BracketTypeT",
     "ConfigT",
+    "VolumeNumberT",
 )
 
 
 BracketTypeT = Literal["square", "round", "curly"]
+# A volume number, or an omnibus range like `1-2`
+VolumeNumberT = int | float | tuple[int | float, int | float]
 
 
 class _ConfigDefaultsT(TypedDict, total=False):

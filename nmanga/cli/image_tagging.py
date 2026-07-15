@@ -37,6 +37,7 @@ from click.exceptions import Exit
 from nmanga import file_handler
 
 from .. import term
+from .._ntypes import VolumeNumberT
 from ..common import (
     ALLOWED_TAG_EXTENSIONS,
     format_archive_filename,
@@ -116,7 +117,7 @@ def _threaded_tagging_star(args: tuple[term.MessageQueue, str, Path, str, str]) 
 def image_tagging(
     path_or_archive: Path,
     manga_title: str,
-    manga_volume: int | float | None,
+    manga_volume: VolumeNumberT | None,
     manga_chapter: int | float | None,
     manga_year: int,
     manga_publication_type: MangaPublication,

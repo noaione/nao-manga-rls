@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import IO, Any, Generator, Iterable, Match, Pattern, cast, overload
 
 from . import config, term, utils
-from ._ntypes import STOP_SIGNAL
+from ._ntypes import STOP_SIGNAL, VolumeNumberT
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
 
 __all__ = (
@@ -638,14 +638,7 @@ def format_archive_filename(
 @overload
 def format_volume_text(
     *,
-    manga_volume: int,
-) -> str: ...
-
-
-@overload
-def format_volume_text(
-    *,
-    manga_volume: float,
+    manga_volume: VolumeNumberT,
 ) -> str: ...
 
 
@@ -674,14 +667,14 @@ def format_volume_text(
 @overload
 def format_volume_text(
     *,
-    manga_volume: int | float | None,
+    manga_volume: VolumeNumberT | None,
     manga_chapter: int | float | None,
 ) -> str | None: ...
 
 
 def format_volume_text(
     *,
-    manga_volume: int | float | None = None,
+    manga_volume: VolumeNumberT | None = None,
     manga_chapter: int | float | None = None,
 ) -> str | None:
     tag_sep = conf.defaults.ch_special_tag
@@ -700,7 +693,13 @@ def format_volume_text(
         if conf.defaults.ch_add_c_prefix:  # pragma: no cover
             volume_text = f"c{volume_text}"  # pragma: no cover
     if manga_volume is not None:
-        volume_text = f"v{format_daiz_like_numbering(manga_volume, 2, False, '.')}"
+        if isinstance(manga_volume, tuple):
+            start_vol, end_vol = manga_volume
+            start_text = format_daiz_like_numbering(start_vol, 2, False, ".")
+            end_text = format_daiz_like_numbering(end_vol, 2, False, ".")
+            volume_text = f"v{start_text}-{end_text}"
+        else:
+            volume_text = f"v{format_daiz_like_numbering(manga_volume, 2, False, '.')}"
 
     return volume_text
 

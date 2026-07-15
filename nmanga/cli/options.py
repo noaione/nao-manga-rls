@@ -32,6 +32,7 @@ from typing import Generator, Literal
 import rich_click as click
 from click.shell_completion import CompletionItem
 
+from .._ntypes import VolumeNumberT
 from ..config import get_config
 from ..constants import MANGA_PUBLICATION_TYPES
 from ..exporter import ExporterType
@@ -131,6 +132,43 @@ class FloatIntParamType(click.ParamType):
             return int(value)
         except ValueError:
             self.fail(f"{value!r} is not a valid integer or floating type", param, ctx)
+
+
+class VolumeParamType(click.ParamType):
+    name = "volume_number"
+
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str | None:
+        return "INTEGER|FLOAT|RANGE (e.g. 1-2)"
+
+    def convert(self, value, param, ctx) -> VolumeNumberT:
+        if isinstance(value, (int, float, tuple)):
+            return value
+
+        raw = value.strip()
+        if "-" in raw:
+            start_str, _, end_str = raw.partition("-")
+            try:
+                return (self._parse_number(start_str), self._parse_number(end_str))
+            except ValueError:
+                self.fail(
+                    f"{value!r} is not a valid volume range, expected e.g. `1-2`",
+                    param,
+                    ctx,
+                )
+
+        try:
+            return self._parse_number(raw)
+        except ValueError:
+            self.fail(f"{value!r} is not a valid integer or floating type", param, ctx)
+
+    @staticmethod
+    def _parse_number(value: str) -> int | float:
+        value = value.strip()
+        if not value:
+            raise ValueError("empty volume number")
+        if "." in value:
+            return float(value)
+        return int(value)
 
 
 class PositiveIntParamType(click.ParamType):
@@ -278,6 +316,7 @@ class PagesRange(click.ParamType):
 
 
 FLOAT_INT = FloatIntParamType()
+VOLUME_NUMBER = VolumeParamType()
 POSITIVE_INT = PositiveIntParamType()
 ZERO_POSITIVE_INT = PositiveIntParamType(start_from_zero=True)
 PUBLICATION_TYPE = MangaPublicationParamType()
@@ -412,8 +451,8 @@ manga_volume = click.option(
     "-vol",
     "--volume",
     "manga_volume",
-    type=FLOAT_INT,
-    help="The volume of the series release",
+    type=VOLUME_NUMBER,
+    help="The volume of the series release, supports omnibus range like `1-2`",
     default=None,
     panel="Release Options",
 )

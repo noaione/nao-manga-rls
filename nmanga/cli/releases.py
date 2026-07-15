@@ -34,6 +34,7 @@ from typing import Literal
 import rich_click as click
 
 from .. import config, file_handler, term
+from .._ntypes import VolumeNumberT
 from ..common import (
     ChapterRange,
     RegexCollection,
@@ -125,6 +126,17 @@ class SpecialNaming:
     show_default=True,
     help="Optimize the images using pingo.",
 )
+@click.option(
+    "--omni",
+    "use_omnibus",
+    is_flag=True,
+    default=False,
+    help=(
+        "Combine all the auto-detected volume numbers into an omnibus range (e.g. `v01-02`) "
+        "for the archive filename."
+    ),
+    panel="Release Options",
+)
 @options.exiftool_path
 @options.pingo_path
 @options.use_bracket_type
@@ -146,6 +158,7 @@ def prepare_releases(
     image_quality: str | None,
     do_exif_tagging: bool,
     do_img_optimize: bool,
+    use_omnibus: bool,
     exiftool_path: str,
     pingo_path: str,
     bracket_type: Literal["square", "round", "curly"],
@@ -221,6 +234,7 @@ def prepare_releases(
     console.info("Processing: 1/???")
     image_titling: str | None = None
     vol_oshot_warn = False
+    collected_volumes: set[int | float] = set()
     q_maps = QualityMapping.from_config(
         lq_threshold=conf.defaults.lq_threshold,
         hq_threshold=conf.defaults.hq_threshold,
@@ -261,6 +275,9 @@ def prepare_releases(
             if vol_ex.startswith("."):
                 vol_ex = vol_ex[1:]
             vol_act = float(f"{vol_act}.{int(vol_ex)}")
+
+        if vol_act is not None:
+            collected_volumes.add(vol_act)
 
         selected_range: ChapterRange | None = None
         for rls_info in rls_information:
@@ -314,6 +331,22 @@ def prepare_releases(
     console.stop_status(f"Processed {current - 1} images!")
     if image_titling is None:
         raise RuntimeError("No image titling generated, this is unexpected!")
+
+    if use_omnibus:
+        if len(collected_volumes) > 1:
+            omnibus_range = (min(collected_volumes), max(collected_volumes))
+            image_titling = format_archive_filename(
+                manga_title=manga_title,
+                manga_year=current_year,
+                publication_type=manga_publication_type,
+                ripper_credit=rls_credit,
+                bracket_type=bracket_type,
+                manga_volume_text=format_volume_text(manga_volume=omnibus_range),
+                rls_revision=rls_revision,
+                extra_metadata=rls_extra_metadata,
+            )
+        else:
+            console.warning("--omni was given but fewer than 2 volumes were detected, ignoring!")
 
     if pingo_exe is not None and do_img_optimize:
         console.info("Optimizing images...")
@@ -414,7 +447,7 @@ def prepare_releases_chapter(
     manga_year: int | None,
     manga_publisher: str,
     manga_chapter: int | float | None,
-    manga_volume: int | None,
+    manga_volume: VolumeNumberT | None,
     chapter_title: str | None,
     manga_publication_type: MangaPublication,
     rls_credit: str,
@@ -444,6 +477,11 @@ def prepare_releases_chapter(
         raise click.BadParameter(
             "-ch/--chapter is required for this command.",
             param_hint="manga_chapter",
+        )
+    if isinstance(manga_volume, tuple):
+        raise click.BadParameter(
+            "Omnibus volume range (e.g. `1-2`) is not supported for this command.",
+            param_hint="manga_volume",
         )
 
     current_pst = datetime.now(timezone(timedelta(hours=-8)))

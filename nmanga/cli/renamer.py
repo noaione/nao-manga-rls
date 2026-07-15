@@ -30,6 +30,7 @@ from pathlib import Path
 import rich_click as click
 
 from .. import file_handler, term
+from .._ntypes import VolumeNumberT
 from ..common import format_volume_text
 from ..renamer import shift_renaming_gen
 from . import options
@@ -77,7 +78,7 @@ def shift_renamer(
     reverse: bool,
     spreads_aware: bool,
     manga_title: str | None,
-    manga_volume: int | float | None,
+    manga_volume: VolumeNumberT | None,
 ):
     """
     Quickly rename all images in a folder to a padded number starting from START_INDEX.

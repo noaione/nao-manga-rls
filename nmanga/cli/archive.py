@@ -34,6 +34,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 import rich_click as click
 
 from .. import exporter, file_handler, term
+from .._ntypes import VolumeNumberT
 from ..common import format_archive_filename, format_volume_text
 from ..constants import MangaPublication
 from . import options
@@ -76,7 +77,7 @@ def pack_releases(
     path_or_archive: Path,
     manga_title: str,
     manga_year: int | None,
-    manga_volume: int | float | None,
+    manga_volume: VolumeNumberT | None,
     manga_chapter: int | float | None,
     manga_publication_type: MangaPublication,
     rls_credit: str,
@@ -176,7 +177,7 @@ def pack_releases_epub_mode(
     path_or_archive: Path,
     epub_title: str,
     epub_source: str,
-    manga_volume: int | float | None,
+    manga_volume: VolumeNumberT | None,
     rls_credit: str,
     compression_level: int,
 ):
