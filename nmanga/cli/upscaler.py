@@ -35,7 +35,7 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..denoiser import MLDataType, denoise_single_image, prepare_model_runtime_builders
+from ..denoiser import MLDataType, denoise_single_image_with_overlap, prepare_model_runtime_builders
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler
@@ -84,6 +84,15 @@ console = term.get_console()
     help="The tile size to use for processing images, higher values use more VRAM",
 )
 @click.option(
+    "-to",
+    "--tile-overlap",
+    "tile_overlap",
+    type=options.ZERO_POSITIVE_INT,
+    default=0,
+    show_default=True,
+    help="The tile overlap to use for processing images",
+)
+@click.option(
     "-cs",
     "--contrast-stretch",
     "contrast_stretch",
@@ -129,6 +138,7 @@ def upscale_trt(
     device_id: int,
     batch_size: int,
     tile_size: int,
+    tile_overlap: int,
     contrast_stretch: bool,
     background: Literal["black", "white"],
     quant_size: str,
@@ -141,6 +151,11 @@ def upscale_trt(
         raise click.BadParameter(
             f"{path_or_archive} is not a directory. Please provide a directory.",
             param_hint="path_or_archive",
+        )
+
+    if tile_overlap < 0 or tile_overlap * 2 >= tile_size:
+        raise click.BadParameter(
+            "Tile overlap must be non-negative and less than half the tile size.", param_hint="tile_overlap"
         )
 
     candidates: list[Path] = []
@@ -202,13 +217,14 @@ def upscale_trt(
             output_path = real_output / f"{image_file.stem}.png"
 
             img_file = Image.open(image_file)
-            output_image = denoise_single_image(
+            output_image = denoise_single_image_with_overlap(
                 img_file,
                 sess,
                 batch_size=1,
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
                 background=background,
+                tile_overlap=tile_overlap,
                 use_fp32=not sess.use_halfp,
             )
 

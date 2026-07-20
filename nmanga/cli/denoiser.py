@@ -38,7 +38,7 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..denoiser import denoise_single_image, prepare_model_runtime
+from ..denoiser import denoise_single_image_with_overlap, prepare_model_runtime
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, test_or_find_magick, test_or_find_w2x_trt
@@ -376,6 +376,15 @@ def identify_denoise_candidates(
     help="The tile size to use for processing images, higher values use more VRAM",
 )
 @click.option(
+    "-to",
+    "--tile-overlap",
+    "tile_overlap",
+    type=options.ZERO_POSITIVE_INT,
+    default=0,
+    show_default=True,
+    help="The tile overlap to use for processing images",
+)
+@click.option(
     "-cs",
     "--contrast-stretch",
     "contrast_stretch",
@@ -403,6 +412,7 @@ def denoiser_trt(
     device_id: int,
     batch_size: int,
     tile_size: int,
+    tile_overlap: int,
     contrast_stretch: bool,
     background: Literal["black", "white"],
     recursive: bool,
@@ -418,6 +428,11 @@ def denoiser_trt(
         raise click.BadParameter(
             f"{path_or_archive} is not a directory. Please provide a directory.",
             param_hint="path_or_archive",
+        )
+
+    if tile_overlap < 0 or tile_overlap * 2 >= tile_size:
+        raise click.BadParameter(
+            "Tile overlap must be non-negative and less than half the tile size.", param_hint="tile_overlap"
         )
 
     candidates: list[Path] = []
@@ -456,13 +471,15 @@ def denoiser_trt(
             output_path = real_output / f"{image_file.stem}.png"
 
             img_file = Image.open(image_file)
-            output_image = denoise_single_image(
+            output_image = denoise_single_image_with_overlap(
                 img_file,
                 sess,
                 batch_size=batch_size,
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
                 background=background,
+                tile_overlap=tile_overlap,
+                use_fp32=not sess.use_halfp,
             )
 
             output_image.save(output_path, format="PNG")

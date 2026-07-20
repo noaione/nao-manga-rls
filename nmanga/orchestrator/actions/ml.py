@@ -36,7 +36,12 @@ from typing_extensions import Self
 
 from ... import file_handler
 from ...common import RegexCollection
-from ...denoiser import MLDataType, denoise_single_image, prepare_model_runtime, prepare_model_runtime_builders
+from ...denoiser import (
+    MLDataType,
+    denoise_single_image_with_overlap,
+    prepare_model_runtime,
+    prepare_model_runtime_builders,
+)
 from ...resizer import ResizeKernel, rescale_image
 from ..common import perform_skip_action
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
@@ -79,6 +84,8 @@ class ActionML(BaseAction):
     """The batch size to use for denoising"""
     tile_size: int = Field(128, ge=64, title="Tile Size")
     """The tile size to use for denoising"""
+    tile_overlap: int = Field(0, ge=0, title="Tile Overlap")
+    """The tile overlap to use for denoising"""
     background: Literal["white", "black"] = Field("black", title="Padding Background Color")
     """The background color to use for padding"""
     contrast_strectch: bool = Field(False, title="Contrast Stretch After Denoising")
@@ -96,6 +103,15 @@ class ActionML(BaseAction):
             raise PydanticCustomError(
                 "precompiled_data_type_missing",
                 "data_type must be specified when precompiled is True",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_tile_overlap(self) -> Self:
+        if self.tile_overlap * 2 >= self.tile_size:
+            raise PydanticCustomError(
+                "tile_overlap_too_large",
+                "tile_overlap must be less than half the tile_size.",
             )
         return self
 
@@ -238,7 +254,7 @@ class ActionML(BaseAction):
                     continue
 
             img_file = Image.open(file_path)
-            output_image = denoise_single_image(
+            output_image = denoise_single_image_with_overlap(
                 img_file,
                 session,
                 batch_size=self.batch_size,

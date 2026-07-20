@@ -366,6 +366,12 @@
                     "title": "Tile Size",
                     "type": "integer"
                 },
+                "tile_overlap": {
+                    "default": 0,
+                    "minimum": 0,
+                    "title": "Tile Overlap",
+                    "type": "integer"
+                },
                 "background": {
                     "default": "black",
                     "enum": [
@@ -1298,6 +1304,12 @@
                     "default": 128,
                     "minimum": 64,
                     "title": "Tile Size",
+                    "type": "integer"
+                },
+                "tile_overlap": {
+                    "default": 0,
+                    "minimum": 0,
+                    "title": "Tile Overlap",
                     "type": "integer"
                 },
                 "background": {

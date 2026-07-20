@@ -57,6 +57,7 @@ if TYPE_CHECKING:
 __all__ = (
     "MLDataType",
     "denoise_single_image",
+    "denoise_single_image_with_overlap",
     "hook_onnx_extensions",
     "prepare_model_runtime",
     "prepare_model_runtime_builders",
@@ -739,3 +740,146 @@ def denoise_single_image(
         output_image = output_image.convert(mode="L")
 
     return output_image
+
+
+def denoise_single_image_with_overlap(
+    input_image: Image.Image,
+    model: "InferenceSessionWithScale",
+    *,
+    batch_size: int = 64,
+    tile_size: int = 128,
+    tile_overlap: int = 16,
+    contrast_stretch: bool = False,
+    background: Literal["white", "black"] = "black",
+    use_fp32: bool = False,
+) -> Image.Image:
+    """Denoise an image using fixed-size overlapping tiles and feathered seams.
+
+    The following tile overlap function has been extracted from:
+    - https://github.com/rewaifu/resr - (c) rewaifu team - MIT License
+    """
+    if tile_overlap == 0:
+        return denoise_single_image(
+            input_image,
+            model,
+            batch_size=batch_size,
+            tile_size=tile_size,
+            contrast_stretch=contrast_stretch,
+            background=background,
+            use_fp32=use_fp32,
+        )
+
+    import numpy as np  # type: ignore
+
+    if batch_size < 1:
+        raise ValueError("Batch size must be at least 1.")
+    if tile_size < 1:
+        raise ValueError("Tile size must be at least 1.")
+    if tile_overlap < 0 or tile_overlap * 2 >= tile_size:
+        raise ValueError("Tile overlap must be non-negative and less than half the tile size.")
+
+    scale_factor = getattr(model, "scale_factor", None)
+    if not isinstance(scale_factor, int):
+        raise ValueError("Model scale factor is not set. Ensure the model was prepared correctly.")
+    input_channel_count: int = model.get_inputs()[0].shape[1]
+    is_grayscale = input_channel_count == 1
+
+    orig_img_mode = input_image.mode
+    orig_img_palette = input_image.palette
+    img = input_image.convert("L" if is_grayscale else "RGB")
+    image_width, image_height = img.size
+
+    tile_stride = tile_size - tile_overlap * 2
+    tile_count_height = max(1, int(np.ceil(max(0, image_height - tile_size) / tile_stride)) + 1)
+    tile_count_width = max(1, int(np.ceil(max(0, image_width - tile_size) / tile_stride)) + 1)
+    padded_height = (tile_count_height - 1) * tile_stride + tile_size
+    padded_width = (tile_count_width - 1) * tile_stride + tile_size
+
+    background_tuple = (0, 0, 0) if background == "black" else (255, 255, 255)
+    padded_image = Image.new(
+        "L" if is_grayscale else "RGB",
+        (padded_width, padded_height),
+        background_tuple[0] if is_grayscale else background_tuple,
+    )
+    padded_image.paste(img, (0, 0))
+
+    image_array = np.asarray(padded_image)
+    if is_grayscale:
+        image_array = np.expand_dims(image_array, axis=-1)
+    image_array = (
+        image_array / 255.0 if not contrast_stretch else (image_array - np.min(image_array)) / np.ptp(image_array)
+    )
+    image_array = image_array.astype(np.float32 if use_fp32 else np.float16)
+    image_array = np.transpose(image_array, (2, 0, 1))
+
+    input_name = model.get_inputs()[0].name
+    output_name = model.get_outputs()[0].name
+    output_tile_size = tile_size * scale_factor
+    output_stride = tile_stride * scale_factor
+    output_overlap = tile_overlap * 2 * scale_factor
+    output_accumulator = np.zeros(
+        (padded_height * scale_factor, padded_width * scale_factor, input_channel_count),
+        dtype=np.float32,
+    )
+    output_weights = np.zeros((*output_accumulator.shape[:2], 1), dtype=np.float32)
+
+    blend_position = np.arange(output_overlap, dtype=np.float32) / (output_overlap - 1)
+    blend_position = np.clip(blend_position * 2.0 - 0.5, 0.0, 1.0)
+    blend_ramp = (np.sin(blend_position * np.pi - np.pi / 2.0) + 1.0) / 2.0
+
+    tile_locations = [(tile_y, tile_x) for tile_y in range(tile_count_height) for tile_x in range(tile_count_width)]
+    for batch_start in range(0, len(tile_locations), batch_size):
+        batch_locations = tile_locations[batch_start : batch_start + batch_size]
+        batch_of_tiles = np.stack([
+            image_array[
+                :,
+                tile_y * tile_stride : tile_y * tile_stride + tile_size,
+                tile_x * tile_stride : tile_x * tile_stride + tile_size,
+            ]
+            for tile_y, tile_x in batch_locations
+        ])
+        model_output = np.asarray(model.run([output_name], {input_name: batch_of_tiles})[0])
+        expected_shape = (len(batch_locations), input_channel_count, output_tile_size, output_tile_size)
+        if model_output.shape != expected_shape:
+            raise ValueError(f"Unexpected model output shape {model_output.shape}; expected {expected_shape}.")
+
+        for tile_output, (tile_y, tile_x) in zip(model_output, batch_locations, strict=True):
+            tile_output = np.transpose(tile_output, (1, 2, 0)).astype(np.float32, copy=False)
+            tile_weights = np.ones((output_tile_size, output_tile_size), dtype=np.float32)
+            if tile_x > 0:
+                tile_weights[:, :output_overlap] *= blend_ramp[None, :]
+            if tile_x + 1 < tile_count_width:
+                tile_weights[:, -output_overlap:] *= 1.0 - blend_ramp[None, :]
+            if tile_y > 0:
+                tile_weights[:output_overlap, :] *= blend_ramp[:, None]
+            if tile_y + 1 < tile_count_height:
+                tile_weights[-output_overlap:, :] *= 1.0 - blend_ramp[:, None]
+
+            output_y = tile_y * output_stride
+            output_x = tile_x * output_stride
+            output_slice = np.s_[
+                output_y : output_y + output_tile_size,
+                output_x : output_x + output_tile_size,
+            ]
+            output_accumulator[output_slice] += tile_output * tile_weights[..., None]
+            output_weights[output_slice] += tile_weights[..., None]
+
+    reconstructed_image = output_accumulator / np.maximum(output_weights, np.finfo(np.float32).eps)
+    if contrast_stretch:
+        output_array = reconstructed_image.astype(np.float32 if use_fp32 else np.float16)
+        output_array = (output_array - np.min(output_array)) / np.ptp(output_array)
+    else:
+        output_array = np.clip(reconstructed_image, 0.0, 1.0)
+    output_array = np.round(output_array * 255.0).astype(np.uint8)
+    if is_grayscale:
+        output_array = np.squeeze(output_array, axis=-1)
+
+    output_image = Image.fromarray(output_array)
+    output_image = output_image.crop((0, 0, image_width * scale_factor, image_height * scale_factor))
+    if is_grayscale:
+        return output_image.convert(mode="L")
+    if orig_img_palette:
+        palette_image = Image.new("P", (1, 1))
+        palette_image.putpalette(orig_img_palette)
+        return output_image.convert(mode="RGB").quantize(palette=palette_image, dither=Image.Dither.NONE)
+    return output_image.convert(mode=orig_img_mode)
