@@ -320,14 +320,23 @@ def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, int] | None:
         return None
 
 
-def _compile_nvrtx_model(model_path: Path, data_dir: Path, ep_name: str, ep_config: dict[str, str]) -> Path:
+def _get_nvrtx_compiled_model_path(model_path: Path, data_dir: Path, cache_key: str) -> Path:
+    cache_hash = md5(cache_key.encode("utf-8")).hexdigest()  # noqa: S324
+    return data_dir / "rtx_compiled" / f"{model_path.stem}_{cache_hash}_ctx.onnx"
+
+
+def _compile_nvrtx_model(
+    model_path: Path,
+    data_dir: Path,
+    cache_key: str,
+    ep_name: str,
+    ep_config: dict[str, str],
+) -> Path:
     ort = _get_onnxruntime()
 
-    model_comp_dir = data_dir / "rtx_compiled"
-    model_comp_dir.mkdir(parents=True, exist_ok=True)
-
     cnsl = get_console()
-    model_comp = model_comp_dir / f"{model_path.stem}_ctx.onnx"
+    model_comp = _get_nvrtx_compiled_model_path(model_path, data_dir, cache_key)
+    model_comp.parent.mkdir(parents=True, exist_ok=True)
     if model_comp.exists():
         cnsl.info(f"Found pre-compiled model {model_path.stem} for TRT-RTX engine")
         return model_comp
@@ -352,14 +361,18 @@ def _compile_nvrtx_model(model_path: Path, data_dir: Path, ep_name: str, ep_conf
     return model_comp
 
 
-def _compile_nvrtx_model_for_ep(model_path: Path, data_dir: Path, ep_device, ep_config: dict[str, str]) -> Path:
+def _compile_nvrtx_model_for_ep(
+    model_path: Path,
+    data_dir: Path,
+    cache_key: str,
+    ep_device,
+    ep_config: dict[str, str],
+) -> Path:
     ort = _get_onnxruntime()
 
-    model_comp_dir = data_dir / "rtx_compiled"
-    model_comp_dir.mkdir(parents=True, exist_ok=True)
-
     cnsl = get_console()
-    model_comp = model_comp_dir / f"{model_path.stem}_ctx.onnx"
+    model_comp = _get_nvrtx_compiled_model_path(model_path, data_dir, cache_key)
+    model_comp.parent.mkdir(parents=True, exist_ok=True)
     if model_comp.exists():
         cnsl.info(f"Found pre-compiled model {model_path.stem} for TRT-RTX engine")
         return model_comp
@@ -577,7 +590,7 @@ def prepare_model_runtime_builders(
     has_nvrtx_compiled_already = False
     for ep_name, ep_config in providers:
         if ep_name in ["nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"]:
-            selected_model_path = _compile_nvrtx_model(model_path, data_dir, ep_name, ep_config)
+            selected_model_path = _compile_nvrtx_model(model_path, data_dir, cache_prefix, ep_name, ep_config)
             has_nvrtx_compiled_already = True
             break
 
@@ -587,7 +600,13 @@ def prepare_model_runtime_builders(
     if not has_nvrtx_compiled_already:
         for ep_devices, ep_config in ep_providers:
             if ep_devices.ep_name in ["nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"]:
-                selected_model_path = _compile_nvrtx_model_for_ep(model_path, data_dir, ep_devices, ep_config)
+                selected_model_path = _compile_nvrtx_model_for_ep(
+                    model_path,
+                    data_dir,
+                    cache_prefix,
+                    ep_devices,
+                    ep_config,
+                )
                 has_nvrtx_compiled_already = True
                 break
 
