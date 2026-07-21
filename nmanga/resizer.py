@@ -124,7 +124,9 @@ class WandResizeOptions:
 
         filters = self.apply_filters(param_a, param_b)
         img_arr = np.array(img)  # type: ignore
-        with WandImage.from_array(img_arr, channel_map=img.mode) as wand_img:
+        # wand's channel_map uses 'I' (intensity) for grayscale and 'IA' for grayscale+alpha
+        wand_channel_map = {"L": "I", "LA": "IA"}.get(img.mode, img.mode)
+        with WandImage.from_array(img_arr, channel_map=wand_channel_map) as wand_img:
             # Apply the filters as needed based on the kernel
             for filter_name, filter_value in filters.items():
                 wand_img.artifacts[filter_name] = filter_value  # type: ignore
