@@ -437,6 +437,15 @@ cjpegli_path = click.option(
     panel="Executable Path",
     show_default=True,
 )
+cjxl_path = click.option(
+    "-cjxe",
+    "--cjxl-exec",
+    "cjxl_path",
+    default=config.executables.cjxl_path,
+    help="Path to the cjxl executable",
+    panel="Executable Path",
+    show_default=True,
+)
 use_bracket_type = click.option(
     "-br",
     "--bracket-type",

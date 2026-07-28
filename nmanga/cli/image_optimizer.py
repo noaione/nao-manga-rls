@@ -37,7 +37,14 @@ from .. import file_handler, term
 from ..common import lowest_or, optimize_images, threaded_worker
 from . import options
 from ._deco import check_config_first, time_program
-from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_cjpegli, test_or_find_pingo
+from .base import (
+    NMangaCommandHandler,
+    WithMutuallyExclusiveOption,
+    is_executeable_global_path,
+    test_or_find_cjpegli,
+    test_or_find_cjxl,
+    test_or_find_pingo,
+)
 
 console = term.get_console()
 
@@ -195,7 +202,156 @@ def image_jpegify(
                 ((log_q, image, real_output, cjpegli_exe, quality, force) for image in image_candidates),
             ):
                 progress.update(task, advance=1)
-        console.stop_progress(progress, f"Converted {total_images} images to JPEG.")
+        console.stop_progress(progress, f"Converted {total_images} images to JPEG.", skip_total=True)
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
+
+
+def _wrapper_jxlify_threaded(
+    log_q: term.MessageOrInterface,
+    img_path: Path,
+    output_dir: Path,
+    cjxl: str,
+    quality_params: list[str],
+    enc_effort: int,
+    force: bool,
+) -> None:
+    dest_path = output_dir / f"{img_path.stem}.jxl"
+    if dest_path.exists() and not force:
+        cnsl = term.with_thread_queue(log_q)
+        cnsl.warning(f"Skipping existing file: {dest_path}")
+        return
+
+    cmd = [cjxl, *quality_params, "-e", str(enc_effort), str(img_path), str(dest_path)]
+    sp.run(cmd, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
+
+
+def _wrapper_jxlify_threaded_star(
+    args: tuple[term.MessageQueue, Path, Path, str, list[str], int, bool],
+) -> None:
+    return _wrapper_jxlify_threaded(*args)
+
+
+@click.command(
+    name="jxlify",
+    help="Convert images to JXL to save space",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-q",
+    "--quality",
+    "jxl_quality",
+    cls=WithMutuallyExclusiveOption,
+    show_default=False,
+    type=click.IntRange(1, 100),
+    help="Quality of the output JXL images (1-100)",
+    mutex_with=["jxl_distance", "jxl_quality"],
+)
+@click.option(
+    "-d",
+    "--distance",
+    "jxl_distance",
+    cls=WithMutuallyExclusiveOption,
+    default=1.0,
+    show_default=True,
+    type=click.FloatRange(0.0, 25.0),
+    help="Target visual distance in JND units, range: 0.0 .. 25.0. 1.0 is visually lossless, "
+    "take priority compared to --quality",
+    mutex_with=["jxl_distance", "jxl_quality"],
+)
+@click.option(
+    "-e",
+    "--effort",
+    "encoder_effort",
+    cls=WithMutuallyExclusiveOption,
+    default=9,
+    show_default=True,
+    type=click.IntRange(1, 10),
+    help="Higher values allow more computation, generally achieving smaller output at same quality.",
+)
+@options.dest_output(optional=False)
+@options.cjxl_path
+@options.threads
+@options.recursive
+@options.force
+@check_config_first
+@time_program
+def image_jxlify(
+    path_or_archive: Path,
+    jxl_quality: int | None,
+    jxl_distance: float,
+    encoder_effort: int,
+    dest_output: Path,
+    cjxl_path: str,
+    threads: int,
+    recursive: bool,
+    force: bool,
+):  # pragma: no cover
+    """
+    Convert images to JPEG to save space
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    force_search = not is_executeable_global_path(cjxl_path, "cjxl")
+    cjxl_exe = test_or_find_cjxl(cjxl_path, force_search)
+    if cjxl_exe is None:
+        console.error("cjxl not found, unable to convert images to JXL!")
+        raise Exit(1)
+
+    console.info(f"Using cjxl at {cjxl_exe}")
+
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to jpegify.")
+
+    used_qualities = ["-d", str(jxl_distance)]
+    if jxl_quality is not None:
+        quality = max(1, min(100, jxl_quality))
+        used_qualities = ["-q", str(quality)]
+
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        image_candidates: list[Path] = [
+            img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(path_real)
+        ]
+
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+
+        total_images = len(image_candidates)
+        if total_images == 0:
+            console.info(f"No images found in {path_real}, skipping.")
+            continue
+
+        real_output.mkdir(parents=True, exist_ok=True)
+
+        progress = console.make_progress()
+        task = progress.add_task("Converting images...", finished_text="Converted images", total=total_images)
+
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, image_candidates)) as (pool, log_q):
+            for _ in pool.imap_unordered(
+                _wrapper_jxlify_threaded_star,
+                (
+                    (log_q, image, real_output, cjxl_exe, used_qualities, encoder_effort, force)
+                    for image in image_candidates
+                ),
+            ):
+                progress.update(task, advance=1)
+        console.stop_progress(progress, f"Converted {total_images} images to JXL.", skip_total=True)
     if recursive:
         console.info(f"Finished processing {len(candidates)} folders.")
 

@@ -34,6 +34,7 @@ from typing import NoReturn
 
 import rich_click as click
 from click_pwsh import support_pwsh_shell_completion
+from rich.box import MINIMAL_HEAVY_HEAD
 
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
@@ -45,7 +46,7 @@ from .cli.debugging import simulate_progress
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.epub_stuff import epub_group
 from .cli.image_operations import imops_group
-from .cli.image_optimizer import image_jpegify, image_mixmatch, image_optimizer
+from .cli.image_optimizer import image_jpegify, image_jxlify, image_mixmatch, image_optimizer
 from .cli.image_tagging import image_tagging, image_tagging_raw
 from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
@@ -91,6 +92,8 @@ help_config = click.RichHelpConfiguration(
     style_required_long="dim red",
     style_options_panel_border="dim",
     style_commands_panel_border="dim",
+    style_errors_panel_box=MINIMAL_HEAVY_HEAD,
+    align_errors_panel="left",
     use_markdown=False,
     use_rich_markup=True,
     show_arguments=True,
@@ -210,7 +213,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Image Utilities",
     help="Commands for optimizing and converting images",
-    commands=["forcegray", "posterize", "rescale", "jpegify", "spreads", "optimize", "mixmatch", "imops"],
+    commands=["forcegray", "posterize", "rescale", "jpegify", "jxlify", "spreads", "optimize", "mixmatch", "imops"],
 )
 @click.command_panel(
     name="Configuration",
@@ -296,6 +299,7 @@ main.add_command(image_tagging)
 main.add_command(image_tagging_raw)
 main.add_command(image_optimizer)
 main.add_command(image_jpegify)
+main.add_command(image_jxlify)
 main.add_command(image_mixmatch)
 main.add_command(timewizard_modify)
 main.add_command(autolevel)
