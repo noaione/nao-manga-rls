@@ -49,6 +49,8 @@ __all__ = (
     "NMangaCommandHandler",
     "UnrecoverableNMangaError",
     "is_executeable_global_path",
+    "test_or_find_cjpegli",
+    "test_or_find_cjxl",
     "test_or_find_exiftool",
     "test_or_find_magick",
     "test_or_find_pingo",
@@ -137,6 +139,16 @@ def test_or_find_cjpegli(cjpegli: str, force_search: bool = True) -> str | None:
         return cjpegli or (None if not force_search else _find_exec_path("cjpegli", ["-h"]))
     except OSError:
         return None if not force_search else _find_exec_path("cjpegli", ["-h"])
+
+
+def test_or_find_cjxl(cjxl: str, force_search: bool = True) -> str | None:
+    try:
+        success = _test_exec([cjxl, "-h"])
+        if not success:
+            return None if not force_search else _find_exec_path("cjxl", ["-h"])
+        return cjxl or (None if not force_search else _find_exec_path("cjxl", ["-h"]))
+    except OSError:
+        return None if not force_search else _find_exec_path("cjxl", ["-h"])
 
 
 def test_or_find_w2x_trt(w2x_trt_path: str | None, force_search: bool = True) -> str | None:

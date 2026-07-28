@@ -32,6 +32,7 @@ class _ConfigExecutableT(TypedDict, total=False):
     pingo_path: str
     exiftool_path: str
     cjpegli_path: str
+    cjxl_path: str
     w2x_trt_path: str | None
 
 
