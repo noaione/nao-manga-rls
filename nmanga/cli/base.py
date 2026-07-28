@@ -30,7 +30,7 @@ import sys
 import traceback
 import warnings
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Pattern, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Pattern, cast, overload
 
 import rich_click as click
 from click.core import Context
@@ -48,6 +48,8 @@ console = term.get_console()
 __all__ = (
     "NMangaCommandHandler",
     "UnrecoverableNMangaError",
+    "WithDeprecatedOption",
+    "WithMutuallyExclusiveOption",
     "is_executeable_global_path",
     "test_or_find_cjpegli",
     "test_or_find_cjxl",
@@ -247,6 +249,141 @@ class WithDeprecatedOption(click.RichOption):
                     (brackets[1], "dim"),
                 )
                 cols.add_renderable(render_pref)
+        return cols
+
+
+class WithMutuallyExclusiveOption(click.RichOption):
+    def __init__(self, *args, **kwargs):
+        mutex_with: tuple[str | click.Option] | list[str | click.Option] | str | click.Option | None = kwargs.pop(
+            "mutex_with", None
+        )
+        mutex_list: list[str] = []
+        if mutex_with is not None:
+            if isinstance(mutex_with, (str, click.Option)):
+                mutex_list = [self._normalize_mutex_name(mutex_with)]
+            elif isinstance(mutex_with, (tuple, list)):
+                mutex_list = []
+                for mw in mutex_with:
+                    if not isinstance(mw, (str, click.Option)):
+                        raise ValueError(
+                            f"The following mutually exclusive option is not a string or click.Option! `{mw!r}`"
+                        )
+                    mutex_list.append(self._normalize_mutex_name(mw))
+        self.mutex_with: list[str] = mutex_list
+        self.is_mutex: bool = len(mutex_list) > 0
+        super(WithMutuallyExclusiveOption, self).__init__(*args, **kwargs)
+
+    @staticmethod
+    def _normalize_mutex_name(name_or_opt: str | click.Option) -> str:
+        """Normalize a mutex reference to its long-form option name.
+
+        Accepts either a raw token (``"bar"``, ``"-b"``, ``"--bar"``) or a
+        :class:`click.Option` instance. For options, the long form (``--name``)
+        is preferred when available; otherwise the first declared opt is used.
+        For strings, the token is normalized to the long form when no leading
+        dash is present, otherwise returned unchanged.
+        """
+        if isinstance(name_or_opt, click.Option):
+            long_opts = [o for o in name_or_opt.opts if o.startswith("--")]
+            if long_opts:
+                return long_opts[0]
+            if name_or_opt.opts:
+                return name_or_opt.opts[0]
+            # Fallback: synthesize from the canonical parameter name.
+            return f"--{name_or_opt.name}"
+        # String token
+        s = name_or_opt.strip()
+        if not s.startswith("-"):
+            return f"--{s}"
+        return s
+
+    @staticmethod
+    def _is_value_set(value, default) -> bool:
+        """Return True when ``value`` looks user-provided rather than default.
+
+        Treats ``None``, empty containers, and values equal to the parameter
+        default as "not set" so that mutually-exclusive checks do not fire on
+        options the user never supplied.
+        """
+        if value is None:
+            return False
+        if isinstance(value, (list, tuple)) and len(value) == 0:
+            return False
+        if value == default:
+            return False
+        return True
+
+    def _resolve_partner(self, ctx: click.Context, partner_name: str) -> tuple[str | None, object]:
+        """Resolve a partner's normalized long-form name to ``(param_name, default)``.
+
+        Looks up the partner ``click.Option`` in the current command's params
+        so the parse-time conflict check can compare against its parsed value
+        while accounting for its default.
+        """
+        bare = partner_name.lstrip("-")
+        for p in ctx.command.params:
+            if not isinstance(p, click.Option) or not p.name:
+                continue
+            if partner_name in p.opts or bare == p.name:
+                return p.name, p.default
+        return None, None
+
+    def handle_parse_result(self, ctx: click.Context, opts: Mapping[str, Any], args: list) -> tuple[dict, list]:
+        """Click hook: enforce mutex relationships against already-parsed options.
+
+        Raises :class:`click.UsageError` when this option was set by the user
+        and any of its ``mutex_with`` partners was also set. Options are
+        processed in declaration order, so a conflict raised on the later
+        option references both clashing option names in the error message.
+        """
+        if not self.is_mutex or self.name not in opts:
+            return super().handle_parse_result(ctx, opts, args)
+        if not self._is_value_set(opts[self.name], self.default):
+            return super().handle_parse_result(ctx, opts, args)
+
+        for partner_token in self.mutex_with:
+            partner_param, partner_default = self._resolve_partner(ctx, partner_token)
+            if partner_param is None or partner_param == self.name:
+                continue
+            if partner_param not in opts:
+                continue
+            if not self._is_value_set(opts[partner_param], partner_default):
+                continue
+            self_name = next((o for o in self.opts if o.startswith("--")), None) or next(
+                iter(self.opts), f"--{self.name}"
+            )
+            raise click.UsageError(f"Illegal usage: `{self_name}` is mutually exclusive with `{partner_token}`.")
+
+        return super().handle_parse_result(ctx, opts, args)
+
+    def _get_bracket_text(self, formatter: click.RichHelpFormatter) -> tuple[tuple[str, str], str]:
+        the_theme = formatter.config.theme
+        if isinstance(the_theme, str):
+            if "-nu" in the_theme:
+                return ("(", ")"), "Mutually exclusive"
+            elif "-robo" in the_theme:
+                return ("❮", "❯"), "mutually exclusive"  # noqa: RUF001
+        elif isinstance(the_theme, RichClickTheme):
+            if "nu" in the_theme.name:
+                return ("(", ")"), "yellow"
+            elif "robo" in the_theme.name:
+                return ("❮", "❯"), "yellow"  # noqa: RUF001
+        return ("[", "]"), "yellow"
+
+    def get_rich_help(self, ctx: click.RichContext, formatter: click.RichHelpFormatter) -> Columns:
+        cols = super().get_rich_help(ctx, formatter)
+        if not self.is_mutex:
+            return cols
+        brackets, _ = self._get_bracket_text(formatter)
+        if len(self.mutex_with) > 0:
+            mutex_with_text = _fmt_pref_text(self.mutex_with)
+            render_mutex = Text.assemble(
+                (brackets[0], "yellow"),
+                ("Mutex with: ", "yellow"),
+                (mutex_with_text, "yellow bold"),
+                (brackets[1], "yellow"),
+            )
+            cols.add_renderable(render_mutex)
         return cols
 
 
