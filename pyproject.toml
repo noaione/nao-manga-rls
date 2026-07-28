@@ -48,7 +48,7 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "ruff>=0.15",
+    "ruff>=0.16.0",
 ]
 autostuff = [
     "numpy>=2.5.1",
@@ -73,7 +73,7 @@ denoiser = [
     "winrt-windows-system>=3.2.1; sys_platform == 'win32'",
 ]
 vapoursynth = [
-    "vapoursynth==77"
+    "vapoursynth==78"
 ]
 epub-render = ["playwright>=1.61.0"]
 
