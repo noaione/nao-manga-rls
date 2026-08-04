@@ -104,7 +104,7 @@ class ActionML(BaseAction):
         if not self.precompiled and self.data_type is None:
             raise PydanticCustomError(
                 "precompiled_data_type_missing",
-                "data_type must be specified when precompiled is True",
+                "data_type must be specified when precompiled is False",
             )
         return self
 
@@ -268,7 +268,8 @@ class ActionML(BaseAction):
                 tile_size=self.tile_size,
                 contrast_stretch=self.contrast_strectch,
                 background=self.background,
-                use_fp32=not self.precompiled,
+                tile_overlap=self.tile_overlap,
+                use_fp32=not session.use_halfp,
             )
             output_image = self.post_process(context, volume, orchestrator, output_image)
 

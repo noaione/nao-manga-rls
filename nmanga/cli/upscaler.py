@@ -220,7 +220,7 @@ def upscale_trt(
             output_image = denoise_single_image_with_overlap(
                 img_file,
                 sess,
-                batch_size=1,
+                batch_size=batch_size,
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
                 background=background,
