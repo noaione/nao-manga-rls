@@ -38,6 +38,7 @@ __all__ = (
     "join_spreads",
     "join_spreads_imagemagick",
     "select_exts",
+    "split_spreads",
 )
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
@@ -104,6 +105,32 @@ def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = Spr
         new_im.paste(im, (x_offset, 0))
         x_offset += im.size[0]
     return new_im
+
+
+def split_spreads(
+    image: Image.Image, direction: SpreadDirection = SpreadDirection.LTR
+) -> tuple[Image.Image, Image.Image]:
+    """Split a spread image into two pages.
+
+    Parameters
+    ----------
+    image: :class:`PIL.Image.Image`
+        The spread image to split.
+    direction: :class:`SpreadDirection`
+        The order of the returned pages. Defaults to `SpreadDirection.LTR`.
+
+    Returns
+    -------
+    tuple[:class:`PIL.Image.Image`, :class:`PIL.Image.Image`]
+        The left and right pages, ordered according to ``direction``.
+    """
+
+    split_at = image.width // 2
+    left = image.crop((0, 0, split_at, image.height))
+    right = image.crop((split_at, 0, image.width, image.height))
+    if direction == SpreadDirection.RTL:
+        return right, left
+    return left, right
 
 
 def join_spreads_imagemagick(

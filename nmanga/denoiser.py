@@ -454,7 +454,7 @@ def prepare_model_runtime_builders(
         "trt_engine_cache_path": "trt_engines",
         "trt_engine_cache_prefix": cache_prefix,
         "trt_timing_cache_enable": True,
-        "trt_timing_cache_path": "trt_engines",
+        "trt_timing_cache_path": str(cache_dir),
         "trt_build_heuristics_enable": True,
         "trt_builder_optimization_level": 3,
         "trt_context_memory_sharing_enable": True,

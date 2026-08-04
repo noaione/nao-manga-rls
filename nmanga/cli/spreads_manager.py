@@ -27,7 +27,6 @@ SOFTWARE.
 from __future__ import annotations
 
 import re
-import subprocess as sp
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import move as mv
@@ -37,8 +36,8 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..common import RegexCollection
-from ..spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
+from ..common import RegexCollection, lowest_or, threaded_worker
+from ..spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts, split_spreads
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -58,44 +57,11 @@ def _is_default_path(path: str) -> bool:
     return False
 
 
-def make_prefix_convert(magick_exe: str):
-    name = Path(magick_exe).name
-    if name.lower() == "convert":
-        return ["convert"]
-    if name.lower() == "magick":
-        return ["magick"]
-    raise ValueError("Invalid magick executable name, must be 'magick' or 'convert'")
-
-
 @dataclass
 class _ExportedImage:
     path: Path
     prefix: str | None = None
     postfix: str | None = None
-
-
-def execute_spreads_split(
-    magick_dir: str,
-    quality: float,
-    input_img: _ExportedImage,
-    out_dir: Path,
-    output_fmt: str = "auto",
-):
-    select_ext = ".jpg"
-    if ".png" in input_img.path.suffix or ".webp" in input_img.path.suffix:
-        select_ext = ".png"
-    if output_fmt != "auto":
-        select_ext = f".{output_fmt}"
-    output_name = file_handler.random_name() + select_ext
-    execute_this = make_prefix_convert(magick_dir)
-    execute_this += ["-crop", "50%x100%", f"{input_img.path}"]
-    execute_this += ["-quality", f"{quality:.2f}%", f"{out_dir / output_name}"]
-    try:
-        sp.run(execute_this, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
-    except sp.CalledProcessError as e:
-        console.error(f"Error: {e.output.decode('utf-8')}")
-        raise e
-    return output_name
 
 
 class _ExportedImages(TypedDict):
@@ -108,6 +74,58 @@ class _SplitSpreads:
     img: _ExportedImage
     a_part: int
     b_part: int
+
+
+def _split_output_extension(image_path: Path, image_fmt: str) -> str:
+    if image_fmt != "auto":
+        return f".{image_fmt.lower()}"
+    if image_path.suffix.lower() in {".png", ".webp"}:
+        return ".png"
+    return ".jpg"
+
+
+def _save_split_image(image: Image.Image, output_path: Path, quality: float) -> None:
+    save_image = image
+    if output_path.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"1", "L", "RGB", "CMYK"}:
+        save_image = image.convert("RGB")
+    try:
+        save_kwargs = {"quality": int(quality)} if output_path.suffix.lower() in {".jpg", ".jpeg"} else {}
+        save_image.save(output_path, format=output_path.suffix[1:].upper(), **save_kwargs)
+    finally:
+        if save_image is not image:
+            save_image.close()
+
+
+def _runner_spreads_split(
+    split_spread: _SplitSpreads,
+    output_dir: Path,
+    quality: float,
+    image_fmt: str,
+    direction: SpreadDirection,
+) -> None:
+    image_data = split_spread.img
+    output_extension = _split_output_extension(image_data.path, image_fmt)
+    first_val = split_spread.a_part
+    second_val = split_spread.b_part
+    prefix = image_data.prefix or ""
+    postfix = image_data.postfix or ""
+    first_path = output_dir / f"{prefix}p{first_val:03d}{postfix}{output_extension}"
+    second_path = output_dir / f"{prefix}p{second_val:03d}{postfix}{output_extension}"
+
+    with Image.open(image_data.path) as image:
+        first_image, second_image = split_spreads(image, direction)
+    try:
+        _save_split_image(first_image, first_path, quality)
+        _save_split_image(second_image, second_path, quality)
+    finally:
+        first_image.close()
+        second_image.close()
+
+
+def _runner_spreads_split_star(
+    args: tuple[_SplitSpreads, Path, float, str, SpreadDirection],
+) -> None:
+    _runner_spreads_split(*args)
 
 
 quality_option = click.option(
@@ -294,25 +312,18 @@ def spreads_join(
 @quality_option
 @reverse_direction
 @format_output
-@options.magick_path
+@options.threads
 @time_program
 def spreads_split(
     path_or_archive: Path,
     quality: float,
     reverse: bool,
     image_fmt: str,
-    magick_path: str,
+    threads: int,
 ):
     """
     Split a joined spreads into two images
     """
-    force_search = not _is_default_path(magick_path)
-    magick_exe = test_or_find_magick(magick_path, force_search)
-    if magick_exe is None:
-        console.error("Could not find the magick executable")
-        return 1
-    console.info("Using magick executable: {}".format(magick_exe))
-
     if not path_or_archive.is_dir():
         raise click.BadParameter(
             f"{path_or_archive} is not a directory. Please provide a directory.",
@@ -343,33 +354,18 @@ def spreads_split(
             image_list.append(split_spread)
     console.info(f"Found {len(image_list)} spreads to split")
 
-    for idx, split_spread in enumerate(image_list):
-        console.status(f"Splitting spreads: {idx + 1}/{len(image_list)}")
-        output_name = execute_spreads_split(
-            magick_exe,
-            quality,
-            split_spread.img,
-            path_or_archive,
-            image_fmt,
-        )
-
-        output_path = Path(output_name)
-
-        output_fn, output_fmt = output_path.stem, output_path.suffix
-        first_img = output_fn + "-0" + output_fmt
-        second_img = output_fn + "-1" + output_fmt
-
-        pre_t = split_spread.img.prefix or ""
-        post_t = split_spread.img.postfix or ""
-        first_val = split_spread.a_part if not reverse else split_spread.b_part
-        second_val = split_spread.b_part if not reverse else split_spread.a_part
-
-        final_a = f"{pre_t}p{first_val:03d}{post_t}{output_fmt}"
-        final_b = f"{pre_t}p{second_val:03d}{post_t}{output_fmt}"
-
-        (path_or_archive / first_img).rename(path_or_archive / final_a)
-        (path_or_archive / second_img).rename(path_or_archive / final_b)
-    console.stop_status(f"Splitted {len(image_list)} spreads")
+    if image_list:
+        direction = SpreadDirection.RTL if reverse else SpreadDirection.LTR
+        progress = console.make_progress()
+        task = progress.add_task("Splitting spreads...", finished_text="Split spreads", total=len(image_list))
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, image_list)) as (pool, _):
+            for _ in pool.imap_unordered(
+                _runner_spreads_split_star,
+                ((split_spread, path_or_archive, quality, image_fmt, direction) for split_spread in image_list),
+            ):
+                progress.update(task, advance=1)
+        console.stop_progress(progress, f"Split {len(image_list)} spreads")
 
     BACKUP_DIR = path_or_archive / "backup"
     BACKUP_DIR.mkdir(exist_ok=True)
