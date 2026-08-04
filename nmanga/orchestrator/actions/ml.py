@@ -92,6 +92,8 @@ class ActionML(BaseAction):
     """Whether to apply contrast stretch after denoising"""
     precompiled: bool = Field(False, title="Is precompiled TensorRT model")
     """Whether the model is a precompiled TensorRT model, so we do not need to build it"""
+    rtx_ep: bool = Field(False, title="Use TRT-RTX Engine")
+    """Use TRT-RTX engine to do this ML action"""
     data_type: MLDataType | None = Field(None, title="The data type to use for TensorRT model")
     """The data type to use for TensorRT model"""
     base_path: str = Field("output", title="Output Base Path")
@@ -151,6 +153,10 @@ class ActionML(BaseAction):
         other_key = (
             f"d{self.device_id}-b{self.batch_size}-t{self.tile_size}-p{self.precompiled}-d{self.data_type or 'None'}"
         )
+        if self.rtx_ep:
+            other_key += "-rtx"
+        if self.precompiled:
+            other_key += "-precomp"
 
         return f"{model_hash}_{other_key}"
 
@@ -186,6 +192,7 @@ class ActionML(BaseAction):
                 tile_size=self.tile_size,
                 batch_size=self.batch_size,
                 data_type=cast(MLDataType, self.data_type),
+                with_nvrtx=self.rtx_ep,
             )
 
         context.ml_model_session[cache_key] = session

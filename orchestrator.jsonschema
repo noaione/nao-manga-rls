@@ -391,6 +391,11 @@
                     "title": "Is precompiled TensorRT model",
                     "type": "boolean"
                 },
+                "rtx_ep": {
+                    "default": false,
+                    "title": "Use TRT-RTX Engine",
+                    "type": "boolean"
+                },
                 "data_type": {
                     "anyOf": [
                         {
@@ -1329,6 +1334,11 @@
                 "precompiled": {
                     "default": false,
                     "title": "Is precompiled TensorRT model",
+                    "type": "boolean"
+                },
+                "rtx_ep": {
+                    "default": false,
+                    "title": "Use TRT-RTX Engine",
                     "type": "boolean"
                 },
                 "data_type": {
