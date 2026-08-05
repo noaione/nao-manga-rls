@@ -102,6 +102,7 @@ def _runner_spreads_split(
     quality: float,
     image_fmt: str,
     direction: SpreadDirection,
+    gap: int,
 ) -> None:
     image_data = split_spread.img
     output_extension = _split_output_extension(image_data.path, image_fmt)
@@ -113,7 +114,7 @@ def _runner_spreads_split(
     second_path = output_dir / f"{prefix}p{second_val:03d}{postfix}{output_extension}"
 
     with Image.open(image_data.path) as image:
-        first_image, second_image = split_spreads(image, direction)
+        first_image, second_image = split_spreads(image, direction, gap=gap)
     try:
         _save_split_image(first_image, first_path, quality)
         _save_split_image(second_image, second_path, quality)
@@ -123,7 +124,7 @@ def _runner_spreads_split(
 
 
 def _runner_spreads_split_star(
-    args: tuple[_SplitSpreads, Path, float, str, SpreadDirection],
+    args: tuple[_SplitSpreads, Path, float, str, SpreadDirection, int],
 ) -> None:
     _runner_spreads_split(*args)
 
@@ -154,6 +155,18 @@ format_output = click.option(
     type=click.Choice(["auto", "png", "jpg"]),
     help="The format of the output image, auto will detect the format from the input images",
 )
+gap_option = click.option(
+    "-g",
+    "--gap",
+    "gap",
+    default=0,
+    show_default=True,
+    type=click.IntRange(0),
+    help=(
+        "The gap (in pixels) to add on each side of an image that touches another image. "
+        "The visible gap between two adjacent images will be twice this value."
+    ),
+)
 
 
 @click.group(name="spreads", help="Manage spreads from a directory of images")
@@ -175,6 +188,7 @@ def spreads():
 )
 @reverse_direction
 @format_output
+@gap_option
 @click.option(
     "--use-pil",
     "use_pil",
@@ -190,6 +204,7 @@ def spreads_join(
     spreads_data: list[str],
     reverse: bool,
     image_fmt: str,
+    gap: int,
     use_pil: bool,
     magick_path: str,
 ):
@@ -270,7 +285,7 @@ def spreads_join(
             # Load all images
             loaded_images = [Image.open(p) for p in all_img_paths]
 
-            joined_image = join_spreads(loaded_images, direction)
+            joined_image = join_spreads(loaded_images, direction, gap=gap)
             extension = select_exts(all_img_paths)
             if image_fmt != "auto":
                 extension = f".{image_fmt}"
@@ -285,6 +300,7 @@ def spreads_join(
                 direction=direction,
                 output_format=image_fmt,
                 magick_path=cast(str, magick_exe),
+                gap=gap,
             )
             extension = Path(temp_output).suffix
 
@@ -312,6 +328,7 @@ def spreads_join(
 @quality_option
 @reverse_direction
 @format_output
+@gap_option
 @options.threads
 @time_program
 def spreads_split(
@@ -319,6 +336,7 @@ def spreads_split(
     quality: float,
     reverse: bool,
     image_fmt: str,
+    gap: int,
     threads: int,
 ):
     """
@@ -362,7 +380,10 @@ def spreads_split(
         with threaded_worker(console, lowest_or(threads, image_list)) as (pool, _):
             for _ in pool.imap_unordered(
                 _runner_spreads_split_star,
-                ((split_spread, path_or_archive, quality, image_fmt, direction) for split_spread in image_list),
+                (
+                    (split_spread, path_or_archive, quality, image_fmt, direction, gap)
+                    for split_spread in image_list
+                ),
             ):
                 progress.update(task, advance=1)
         console.stop_progress(progress, f"Split {len(image_list)} spreads")

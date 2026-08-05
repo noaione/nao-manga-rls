@@ -70,7 +70,9 @@ def select_exts(files: list[Path]) -> str:
     return select_ext
 
 
-def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = SpreadDirection.LTR) -> Image.Image:
+def join_spreads(
+    images: Sequence[Image.Image], direction: SpreadDirection = SpreadDirection.LTR, gap: int = 0
+) -> Image.Image:
     """Join images into spreads.
 
     Parameters
@@ -79,6 +81,9 @@ def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = Spr
         The list of images to join.
     direction: :class:`SpreadDirection`
         The direction of the spread. Defaults to `SpreadDirection.LTR`.
+    gap: :class:`int`
+        The gap (in pixels) to add on each side of an image that touches another image.
+        Between any two adjacent images the visible gap will be ``gap * 2``. Defaults to ``0``.
 
     Returns
     -------
@@ -88,7 +93,7 @@ def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = Spr
 
     widths, heights = zip(*(i.size for i in images), strict=True)
 
-    total_width = sum(widths)
+    total_width = sum(widths) + (gap * 2 * (len(images) - 1))
     max_height = max(heights)
 
     # Get all the current image modes, force RGB if one of them is not "L" (also check if there's an alpha channel)
@@ -99,16 +104,20 @@ def join_spreads(images: Sequence[Image.Image], direction: SpreadDirection = Spr
     else:
         mode = "L"
 
-    new_im = Image.new(mode, (total_width, max_height))
+    bg_color = 255 if mode == "L" else (255, 255, 255)
+    new_im = Image.new(mode, (total_width, max_height), color=bg_color)
     x_offset = 0
-    for im in images if direction == SpreadDirection.LTR else reversed(images):
+    ordered_images = images if direction == SpreadDirection.LTR else list(reversed(images))
+    for idx, im in enumerate(ordered_images):
         new_im.paste(im, (x_offset, 0))
         x_offset += im.size[0]
+        if gap > 0 and idx != len(ordered_images) - 1:
+            x_offset += gap * 2
     return new_im
 
 
 def split_spreads(
-    image: Image.Image, direction: SpreadDirection = SpreadDirection.LTR
+    image: Image.Image, direction: SpreadDirection = SpreadDirection.LTR, gap: int = 0
 ) -> tuple[Image.Image, Image.Image]:
     """Split a spread image into two pages.
 
@@ -118,6 +127,10 @@ def split_spreads(
         The spread image to split.
     direction: :class:`SpreadDirection`
         The order of the returned pages. Defaults to `SpreadDirection.LTR`.
+    gap: :class:`int`
+        The gap (in pixels) that was added on each side of the two joined images, i.e. the
+        reverse of the ``gap`` used in :func:`join_spreads`. The ``gap * 2`` pixels in the
+        middle of the image will be discarded. Defaults to ``0``.
 
     Returns
     -------
@@ -125,9 +138,10 @@ def split_spreads(
         The left and right pages, ordered according to ``direction``.
     """
 
-    split_at = image.width // 2
+    content_width = image.width - (gap * 2)
+    split_at = content_width // 2
     left = image.crop((0, 0, split_at, image.height))
-    right = image.crop((split_at, 0, image.width, image.height))
+    right = image.crop((split_at + (gap * 2), 0, image.width, image.height))
     if direction == SpreadDirection.RTL:
         return right, left
     return left, right
@@ -140,6 +154,7 @@ def join_spreads_imagemagick(
     direction: SpreadDirection = SpreadDirection.LTR,
     output_format: str = "auto",
     magick_path: str = "magick",
+    gap: int = 0,
 ) -> str:
     """Join images into spreads using ImageMagick.
 
@@ -158,6 +173,9 @@ def join_spreads_imagemagick(
         Supported formats are "jpg", "png", and "webp".
     magick_path: :class:`str`
         The path to the ImageMagick `magick` executable. Defaults to "magick".
+    gap: :class:`int`
+        The gap (in pixels) to add on each side of an image that touches another image.
+        Between any two adjacent images the visible gap will be ``gap * 2``. Defaults to ``0``.
 
     Returns
     -------
@@ -172,7 +190,12 @@ def join_spreads_imagemagick(
 
     commands = [magick_path]
     commands.extend(str(x) for x in images)
-    commands.extend(["-quality", f"{quality:.2f}%", "+append", f"{output_directory / output_name}"])
+    commands.extend(["-quality", f"{quality:.2f}%"])
+    if gap > 0:
+        commands.extend(["-background", "white", "+smush", str(gap * 2)])
+    else:
+        commands.append("+append")
+    commands.append(f"{output_directory / output_name}")
 
     try:
         sp.run(commands, check=True, stdout=sp.DEVNULL, stderr=sp.DEVNULL)
