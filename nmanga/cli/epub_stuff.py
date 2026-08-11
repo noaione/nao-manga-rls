@@ -36,9 +36,11 @@ from zipfile import ZipFile
 import rich_click as click
 from defusedxml import ElementTree as ET  # ruff: ignore[camelcase-imported-as-acronym]
 from PIL import Image
+from rich.table import Table
 
 from .. import term
 from ..autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
+from ..epub_diff import EpubDiffEntry, PageDiffEntry, diff_epub_files
 from ..epub_merge import merge_images_into_extracted_epub
 from ..epub_render import (
     attach_chromium_console,
@@ -278,6 +280,152 @@ def epub_merge_images(extracted_folder: Path, image_folder: Path, remove_origina
         new_name = replacement.new_path.relative_to(extracted_folder)
         console.log(f"Replaced {old_name} with {new_name}")
     console.info(f"Merged {len(replacements)} replacement images into {extracted_folder}")
+
+
+def _diff_status_text(status: str) -> str:
+    return {
+        "identical": "[green]identical[/green]",
+        "modified": "[yellow]modified[/yellow]",
+        "image-modified": "[yellow]image-modified[/yellow]",
+        "re-encoded": "[cyan]re-encoded[/cyan]",
+        "added": "[green]added[/green]",
+        "removed": "[red]removed[/red]",
+    }.get(status, status)
+
+
+def _render_page_table(pages: list[PageDiffEntry]) -> None:
+    table = Table(title="Pages", title_justify="left", header_style="bold")
+    table.add_column("Pos", justify="right", style="dim")
+    table.add_column("Status")
+    table.add_column("XHTML", overflow="fold", max_width=48)
+    table.add_column("Image", overflow="fold", max_width=48)
+    table.add_column("Detail", overflow="fold", max_width=40)
+    for page in pages:
+        table.add_row(
+            str(page.position + 1),
+            _diff_status_text(page.status),
+            page.new_name or page.old_name or "",
+            page.new_image or page.old_image or "-",
+            page.detail or "",
+        )
+    console.console.print(table)
+
+
+def _render_file_table(files: list[EpubDiffEntry]) -> None:
+    changed = [entry for entry in files if entry.status != "identical"]
+    identical_count = sum(1 for entry in files if entry.status == "identical")
+    if not changed:
+        if identical_count:
+            console.info(f"{identical_count} other file(s) unchanged")
+        return
+
+    table = Table(title="Files", title_justify="left", header_style="bold")
+    table.add_column("Status")
+    table.add_column("Entry", overflow="fold", max_width=60)
+    table.add_column("Old", justify="right")
+    table.add_column("New", justify="right")
+    table.add_column("Detail", overflow="fold", max_width=40)
+    for entry in changed:
+        old_size = str(entry.old_size) if entry.old_size is not None else "-"
+        new_size = str(entry.new_size) if entry.new_size is not None else "-"
+        table.add_row(
+            _diff_status_text(entry.status),
+            entry.name,
+            old_size,
+            new_size,
+            entry.detail or "",
+        )
+    console.console.print(table)
+    if identical_count:
+        console.info(f"{identical_count} other file(s) unchanged")
+
+
+def _print_diff_block(title: str, diff_lines: list[str]) -> None:
+    console.console.print()
+    console.console.print(f"[bold underline]{title}[/bold underline]")
+    for line in diff_lines:
+        if line.startswith(("+++", "---", "@@")):
+            console.console.print(line, markup=False, style="cyan")
+        elif line.startswith("+"):
+            console.console.print(line, markup=False, style="green")
+        elif line.startswith("-"):
+            console.console.print(line, markup=False, style="red")
+        else:
+            console.console.print(line, markup=False)
+
+
+@epub_group.command(
+    name="diff",
+    help="Compare two EPUB files and report differences",
+    cls=NMangaCommandHandler,
+)
+@click.argument(
+    "old_epub",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, resolve_path=True, path_type=Path),
+)
+@click.argument(
+    "new_epub",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, resolve_path=True, path_type=Path),
+)
+@click.option(
+    "--strict-metadata",
+    is_flag=True,
+    help="Include volatile OPF metadata (per-build timestamps) in the comparison",
+)
+@click.option(
+    "-C",
+    "--context",
+    "context_lines",
+    type=click.IntRange(0, 20),
+    default=3,
+    show_default=True,
+    help="Number of context lines around each change in unified diffs",
+)
+@time_program
+def epub_diff(
+    old_epub: Path,
+    new_epub: Path,
+    strict_metadata: bool,
+    context_lines: int,
+) -> int:
+    """Compare two EPUB files and report differences between them."""
+
+    for path, hint in ((old_epub, "old_epub"), (new_epub, "new_epub")):
+        if path.suffix.lower() != ".epub":
+            raise click.BadParameter(
+                f"{path} is not an EPUB file (expected .epub extension).",
+                param_hint=hint,
+            )
+
+    console.info(f"Comparing {old_epub.name} -> {new_epub.name}")
+
+    try:
+        result = diff_epub_files(
+            old_epub,
+            new_epub,
+            strict_metadata=strict_metadata,
+            context=context_lines,
+        )
+    except (ValueError, UnicodeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if result.pages:
+        _render_page_table(result.pages)
+    if result.files:
+        _render_file_table(result.files)
+
+    for page in result.pages:
+        if page.diff:
+            _print_diff_block(f"Page {page.position + 1}: {page.new_name or page.old_name}", page.diff)
+    for entry in result.files:
+        if entry.diff:
+            _print_diff_block(entry.name, entry.diff)
+
+    if result.identical:
+        console.success("No differences found between the two EPUB files.")
+        return 0
+    console.error(f"{result.changed} change(s) found between the two EPUB files.")
+    return 1
 
 
 def overlay_level_image(
