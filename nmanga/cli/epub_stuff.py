@@ -34,7 +34,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import rich_click as click
-from defusedxml import ElementTree as ET  # noqa: N817
+from defusedxml import ElementTree as ET  # ruff: ignore[camelcase-imported-as-acronym]
 from PIL import Image
 
 from .. import term

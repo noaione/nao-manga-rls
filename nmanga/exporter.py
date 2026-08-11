@@ -30,9 +30,9 @@ from mimetypes import guess_type
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-import lxml.etree as ET  # noqa: N812
+import lxml.etree as ET  # ruff: ignore[lowercase-imported-as-non-lowercase]
 import py7zr
-from defusedxml.minidom import parseString as xml_dom_parse  # noqa: N813
+from defusedxml.minidom import parseString as xml_dom_parse  # ruff: ignore[camelcase-imported-as-lowercase]
 from PIL import Image
 
 from .templates.epub import EPUB_CONTAINER, EPUB_CONTENT, EPUB_PAGE, EPUB_STYLES

@@ -86,7 +86,7 @@ class TestFormatDaizLikeFilename:
             "Captain Corinth - c011 (v02) - p101 [dig] [The Adventurers Guild] [One Peace Books] [nao]",
             "Captain Corinth - c012 (v02) - p133 [dig] [The Fall of Starvake] [One Peace Books] [nao]",
             "Captain Corinth - c013 (v02) - p157 [dig] [Reasons] [One Peace Books] [nao]",
-            "Captain Corinth - c013x1 (v02) - p183 [dig] [Cleria's Conversation With the Spirits] [One Peace Books] [nao]",  # noqa
+            "Captain Corinth - c013x1 (v02) - p183 [dig] [Cleria's Conversation With the Spirits] [One Peace Books] [nao]",  # ruff: ignore[line-too-long]
         ],
         "extra": {0: "Cover"},
     }

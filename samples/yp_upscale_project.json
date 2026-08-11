@@ -1,0 +1,161 @@
+{
+    "$schema": "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema",
+    "title": "Upscale Project",
+    "publisher": "Yen Press",
+    "credit": "naoX",
+    "email": "noaione@protonmail.ch",
+    "bracket_type": "round",
+    "base_path": "todo",
+    "volumes": [
+        {
+            "path": "lovebullet01",
+            "title": "Love Bullet",
+            "number": 1,
+            "year": 2025,
+            "colors": [
+                0, 1, 2, 3, 4
+            ],
+            "chapters": [
+                {
+                    "number": 0,
+                    "title": "A Cupid's Solution to a Love Triangle",
+                    "start": 0
+                },
+                {
+                    "number": 1,
+                    "title": "To Fall in Love with Love...",
+                    "start": 67
+                },
+                {
+                    "number": 2,
+                    "title": "The Modern-Day Cupid (Part One)",
+                    "start": 99
+                },
+                {
+                    "number": 3,
+                    "title": "The Modern-Day Cupid (Part Two)",
+                    "start": 117
+                },
+                {
+                    "number": 4,
+                    "title": "Cupid vs. Cupid (Part One)",
+                    "start": 131
+                },
+                {
+                    "number": 5,
+                    "title": "Cupid vs. Cupid (Part Two)",
+                    "start": 147
+                },
+                {
+                    "number": 6,
+                    "title": "See You Later",
+                    "start": 165
+                },
+                {
+                    "number": 6.5,
+                    "title": "The Daily Life of Cupids (1)",
+                    "start": 193
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital",
+            "metafields": {
+                "rescale": {
+                    "mode": "height",
+                    "height": 3840
+                }
+            }
+        }
+    ],
+    "actions": [
+        {
+            "kind": "upscale",
+            "model": "I:\\Manga\\_Toolsets\\models\\mangajanai\\4x_MangaJaNai_1200p_V1_ESRGAN_70k_fp32_op20.onnx",
+            "rescale": {
+                "kernel": "catmull_rom",
+                "target": {
+                    "mode": "height",
+                    "height": 3600
+                }
+            },
+            "base_path": "final",
+            "batch_size": 32,
+            "tile_size": 128,
+            "device_id": 0,
+            "data_type": "fp16"
+        },
+        {
+            "kind": "change_cwd",
+            "directory": "_toned"
+        },
+        {
+            "kind": "change_cwd",
+            "directory": "_covers"
+        },
+        {
+            "kind": "upscale",
+            "model": "I:\\Manga\\_Toolsets\\models\\mangajanai\\2x_IllustrationJaNai_V3detail_FDAT_M_unshuffle_40k_fp16_fp32_op20.onnx",
+            "rescale": {
+                "kernel": "catmull_rom",
+                "target": {
+                    "mode": "height",
+                    "height": 3600
+                }
+            },
+            "base_path": "final",
+            "batch_size": 64,
+            "tile_size": 128,
+            "device_id": 0,
+            "data_type": "fp16"
+        },
+        {
+            "kind": "upscale",
+            "model": "I:\\Manga\\_Toolsets\\models\\mangajanai\\4x_IllustrationJaNai_V3detail_FDAT_XL_27k_bf16_fp32_op23_dynamo.onnx",
+            "rescale": {
+                "kernel": "catmull_rom",
+                "target": {
+                    "mode": "height",
+                    "height": 3600
+                }
+            },
+            "base_path": "final",
+            "batch_size": 64,
+            "tile_size": 128,
+            "device_id": 0,
+            "data_type": "bf16"
+        },
+        {
+            "kind": "move_color",
+            "base_path": "_color"
+        },
+        {
+            "kind": "color_jpegify",
+            "quality": 99,
+            "threads": 4,
+            "source_path": "_color",
+            "base_path": "final"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": true,
+            "limiter": ".png"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": false,
+            "limiter": ".jpg"
+        },
+        {
+            "kind": "tagging"
+        },
+        {
+            "kind": "rename"
+        },
+        {
+            "kind": "pack",
+            "compress_level": 7,
+            "output_mode": "cbz"
+        }
+    ]
+}

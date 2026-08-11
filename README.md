@@ -14,7 +14,7 @@ All my release use one of the following tag:
 
 ## Requirements
 - Python 3.10+
-- imagemagick (for `spreads join` and `spreads split` command)
+- imagemagick (for `spreads join` command)
 - exiftool (for `releases` and `tag`, optional)
 - pingo (for `releases` and `optimize`, optional)
 
@@ -466,14 +466,15 @@ Options:
   -f, --format [auto|png|jpg]  The format of the output image, auto will
                                detect the format from the input images
                                [default: auto]
-  -me, --magick-exec TEXT      Path to the magick executable  [default:
-                               magick]
+  -t, --threads INTEGER        The number of threads to use for processing
+                               [default: half CPU count]
   -h, --help                   Show this message and exit.
 ```
 
 `--quality`, the output quality (mainly used as jpg export)<br />
 `--reverse`, reverse the order of the spread (recommended for manga/RTL layout)<br />
 `--format`, the output format that should be used, default to `auto` that will determine the output format from the input image.
+`--threads`, the number of threads used to split spreads with Pillow.
 
 The filename should have the minimum format like this: `pXXX-YYY`<br />
 The prefix `p` is important to differentiate it from any other text in the filename.<br />

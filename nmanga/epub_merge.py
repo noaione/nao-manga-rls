@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from defusedxml import ElementTree as ET  # noqa: N817
+from defusedxml import ElementTree as ET  # ruff: ignore[camelcase-imported-as-acronym]
 
 from .epub_render import find_root_file_path, resolve_epub_href
 

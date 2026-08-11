@@ -24,5 +24,12 @@
     },
     "ruff.format.backend": "uv",
     "ruff.format.preview": true,
-    "ruff.configurationPreference": "filesystemFirst"
+    "ruff.configurationPreference": "filesystemFirst",
+    "python.analysis.ignore": [
+        "**\\Python310\\**",
+        "**\\Python311\\**",
+        "**\\Python312\\**",
+        "**\\Python313\\**",
+        "**\\Python314\\**",
+    ]
 }

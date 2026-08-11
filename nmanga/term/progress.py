@@ -252,7 +252,7 @@ class IterationSpeedColumn(ProgressColumn):
             return Text("0.00it/s", style="progress.percentage")
         unit, suffix = pick_unit_and_suffix(
             int(speed),
-            ["", "×10³", "×10⁶", "×10⁹", "×10¹²"],  # noqa: RUF001
+            ["", "×10³", "×10⁶", "×10⁹", "×10¹²"],  # ruff: ignore[ambiguous-unicode-character-string]
             1000,
         )
         data_speed = speed / unit

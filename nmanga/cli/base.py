@@ -39,7 +39,7 @@ from rich.text import Text
 from rich_click.rich_click_theme import RichClickTheme
 
 from .. import term
-from ..common import RegexCollection as _RegexCollection  # noqa: F401, RUF100
+from ..common import RegexCollection as _RegexCollection
 
 if TYPE_CHECKING:
     from click.parser import _Option, _OptionParser, _ParsingState
@@ -103,7 +103,7 @@ def _find_exec_path(
     for path in path_env.split(os.pathsep):
         path = path.strip('"')
         for exec in exec_name:
-            exec_path = os.path.join(path, exec)  # noqa: PTH118
+            exec_path = os.path.join(path, exec)  # ruff: ignore[os-path-join]
             exec_cmd = [exec_path]
             for test_cmd in test_cmd_list:
                 exec_cmd.append(test_cmd)
@@ -222,12 +222,12 @@ class WithDeprecatedOption(click.RichOption):
             if "-nu" in the_theme:
                 return ("(", ")"), "Deprecated"
             elif "-robo" in the_theme:
-                return ("❮", "❯"), "deprecated"  # noqa: RUF001
+                return ("❮", "❯"), "deprecated"  # ruff: ignore[ambiguous-unicode-character-string]
         elif isinstance(the_theme, RichClickTheme):
             if "nu" in the_theme.name:
                 return ("(", ")"), "dim blue"
             elif "robo" in the_theme.name:
-                return ("❮", "❯"), "dim blue"  # noqa: RUF001
+                return ("❮", "❯"), "dim blue"  # ruff: ignore[ambiguous-unicode-character-string]
         return ("[", "]"), "dim blue"
 
     def get_rich_help(self, ctx: click.RichContext, formatter: click.RichHelpFormatter) -> Columns:
@@ -362,12 +362,12 @@ class WithMutuallyExclusiveOption(click.RichOption):
             if "-nu" in the_theme:
                 return ("(", ")"), "Mutually exclusive"
             elif "-robo" in the_theme:
-                return ("❮", "❯"), "mutually exclusive"  # noqa: RUF001
+                return ("❮", "❯"), "mutually exclusive"  # ruff: ignore[ambiguous-unicode-character-string]
         elif isinstance(the_theme, RichClickTheme):
             if "nu" in the_theme.name:
                 return ("(", ")"), "yellow"
             elif "robo" in the_theme.name:
-                return ("❮", "❯"), "yellow"  # noqa: RUF001
+                return ("❮", "❯"), "yellow"  # ruff: ignore[ambiguous-unicode-character-string]
         return ("[", "]"), "yellow"
 
     def get_rich_help(self, ctx: click.RichContext, formatter: click.RichHelpFormatter) -> Columns:

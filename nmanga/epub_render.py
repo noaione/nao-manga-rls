@@ -35,7 +35,7 @@ from urllib.parse import unquote, urldefrag, urlparse, urlsplit
 from urllib.request import url2pathname
 
 from bs4 import BeautifulSoup
-from defusedxml import ElementTree as ET  # noqa: N817
+from defusedxml import ElementTree as ET  # ruff: ignore[camelcase-imported-as-acronym]
 from PIL import Image
 
 if TYPE_CHECKING:

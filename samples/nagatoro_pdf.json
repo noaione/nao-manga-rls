@@ -1,0 +1,1588 @@
+{
+    "$schema": "https://raw.githubusercontent.com/noaione/nao-manga-rls/refs/heads/master/orchestrator.jsonschema",
+    "title": "Don't Toy With Me, Miss Nagatoro",
+    "publisher": "Vertical Comics",
+    "credit": "nao",
+    "email": "noaione@protonmail.ch",
+    "bracket_type": "round",
+    "base_path": "source",
+    "volumes": [
+        {
+            "path": "v01",
+            "number": 1,
+            "year": 2019,
+            "spreads": [],
+            "colors": [0, 161],
+            "meta_naming": [
+                {
+                    "page": [0, 161],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 159,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": 160,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 1,
+                    "start": 0,
+                    "title": "Senpai, You're Kinda..."
+                },
+                {
+                    "number": 2,
+                    "start": 29,
+                    "title": "Observing Senpai is Fun... ♪"
+                },
+                {
+                    "number": 3,
+                    "start": 51,
+                    "title": "Senpai, Don't You Get Angry"
+                },
+                {
+                    "number": 4,
+                    "start": 71,
+                    "title": "Senpai's Wish Just Came True!!"
+                },
+                {
+                    "number": 5,
+                    "start": 87,
+                    "title": "Senpai, Please Brush Your Teeth"
+                },
+                {
+                    "number": 6,
+                    "start": 101,
+                    "title": "'Sup, Senpai!"
+                },
+                {
+                    "number": 7,
+                    "start": 119,
+                    "title": "Senpai, You're Still Soapy..."
+                },
+                {
+                    "number": 8,
+                    "start": 127,
+                    "title": "Senpai Needs a Little More..."
+                },
+                {
+                    "number": 8.5,
+                    "start": 147,
+                    "title": "Did Someone Give Senpai Chocolate..."
+                },
+                {
+                    "number": 8.6,
+                    "start": 151,
+                    "title": "I'm Being Defiled by Senpai~♥"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v02",
+            "number": 2,
+            "year": 2020,
+            "spreads": [],
+            "colors": [0, 145],
+            "meta_naming": [
+                {
+                    "page": [0, 145],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 143,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": 144,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 9,
+                    "start": 0,
+                    "title": "You're Too Gullible, Senpai~♥"
+                },
+                {
+                    "number": 10,
+                    "start": 21,
+                    "title": "Come On, Senpai! Fight Back!"
+                },
+                {
+                    "number": 11,
+                    "start": 37,
+                    "title": "Senpai! Come Here~!"
+                },
+                {
+                    "number": 12,
+                    "start": 57,
+                    "title": "Senpai, Let's Play a Game!"
+                },
+                {
+                    "number": 12.5,
+                    "start": 69,
+                    "title": "Practice Makes Perfect, Senpai!"
+                },
+                {
+                    "number": 13,
+                    "start": 83,
+                    "title": "Senpai's Afraid!"
+                },
+                {
+                    "number": 14,
+                    "start": 93,
+                    "title": "No, You Drew This, Senpai!"
+                },
+                {
+                    "number": 14.5,
+                    "start": 113,
+                    "title": "Senpai, I'm Ready Now!"
+                },
+                {
+                    "number": 14.6,
+                    "start": 127,
+                    "title": "See ya, Sen-pai ♥"
+                },
+                {
+                    "number": 14.7,
+                    "start": 131,
+                    "title": "Senpai, Move Your Hand a Bit Lower..."
+                },
+                {
+                    "number": 14.8,
+                    "start": 135,
+                    "title": "I Bet You're Sensitive, Senpai~♥"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v03",
+            "number": 3,
+            "year": 2020,
+            "spreads": [],
+            "colors": [0, 161],
+            "meta_naming": [
+                {
+                    "page": [0, 161],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 159,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": 160,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 15,
+                    "start": 0,
+                    "title": "Senpai, Your Arms Are So Skinny!!"
+                },
+                {
+                    "number": 16,
+                    "start": 15,
+                    "title": "If We Buzz That Fluff, Senpai"
+                },
+                {
+                    "number": 17,
+                    "start": 35,
+                    "title": "Say, Senpai"
+                },
+                {
+                    "number": 18,
+                    "start": 49,
+                    "title": "Let's Do It Again Sometime, Senpai"
+                },
+                {
+                    "number": 19,
+                    "start": 69,
+                    "title": "Senpai, You Creeep! ♥"
+                },
+                {
+                    "number": 20,
+                    "start": 85,
+                    "title": "Thanks, Senpai..."
+                },
+                {
+                    "number": 21,
+                    "start": 101,
+                    "title": "Thanks for the Treat, Senpai!!"
+                },
+                {
+                    "number": 22,
+                    "start": 113,
+                    "title": "Senpai! Let's Go to the Beach!!"
+                },
+                {
+                    "number": 23,
+                    "start": 131,
+                    "title": "I'll Rub It in for You, Senpai ♥"
+                },
+                {
+                    "number": 23.5,
+                    "start": 155,
+                    "title": "What Do Ya Think, Senpai! Check These Hip Moves!!"
+                },
+                {
+                    "number": 23.6,
+                    "start": 157,
+                    "title": "I'll Boost Your Spirits, Senpai ♥"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v04",
+            "number": 4,
+            "year": 2020,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 143,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": 144,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 24,
+                    "start": 0,
+                    "title": "Senpai, Why Don't We Go to the Festival"
+                },
+                {
+                    "number": 25,
+                    "start": 19,
+                    "title": "Senpai, Please Don't Drag Me Down"
+                },
+                {
+                    "number": 26,
+                    "start": 33,
+                    "title": "This Is Like a Date, Isn't It, Senpai ♥"
+                },
+                {
+                    "number": 26.5,
+                    "start": 53,
+                    "title": "That's Right, Huh, Senpai"
+                },
+                {
+                    "number": 27,
+                    "start": 59,
+                    "title": "Let's Leave, Senpai"
+                },
+                {
+                    "number": 28,
+                    "start": 75,
+                    "title": "Stay Still, Paisen!"
+                },
+                {
+                    "number": 29,
+                    "start": 85,
+                    "title": "Let's Do Rock-Paper-Scissors, Senpai!!"
+                },
+                {
+                    "number": 30,
+                    "start": 101,
+                    "title": "I Saw You, Senpai..."
+                },
+                {
+                    "number": 30.5,
+                    "start": 117,
+                    "title": "Senpai, Your Body Seems So Stiff"
+                },
+                {
+                    "number": 30.6,
+                    "start": 127,
+                    "title": "Senpai, You're a Real Creep ♥"
+                },
+                {
+                    "number": 30.7,
+                    "start": 133,
+                    "title": "Senpai, Stand Up!! (1)"
+                },
+                {
+                    "number": 30.8,
+                    "start": 137,
+                    "title": "Senpai, Stand Up!! (2)"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v05",
+            "number": 5,
+            "year": 2021,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 157,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": [158, 159],
+                    "tag": "Advert"
+                },
+                {
+                    "page": 160,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 31,
+                    "start": 0,
+                    "title": "You Have No Sense of Adventure, Senpai"
+                },
+                {
+                    "number": 32,
+                    "start": 21,
+                    "title": "Senpai's a Closet Perv!!"
+                },
+                {
+                    "number": 33,
+                    "start": 41,
+                    "title": "Senpai, What's in Your Bento Lunch"
+                },
+                {
+                    "number": 34,
+                    "start": 59,
+                    "title": "As If a Creep Like Senpai Could Go on a Proper Date!!"
+                },
+                {
+                    "number": 34.5,
+                    "start": 79,
+                    "title": "It May Be More Fun Than You'd Expect, Ex-Senpai ♥"
+                },
+                {
+                    "number": 35,
+                    "start": 89,
+                    "title": "We'd End Up Becoming Your Senpais, Right, Paisen"
+                },
+                {
+                    "number": 36,
+                    "start": 99,
+                    "title": "Senpai, You Made Me Do This..."
+                },
+                {
+                    "number": 37,
+                    "start": 113,
+                    "title": "Senpai, You're Staring Off into Space"
+                },
+                {
+                    "number": 38,
+                    "start": 129,
+                    "title": "Let's Go for It, Senpai!!"
+                },
+                {
+                    "number": 38.5,
+                    "start": 147,
+                    "title": "Senpai, You've Gone Beet Red"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v06",
+            "number": 6,
+            "year": 2021,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 173,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": [174, 175],
+                    "tag": "Advert"
+                },
+                {
+                    "page": 176,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 39,
+                    "start": 0,
+                    "title": "Whadda You Think of It, Senpai?"
+                },
+                {
+                    "number": 40,
+                    "start": 23,
+                    "title": "Come On! Just Admit You Want It, Senpai! ♥"
+                },
+                {
+                    "number": 41,
+                    "start": 43,
+                    "title": "A-Are You All Right, Senpai"
+                },
+                {
+                    "number": 42,
+                    "start": 63,
+                    "title": "Senpai, You're Being Naïve About This Contest"
+                },
+                {
+                    "number": 43,
+                    "start": 83,
+                    "title": "Senpai, You Can Put Up a Good Fight!!"
+                },
+                {
+                    "number": 44,
+                    "start": 105,
+                    "title": "Toro-Cat Needs to Do Better Than That"
+                },
+                {
+                    "number": 45,
+                    "start": 123,
+                    "title": "Has Spring Finally Come for Senpai, The Unpopular Lone Louse!"
+                },
+                {
+                    "number": 46,
+                    "start": 143,
+                    "title": "She Said Something About Love, Didn't She, Senpai"
+                },
+                {
+                    "number": 46.5,
+                    "start": 163,
+                    "title": "Senpai! ♥ Whadda You Think About This Post"
+                },
+                {
+                    "number": 46.6,
+                    "start": 168,
+                    "title": "Are You Okay, Senpai!"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v07",
+            "number": 7,
+            "year": 2021,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 159,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": 160,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 47,
+                    "start": 0,
+                    "title": "Since We're Good Pals 'n' All, Senpai"
+                },
+                {
+                    "number": 48,
+                    "start": 29,
+                    "title": "You're the Star of the Show, Senpai"
+                },
+                {
+                    "number": 49,
+                    "start": 47,
+                    "title": "Senpai, Are You Asking Me Out?"
+                },
+                {
+                    "number": 50,
+                    "start": 69,
+                    "title": "Please Take Me by the Hand and Teach Me, Senpai ♥"
+                },
+                {
+                    "number": 51,
+                    "start": 93,
+                    "title": "What Do You Want with My Senpai..."
+                },
+                {
+                    "number": 52,
+                    "start": 113,
+                    "title": "That's What We Get from Imagining Your Future Realistically, Senpai!"
+                },
+                {
+                    "number": 53,
+                    "start": 131,
+                    "title": "Senpai! Please Get Them on Me Quickly! ♥"
+                },
+                {
+                    "number": 53.5,
+                    "start": 151,
+                    "title": "We'll Have a Sketch Competition, Senpai"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v08",
+            "number": 8,
+            "year": 2021,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 183,
+                    "tag": "Afterword"
+                },
+                {
+                    "page": 184,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 54,
+                    "start": 0,
+                    "title": "So You Read Girls' Manga, Huh, Senpai"
+                },
+                {
+                    "number": 55,
+                    "start": 23,
+                    "title": "Well, Then Maybe I'll Just Have... a Lick of Yours, Senpai ♥"
+                },
+                {
+                    "number": 56,
+                    "start": 35,
+                    "title": "Senpai - What's Wrong..."
+                },
+                {
+                    "number": 57,
+                    "start": 53,
+                    "title": "Well Said! Especially for You, Paisen!!"
+                },
+                {
+                    "number": 58,
+                    "start": 77,
+                    "title": "Senpai... Did You... Overhear Us Just Then..."
+                },
+                {
+                    "number": 59,
+                    "start": 105,
+                    "title": "Come on in, Senpai-kun! ♥"
+                },
+                {
+                    "number": 60,
+                    "start": 131,
+                    "title": "Senpai, Umm... Thanks... For Paying Me a Visit"
+                },
+                {
+                    "number": 61,
+                    "start": 147,
+                    "title": "Senpai... What Were You Talking About With My Sister..."
+                },
+                {
+                    "number": 62,
+                    "start": 161,
+                    "title": "Senpai... So You Want to Know... My Name!!"
+                },
+                {
+                    "number": 62.5,
+                    "start": 175,
+                    "title": "You Like This Kind of Thing, Don't You, Senpai"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v09",
+            "number": 9,
+            "year": 2021,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 176,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 63,
+                    "start": 0,
+                    "title": "Morning, Senpai"
+                },
+                {
+                    "number": 64,
+                    "start": 21,
+                    "title": "So This Is Your Room, Huh, Senpai?"
+                },
+                {
+                    "number": 65,
+                    "start": 41,
+                    "title": "You Stay Here and Mind the House, Okay, Senpai ♥"
+                },
+                {
+                    "number": 66,
+                    "start": 57,
+                    "title": "Why, You! You of All People, Senpai!"
+                },
+                {
+                    "number": 67,
+                    "start": 79,
+                    "title": "I'm Not Telling You, Senpai! ♥"
+                },
+                {
+                    "number": 68,
+                    "start": 107,
+                    "title": "Well, Thanks for Treating Me, Senpai!"
+                },
+                {
+                    "number": 69,
+                    "start": 129,
+                    "title": "You Aren't Spending Christmas Alone, Are You, Senpai ♥"
+                },
+                {
+                    "number": 70,
+                    "start": 145,
+                    "title": "Well, I've Got Something for You Too, Senpai..."
+                },
+                {
+                    "number": 70.5,
+                    "start": 169,
+                    "title": "The Boy-less Crew — All-Night Karaoke of Fury"
+                },
+                {
+                    "number": 70.6,
+                    "start": 170,
+                    "title": "Christmas Presents"
+                },
+                {
+                    "number": 70.7,
+                    "start": 174,
+                    "title": "Ghost of the Pale Woman"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v10",
+            "number": 10,
+            "year": 2022,
+            "spreads": [
+                [98, 99]
+            ],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": [174, 175],
+                    "tag": "Advert"
+                },
+                {
+                    "page": 176,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 71,
+                    "start": 0,
+                    "title": "So Then, Senpai, What Will Your Fortune Be This Year"
+                },
+                {
+                    "number": 72,
+                    "start": 21,
+                    "title": "What'cha End Up Wishing for, Senpai"
+                },
+                {
+                    "number": 73,
+                    "start": 43,
+                    "title": "So You're Gonna Start Wearing Contacts, Aren't You!!"
+                },
+                {
+                    "number": 74,
+                    "start": 63,
+                    "title": "So That's What Your Ski Skills Look Like, Huh, Senpai"
+                },
+                {
+                    "number": 75,
+                    "start": 89,
+                    "title": "You Know, That Felt Pretty Good, Senpai ♥"
+                },
+                {
+                    "number": 76,
+                    "start": 111,
+                    "title": "Why Don't You Try Gettin' Into Shape, Paisen"
+                },
+                {
+                    "number": 77,
+                    "start": 129,
+                    "title": "I'm Pretty Sure You're Not Into This Stuff at All, Senpai!!"
+                },
+                {
+                    "number": 78,
+                    "start": 147,
+                    "title": "You Were Scared Outta Your Wits, Senpai!"
+                },
+                {
+                    "number": 78.5,
+                    "start": 167,
+                    "title": "The President's Drilling Paisen One-on-One"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v11",
+            "number": 11,
+            "year": 2022,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 79,
+                    "start": 0,
+                    "title": "What's Up, Senpai"
+                },
+                {
+                    "number": 80,
+                    "start": 27,
+                    "title": "Senpai, If You Can at Least Win One Match... That Is"
+                },
+                {
+                    "number": 81,
+                    "start": 47,
+                    "title": "Can't Believe I Got Lumped in With You, Senpai..."
+                },
+                {
+                    "number": 82,
+                    "start": 75,
+                    "title": "Well - What's Your Answer, Senpai"
+                },
+                {
+                    "number": 83,
+                    "start": 97,
+                    "title": "I Am Greatly Indebted to My Senior, Hachioji-Senpai"
+                },
+                {
+                    "number": 84,
+                    "start": 119,
+                    "title": "But Then You Met, And It Happened"
+                },
+                {
+                    "number": 85,
+                    "start": 141,
+                    "title": "Do You Miss Me Now That I'm Not Around, Senpai..."
+                },
+                {
+                    "number": 86,
+                    "start": 163,
+                    "title": "Senpai, Let's Go Together!!"
+                },
+                {
+                    "number": 86.5,
+                    "start": 186,
+                    "title": "Please Give Me a Massage, Senpai! ♥"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v12",
+            "number": 12,
+            "year": 2022,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 87,
+                    "title": "'Sup, Senpai",
+                    "start": 0
+                },
+                {
+                    "number": 88,
+                    "title": "This Is Just a Practice Date for You, Senpai! Got It!",
+                    "start": 27
+                },
+                {
+                    "number": 89,
+                    "title": "I'll Reveal Your Score for Today, Senpai!!",
+                    "start": 53
+                },
+                {
+                    "number": 90,
+                    "title": "Well, Then... Shall We Do Something That Would Be Appropriate for a Real Date",
+                    "start": 73
+                },
+                {
+                    "number": 91,
+                    "title": "What Do You Say, Senpai - Would You Like to Eat It",
+                    "start": 89
+                },
+                {
+                    "number": 92,
+                    "title": "I Want to Give Senpai a Real Surprise, After All...",
+                    "start": 111
+                },
+                {
+                    "number": 93,
+                    "title": "Senpai... You're in High Spirits, Aren't You",
+                    "start": 137
+                },
+                {
+                    "number": 94,
+                    "title": "Oh, Senpai, This Guy Is...",
+                    "start": 159
+                },
+                {
+                    "number": 94.5,
+                    "title": "Ah!! Volcano...!!",
+                    "start": 186
+                },
+                {
+                    "number": 94.6,
+                    "title": "It's Trick and Treat ♥",
+                    "start": 189
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v13",
+            "number": 13,
+            "year": 2022,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 95,
+                    "start": 0,
+                    "title": "Nagatoro... Hang in There!!"
+                },
+                {
+                    "number": 96,
+                    "start": 21,
+                    "title": "You Got a Problem With My Senpai"
+                },
+                {
+                    "number": 97,
+                    "start": 49,
+                    "title": "It's Totes Obvi You're Being Suspicious, Senpai ♥"
+                },
+                {
+                    "number": 98,
+                    "start": 69,
+                    "title": "But What About You, Senpai"
+                },
+                {
+                    "number": 99,
+                    "start": 93,
+                    "title": "Senpai... Are You Satisfied Now That You've Had Your Fill of T&A"
+                },
+                {
+                    "number": 100,
+                    "start": 119,
+                    "title": "If We Were in the Same Grade, Senpai..."
+                },
+                {
+                    "number": 101,
+                    "start": 145,
+                    "title": "Senpai, You Dumbass!!"
+                },
+                {
+                    "number": 102,
+                    "start": 167,
+                    "title": "If You Absolutely Insist, Senpai"
+                },
+                {
+                    "number": 102.5,
+                    "start": 188,
+                    "title": "All Right, My Turn Next"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v14",
+            "number": 14,
+            "year": 2023,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 103,
+                    "start": 0,
+                    "title": "Don't Just Stand There, Senpai!"
+                },
+                {
+                    "number": 104,
+                    "start": 23,
+                    "title": "What's Goin' On With You and Paisen!"
+                },
+                {
+                    "number": 105,
+                    "start": 49,
+                    "title": "You're Gonna Hang With Me, Senpai!"
+                },
+                {
+                    "number": 106,
+                    "start": 73,
+                    "title": "Now, Senpai! You Ready!"
+                },
+                {
+                    "number": 107,
+                    "start": 97,
+                    "title": "I... I Want...!!"
+                },
+                {
+                    "number": 108,
+                    "start": 119,
+                    "title": "Senpai!! Oh, Senpai!!"
+                },
+                {
+                    "number": 109,
+                    "start": 147,
+                    "title": "What're You Waiting for, Senpai!"
+                },
+                {
+                    "number": 109.5,
+                    "start": 172,
+                    "title": "Boob-Size Showdown!!"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v15",
+            "number": 15,
+            "year": 2023,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 4,
+                    "tag": "ToC"
+                },
+                {
+                    "page": [2, 3],
+                    "tag": "Characters"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 110,
+                    "start": 0,
+                    "title": "How About You and Nagatoro-Senpai..."
+                },
+                {
+                    "number": 111,
+                    "start": 31,
+                    "title": "Give Senpai Some Advice... Please!!"
+                },
+                {
+                    "number": 112,
+                    "start": 53,
+                    "title": "Which of Us Do You Want to Draw, Senpai"
+                },
+                {
+                    "number": 113,
+                    "start": 75,
+                    "title": "I Look Forward to Working with You, Senpai ♥ (1)"
+                },
+                {
+                    "number": 114,
+                    "start": 99,
+                    "title": "I Look Forward to Working with You, Senpai ♥ (2)"
+                },
+                {
+                    "number": 115,
+                    "start": 131,
+                    "title": "You Want Me to Kiss You, Don't You, Senpai ♥"
+                },
+                {
+                    "number": 116,
+                    "start": 157,
+                    "title": "Killer Move!! The Senpai Slayer!!"
+                },
+                {
+                    "number": 116.5,
+                    "start": 186,
+                    "title": "Would You... Care to Strip for Me..."
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v16",
+            "number": 16,
+            "year": 2024,
+            "spreads": [
+                [76, 77]
+            ],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 117,
+                    "start": 0,
+                    "title": "You're Doing a Training Camp, Too, Senpai?"
+                },
+                {
+                    "number": 118,
+                    "start": 25,
+                    "title": "Senpai! And The Bunnies... "
+                },
+                {
+                    "number": 119,
+                    "start": 45,
+                    "title": "Isn't That Right, Senpai-kun"
+                },
+                {
+                    "number": 120,
+                    "start": 69,
+                    "title": "I Wish Hayatchi Could've Come, Too"
+                },
+                {
+                    "number": 121,
+                    "start": 83,
+                    "title": "Only 'Cos You Cried and Begged, Senpai! ♥"
+                },
+                {
+                    "number": 122,
+                    "start": 117,
+                    "title": "Pretty Bold... for You, Senpai...!"
+                },
+                {
+                    "number": 123,
+                    "start": 139,
+                    "title": "...Hey, Senpai...!"
+                },
+                {
+                    "number": 124,
+                    "start": 163,
+                    "title": "I Accept Your Challenge!!"
+                },
+                {
+                    "number": 124.5,
+                    "start": 185,
+                    "title": "Liberate Your Heart and Mind...!!"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v17",
+            "number": 17,
+            "year": 2024,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 125,
+                    "start": 0,
+                    "title": "You Really Do Take Me by Surprise, Senpai!"
+                },
+                {
+                    "number": 126,
+                    "start": 31,
+                    "title": "Senpai! Now's Our Chance to Ride Down Those Rapids!"
+                },
+                {
+                    "number": 127,
+                    "start": 57,
+                    "title": "Here, Senpai, A Special Treat, Just for Today!"
+                },
+                {
+                    "number": 128,
+                    "start": 83,
+                    "title": "Thank You for Looking After My Senpai...!!"
+                },
+                {
+                    "number": 129,
+                    "start": 107,
+                    "title": "Not When Senpai’s Trying His Best, Too"
+                },
+                {
+                    "number": 130,
+                    "start": 135,
+                    "title": "I'm Curious to See What You're Like in This World, Senpai"
+                },
+                {
+                    "number": 131,
+                    "start": 159,
+                    "title": "Senpai, Waiiit!!"
+                },
+                {
+                    "number": 131.5,
+                    "start": 185,
+                    "title": "What I Need Is To Be... More Decisive!!"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v18",
+            "number": 18,
+            "year": 2025,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 132,
+                    "start": 0,
+                    "title": "Hey, Senpai... Remember What You Said the Other Day..."
+                },
+                {
+                    "number": 133,
+                    "start": 27,
+                    "title": "I Mean, I Get What You're Trying to Say, Senpai..."
+                },
+                {
+                    "number": 134,
+                    "start": 53,
+                    "title": "Senpai! H-How Did It Go!"
+                },
+                {
+                    "number": 135,
+                    "start": 79,
+                    "title": "Hold Your Head Up High, Hachioji!!"
+                },
+                {
+                    "number": 136,
+                    "start": 105,
+                    "title": "Go, Gamo, Go!!"
+                },
+                {
+                    "number": 137,
+                    "start": 137,
+                    "title": "It's Up to You, Now, Paisen!"
+                },
+                {
+                    "number": 138,
+                    "start": 161,
+                    "title": "How Very Like You, Senpai"
+                },
+                {
+                    "number": 138.5,
+                    "start": 187,
+                    "title": "Thank You, Naked Kamen!!"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v19",
+            "number": 19,
+            "year": 2025,
+            "spreads": [
+                [146, 147]
+            ],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": [0],
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                },
+                {
+                    "page": 192,
+                    "tag": "Colophon"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 139,
+                    "start": 0,
+                    "title": "I Unloaded Them All into You, Senpai!"
+                },
+                {
+                    "number": 140,
+                    "start": 27,
+                    "title": "But Then Came the Day That I Met You, Senpai"
+                },
+                {
+                    "number": 141,
+                    "start": 53,
+                    "title": "I'm Doing This for Myself and Senpai. That's My Fight!!"
+                },
+                {
+                    "number": 142,
+                    "start": 75,
+                    "title": "Senpai!! Whoa, Whoa, Whoa..."
+                },
+                {
+                    "number": 143,
+                    "start": 107,
+                    "title": "Go On. Say Something, Senpai..."
+                },
+                {
+                    "number": 144,
+                    "start": 133,
+                    "title": "I... I Never Thought You Would..."
+                },
+                {
+                    "number": 145,
+                    "start": 165,
+                    "title": "Y'know, Senpai, as a Couple..."
+                },
+                {
+                    "number": 145.5,
+                    "start": 186,
+                    "title": "I'll Have to Walk Home... Naked..."
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        },
+        {
+            "path": "v20",
+            "number": 20,
+            "year": 2025,
+            "spreads": [],
+            "colors": [0],
+            "meta_naming": [
+                {
+                    "page": 0,
+                    "tag": "Cover"
+                },
+                {
+                    "page": 2,
+                    "tag": "ToC"
+                }
+            ],
+            "chapters": [
+                {
+                    "number": 146,
+                    "start": 0,
+                    "title": "I Guess... I'll Just Wait and See What Senpai Does Next..."
+                },
+                {
+                    "number": 147,
+                    "start": 29,
+                    "title": "Senpai! Are You Free After Club Today!"
+                },
+                {
+                    "number": 148,
+                    "start": 55,
+                    "title": "Senpai, Are You and I... Strangers..."
+                },
+                {
+                    "number": 149,
+                    "start": 81,
+                    "title": "Senpai, Your Voice Has Gone Kinda High-Pitched, Don't You Think..."
+                },
+                {
+                    "number": 150,
+                    "start": 107,
+                    "title": "Senpai Was Being as Creepy as Always"
+                },
+                {
+                    "number": 151,
+                    "start": 137,
+                    "title": "Senpai!! You Can Do It, Senpai!!"
+                },
+                {
+                    "number": 152,
+                    "start": 169,
+                    "title": "My Senpai..."
+                },
+                {
+                    "number": 153,
+                    "start": 197,
+                    "title": "What's Your Dream, Senpai"
+                },
+                {
+                    "number": 154,
+                    "start": 231,
+                    "title": "Senpai!! Nagatoro!!"
+                },
+                {
+                    "number": 154.5,
+                    "start": 274,
+                    "title": "This Is Gonna Be Fun, Senpai! ♥"
+                }
+            ],
+            "revision": 1,
+            "quality": "HQ",
+            "pub_type": "digital"
+        }
+    ],
+    "actions": [
+        {
+            "kind": "spreads",
+            "direction": "rtl",
+            "output_fmt": "png",
+            "pillow": true,
+            "threads": 4
+        },
+        {
+            "kind": "optimize",
+            "aggresive": false,
+            "limiter": ".jpg"
+        },
+        {
+            "kind": "optimize",
+            "aggresive": true,
+            "limiter": ".png"
+        },
+        {
+            "kind": "tagging"
+        },
+        {
+            "kind": "rename"
+        },
+        {
+            "kind": "pack",
+            "compress_level": 7,
+            "output_mode": "cbz"
+        }
+    ]
+}

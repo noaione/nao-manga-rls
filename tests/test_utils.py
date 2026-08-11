@@ -36,11 +36,11 @@ class TestSecureFilename:
 
     def test_replacement(self):
         safe_fn = secure_filename("test: test")
-        assert safe_fn == "test： test"  # noqa: RUF001
+        assert safe_fn == "test： test"  # ruff: ignore[ambiguous-unicode-character-string]
 
     def test_emoji(self):
         safe_fn = secure_filename("test: test 🤔")
-        assert safe_fn == "test： test _"  # noqa: RUF001
+        assert safe_fn == "test： test _"  # ruff: ignore[ambiguous-unicode-character-string]
 
 
 class TestUnsecureFilename:
@@ -50,13 +50,13 @@ class TestUnsecureFilename:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="The following works only on POSIX")
     def test_replacement(self):
-        unsafe_fn = unsecure_filename("test： test")  # noqa: RUF001
+        unsafe_fn = unsecure_filename("test： test")  # ruff: ignore[ambiguous-unicode-character-string]
         assert unsafe_fn == "test: test"
 
     @pytest.mark.skipif(sys.platform == "win32", reason="The following works only on POSIX")
     def test_replacement_but_no_changes(self):
-        unsafe_fn = unsecure_filename("test／ test")  # noqa: RUF001
-        assert unsafe_fn == "test／ test"  # noqa: RUF001
+        unsafe_fn = unsecure_filename("test／ test")  # ruff: ignore[ambiguous-unicode-character-string]
+        assert unsafe_fn == "test／ test"  # ruff: ignore[ambiguous-unicode-character-string]
 
 
 class TestCleanTitle:

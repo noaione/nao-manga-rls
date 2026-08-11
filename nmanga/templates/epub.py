@@ -63,7 +63,7 @@ EPUB_CONTENT = """<?xml version='1.0' encoding='utf-8'?>
 
     </spine>
 </package>
-"""  # noqa
+"""  # ruff: ignore[line-too-long]
 
 EPUB_PAGE = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -79,7 +79,7 @@ EPUB_PAGE = """<?xml version="1.0" encoding="UTF-8"?>
         </svg>
     </body>
 </html>
-"""  # noqa
+"""  # ruff: ignore[line-too-long]
 
 EPUB_STYLES = """@charset "UTF-8";
 html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-size: 0; }

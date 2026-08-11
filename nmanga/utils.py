@@ -41,16 +41,16 @@ __all__ = (
 
 def secure_filename(fn: str):
     replacement = {
-        "/": "／",  # noqa: RUF001
-        ":": "：",  # noqa: RUF001
-        "<": "＜",  # noqa: RUF001
-        ">": "＞",  # noqa: RUF001
+        "/": "／",  # ruff: ignore[ambiguous-unicode-character-string]
+        ":": "：",  # ruff: ignore[ambiguous-unicode-character-string]
+        "<": "＜",  # ruff: ignore[ambiguous-unicode-character-string]
+        ">": "＞",  # ruff: ignore[ambiguous-unicode-character-string]
         '"': "”",
-        # "'": "’",  # noqa: RUF003
-        "\\": "＼",  # noqa: RUF001
-        "?": "？",  # noqa: RUF001
+        # "'": "’",  # ruff: ignore[ambiguous-unicode-character-comment]
+        "\\": "＼",  # ruff: ignore[ambiguous-unicode-character-string]
+        "?": "？",  # ruff: ignore[ambiguous-unicode-character-string]
         "*": "⋆",
-        "|": "｜",  # noqa: RUF001
+        "|": "｜",  # ruff: ignore[ambiguous-unicode-character-string]
         "#": "",
     }
     for k, v in replacement.items():
@@ -77,17 +77,17 @@ def unsecure_filename(fn: str):
     # Remap back to original.
     # Only works on Linux-based OS.
     replacement = {
-        "：": ":",  # noqa: RUF001
-        "＜": "<",  # noqa: RUF001
-        "＞": ">",  # noqa: RUF001
+        "：": ":",  # ruff: ignore[ambiguous-unicode-character-string]
+        "＜": "<",  # ruff: ignore[ambiguous-unicode-character-string]
+        "＞": ">",  # ruff: ignore[ambiguous-unicode-character-string]
         "”": '"',
         "“": '"',
-        "’": "'",  # noqa: RUF001
-        "‘": "'",  # noqa: RUF001
-        "＼": "\\",  # noqa: RUF001
-        "？": "?",  # noqa: RUF001
+        "’": "'",  # ruff: ignore[ambiguous-unicode-character-string]
+        "‘": "'",  # ruff: ignore[ambiguous-unicode-character-string]
+        "＼": "\\",  # ruff: ignore[ambiguous-unicode-character-string]
+        "？": "?",  # ruff: ignore[ambiguous-unicode-character-string]
         "⋆": "*",
-        "｜": "|",  # noqa: RUF001
+        "｜": "|",  # ruff: ignore[ambiguous-unicode-character-string]
     }
 
     if sys.platform == "win32":

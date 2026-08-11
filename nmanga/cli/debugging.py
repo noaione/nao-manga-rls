@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 def simulate_thread_progress(log_queue: term.MessageQueue, thread_id: int, task_name: str) -> None:
     console = term.with_thread_queue(log_queue)
-    sleep(random.uniform(0.1, 0.5))  # noqa: S311
+    sleep(random.uniform(0.1, 0.5))  # ruff: ignore[suspicious-non-cryptographic-random-usage]
     console.info(f"Thread {thread_id} starting task: {task_name}")
     logger.info(f"Logger {thread_id} starting task: {task_name}")
     sleep(0.5 + thread_id * 0.2)
@@ -53,7 +53,7 @@ def simulate_thread_progress_star(args: tuple[term.MessageQueue, int, str]) -> N
 def simulate_thread_progress_creation(args: tuple[term.MessageQueue, str]) -> None:
     log_queue, task_name = args
     console = term.with_thread_queue(log_queue)
-    sleep(random.uniform(0.1, 0.5))  # noqa: S311
+    sleep(random.uniform(0.1, 0.5))  # ruff: ignore[suspicious-non-cryptographic-random-usage]
 
     TOTAL_GEN = 50
     task_name_task = None

@@ -122,7 +122,7 @@ def _get_onnxruntime() -> "type[ort]":  # type: ignore
     # Preload TensorRT if available
     is_tensorrt_available = importutil.find_spec("tensorrt")
     if is_tensorrt_available is not None:
-        import tensorrt  # type: ignore # noqa: F401
+        import tensorrt  # type: ignore # ruff: ignore[unused-import]
 
     import onnxruntime as ort  # type: ignore
 
@@ -321,7 +321,7 @@ def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, int] | None:
 
 
 def _get_nvrtx_compiled_model_path(model_path: Path, data_dir: Path, cache_key: str) -> Path:
-    cache_hash = md5(cache_key.encode("utf-8")).hexdigest()  # noqa: S324
+    cache_hash = md5(cache_key.encode("utf-8")).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
     return data_dir / "rtx_compiled" / f"{model_path.stem}_{cache_hash}_ctx.onnx"
 
 
@@ -427,7 +427,7 @@ def prepare_model_runtime_builders(
     cache_onv_dir = data_dir / "openvino_cache"
     cache_onv_dir.mkdir(parents=True, exist_ok=True)
 
-    hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # noqa: S324
+    hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
     cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
 
     torch_info = get_torch_memory_limit_and_rtx(device_id)

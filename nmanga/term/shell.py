@@ -113,7 +113,7 @@ def install_completion_for_pwsh():
     cmd_name = "nmanga"
     # Get current shell path
     profile = (
-        sp.run(["pwsh", "-c", "echo", "$PROFILE"], shell=False, capture_output=True).stdout.decode("utf-8").strip()  # noqa: S607
+        sp.run(["pwsh", "-c", "echo", "$PROFILE"], shell=False, capture_output=True).stdout.decode("utf-8").strip()  # ruff: ignore[start-process-with-partial-path]
     )
     profile = Path(profile)
 
@@ -123,7 +123,7 @@ def install_completion_for_pwsh():
     cmd = "pwsh -c \"$env:{0} = 'pwsh_source'; {1} > '{2}'; $env:{0} = $null\"".format(
         completion_varname, cmd_name, str(completion_profile)
     )
-    sp.run(cmd, shell=True)  # noqa: S602
+    sp.run(cmd, shell=True)  # ruff: ignore[subprocess-popen-with-shell-equals-true]
 
     # read profile path
     if profile.exists():

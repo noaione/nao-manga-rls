@@ -107,7 +107,7 @@ class UnicodeZipFile(zipfile.ZipFile):
         file: str | PathLike | IO[bytes],
         mode: str = "r",
         compression: int = zipfile.ZIP_STORED,
-        allowZip64: bool = True,  # noqa: N803
+        allowZip64: bool = True,  # ruff: ignore[invalid-argument-name]
         compresslevel: int | None = None,
         *,
         strict_timestamps: bool = True,
@@ -546,4 +546,4 @@ def remove_folder_and_contents(base_folder: Path):
 
 
 def random_name(length: int = 8):
-    return "".join(random.choices(ascii_letters + digits, k=length))  # noqa: S311
+    return "".join(random.choices(ascii_letters + digits, k=length))  # ruff: ignore[suspicious-non-cryptographic-random-usage]

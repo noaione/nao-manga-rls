@@ -156,19 +156,19 @@ select = [
     "ASYNC"
 ]
 ignore = [
-    "E203",
-    "F405",
-    "F403",
-    "F722",
-    "N806",
-    "COM812",
-    "D400",  # first line should be period, most of my docstring will be LICENSE header so no thanks
-    "D202",
-    "D401",
+    "whitespace-before-punctuation",
+    "undefined-local-with-import-star-usage",
+    "undefined-local-with-import-star",
+    "forward-annotation-syntax-error",
+    "non-lowercase-variable-in-function",
+    "missing-trailing-comma",
+    "missing-trailing-period",  # first line should be period, most of my docstring will be LICENSE header so no thanks
+    "blank-line-after-function",
+    "non-imperative-mood",
     "CPY",
 ]
 preview = true
-extend-ignore = ["D", "S603", "S404", "T201"] # D -> Docstring missing for public function or method
+extend-ignore = ["D", "subprocess-without-shell-equals-true", "suspicious-subprocess-import", "print"] # D -> Docstring missing for public function or method
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -182,10 +182,10 @@ known-first-party = ["tests", "nmanga"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401", "F403", "I002", "D205"]
-"tests/*.py" = ["S101", "I002", "D"]  # assert statement used in pytest
-"pipelines/*" = ["T", "I", "S603", "D"]
-"tools/*.py" = ["D100", "T201", "I002"]
+"__init__.py" = ["unused-import", "undefined-local-with-import-star", "missing-required-import", "missing-blank-line-after-summary"]
+"tests/*.py" = ["assert", "missing-required-import", "D"]  # assert statement used in pytest
+"pipelines/*" = ["T", "I", "subprocess-without-shell-equals-true", "D"]
+"tools/*.py" = ["undocumented-public-module", "print", "missing-required-import"]
 
 [tool.pyright]
 exclude = [

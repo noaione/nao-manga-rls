@@ -52,7 +52,7 @@ __all__ = (
     "WorkerContext",
 )
 
-ActionType: TypeAlias = (  # noqa: RUF067
+ActionType: TypeAlias = (  # ruff: ignore[non-empty-init-module]
     ActionShiftName
     | ActionSpreads
     | ActionRename
@@ -71,7 +71,7 @@ ActionType: TypeAlias = (  # noqa: RUF067
     | ActionInterrupt
     | ActionChangeCwd
 )
-Actions = Annotated[ActionType, Field(discriminator="kind", description="The collection of all supported actions.")]  # noqa: RUF067
+Actions = Annotated[ActionType, Field(discriminator="kind", description="The collection of all supported actions.")]  # ruff: ignore[non-empty-init-module]
 """
 The list of all supported actions.
 """
