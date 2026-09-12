@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import ConfigDict, Field
 
-from ._base import ActionKind, BaseAction, WorkerContext
+from ._base import ActionKind, BaseAction, OrchestratorInterruptError, WorkerContext
 
 if TYPE_CHECKING:
     from ..models import OrchestratorConfig, VolumeConfig
@@ -97,13 +97,24 @@ class ActionInterrupt(BaseAction):
         """
         Run the action on a volume
 
+        This will "pause" the action chain in-place and ask the user whether they
+        want to interrupt (quit) or continue the chain.
+
+        When interrupting, the :attr:`whole_chain` field controls whether the whole
+        orchestrator run is stopped or only the current volume action chain.
+
         :param context: The worker context
         :param volume: The volume configuration
         :param orchestrator: The orchestrator configuration
         """
 
-        # TODO: Implement interrupt logic, in here
-        context.terminal.warning("Not implemented")
         if context.dry_run:
             context.terminal.info(f"- Whole Chain: {'Yes' if self.whole_chain else 'No'}")
             return
+
+        should_interrupt = context.terminal.confirm("Do you want to interrupt the action chain?")
+        if not should_interrupt:
+            context.terminal.info("Continuing the action chain...")
+            return
+
+        raise OrchestratorInterruptError(self.whole_chain)

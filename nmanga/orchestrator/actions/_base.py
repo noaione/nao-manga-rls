@@ -47,6 +47,7 @@ __all__ = (
     "ActionColorMixin",
     "ActionKind",
     "BaseAction",
+    "OrchestratorInterruptError",
     "ThreadedResult",
     "ToolsKind",
     "WorkerContext",
@@ -125,6 +126,22 @@ class WorkerContext(Context):
             self.detected_colors = []
         if page not in self.detected_colors:
             self.detected_colors.append(page)
+
+
+class OrchestratorInterruptError(Exception):
+    """
+    Signal raised by the interrupt action to stop the action chain early.
+
+    The orchestrator runner catches this exception and decides whether to stop
+    only the current volume action chain or the whole orchestrator run,
+    based on :attr:`whole_chain`.
+    """
+
+    def __init__(self, whole_chain: bool = False):
+        self.whole_chain = whole_chain
+        """Whether the whole volume chain should be stopped, not just the current volume"""
+
+        super().__init__("Action chain interrupted by user")
 
 
 class ActionKind(str, Enum):

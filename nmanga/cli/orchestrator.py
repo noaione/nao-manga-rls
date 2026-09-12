@@ -227,6 +227,7 @@ def orchestrator_runner(
     console.info(f"Detected packages: {', '.join(tested_pkg) if tested_pkg else 'None'}")
 
     input_dir = full_base / Path(config.base_path)
+    stop_whole_chain = False
     for volume in config.volumes:
         chapter_path = input_dir / Path(volume.path)
         if not chapter_path.exists():
@@ -249,6 +250,7 @@ def orchestrator_runner(
         )
 
         volume_start = time()
+        volume_interrupted = False
         for action_name, action in config.actions_maps.items():
             console.info(f" - Running action {action.kind.name}...")
             start_action = time()
@@ -257,15 +259,38 @@ def orchestrator_runner(
             context.set_skip_action(skip_action)
 
             context.terminal.set_space(3)
-            action.run(context, volume, config)
-            context.terminal.set_space(0)
+            try:
+                action.run(context, volume, config)
+            except OrchestratorInterruptError as interrupt:
+                volume_interrupted = True
+                stop_whole_chain = interrupt.whole_chain
+            finally:
+                context.terminal.set_space(0)
 
             end_action = time()
+            if volume_interrupted:
+                console.warning(
+                    f" - Action {action.kind.name} interrupted the chain in {end_action - start_action:.2f}s"
+                )
+                break
+
             console.info(f" - Finished action {action.kind.name} in {end_action - start_action:.2f}s")
             console.enter()
+
         volume_end = time()
-        console.info(f"Finished processing volume {volume.number_display} in {volume_end - volume_start:.2f}s")
-    console.info("Orchestrator finished all tasks.")
+        if volume_interrupted:
+            console.info(f"Interrupted volume {volume.number_display} after {volume_end - volume_start:.2f}s")
+        else:
+            console.info(f"Finished processing volume {volume.number_display} in {volume_end - volume_start:.2f}s")
+
+        if stop_whole_chain:
+            console.warning("Interrupting the whole action chain, stopping the orchestrator...")
+            break
+
+    if stop_whole_chain:
+        console.info("Orchestrator stopped early due to interrupt.")
+    else:
+        console.info("Orchestrator finished all tasks.")
 
 
 @orchestractor.command(

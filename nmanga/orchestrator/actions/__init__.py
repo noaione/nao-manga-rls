@@ -46,6 +46,7 @@ __all__ = (
     "ActionUpscale",
     "Actions",
     "BaseAction",
+    "OrchestratorInterruptError",
     "RescaleTarget",
     "ThreadedResult",
     "ToolsKind",

@@ -37,6 +37,7 @@ __all__ = (
     "CustomJSONEncoder",
     "MetadataNamingConfig",
     "OrchestratorConfig",
+    "OrchestratorInterruptError",
     "SSIMULACRA2CheckConfig",
     "SkipActionConfig",
     "SkipActionKind",
