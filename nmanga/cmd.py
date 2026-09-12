@@ -222,7 +222,7 @@ signal.signal(signal.SIGTERM, exit_143)
 )
 def main(ctx: click.Context, verbose: bool):
     """
-    Nmanga is a CLI tool for Processing pirated manga.
+    nmanga is a CLI tools to post/pre-process manga releases.
     """
     ctx.ensure_object(dict)
     ctx.obj["VERBOSE_MODE"] = verbose
