@@ -142,6 +142,7 @@ def _posterize_simple_wrapper_star(args: tuple[term.MessageQueue, Path, Path, in
     help="The minimum SSIM score for an image to be considered good",
 )
 @options.threads
+@options.recursive
 @time_program
 def posterize_simple(
     path_or_archive: Path,
@@ -150,6 +151,7 @@ def posterize_simple(
     use_ssimulacra2: bool,
     ssim_min: float,
     threads: int,
+    recursive: bool,
 ):
     """
     Posterize images in a directory to a specific bit depth using Pillow.
@@ -162,44 +164,70 @@ def posterize_simple(
             param_hint="path_or_archive",
         )
 
-    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
-    total_files = len(all_files)
-    console.info(f"Found {total_files} files in the directory.")
-    ssim_opt = SsimOption(enabled=use_ssimulacra2, minimum=ssim_min)
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to posterize.")
 
-    if ssim_opt:
-        core = get_vapoursynth().core
-        core.num_threads = 1
-        console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
-        missing_plugins = vs_find_missing_plugins(["com.lumen.vship", "com.vapoursynth.bestsource"])
+    if not candidates and recursive:
+        console.warning("No valid folders found to posterize.")
+        return 1
 
-        if missing_plugins:
-            console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
-            raise click.Abort()
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}")
+            continue
 
-    progress = console.make_progress()
-    task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
+        console.info(f"Found {total_files} files in the directory.")
+        ssim_opt = SsimOption(enabled=use_ssimulacra2, minimum=ssim_min)
 
-    dest_output.mkdir(parents=True, exist_ok=True)
-    results: list[PosterizedResult] = []
-    console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
-        for result in pool.imap_unordered(
-            _posterize_simple_wrapper_star,
-            [(log_q, img_path, dest_output, num_bits, ssim_opt) for img_path in all_files],
-        ):
-            results.append(result)
-            progress.update(task, advance=1)
+        if ssim_opt:
+            core = get_vapoursynth().core
+            core.num_threads = 1
+            console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
+            missing_plugins = vs_find_missing_plugins(["com.lumen.vship", "com.vapoursynth.bestsource"])
 
-    console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.", skip_total=True)
+            if missing_plugins:
+                console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
+                raise click.Abort()
 
-    posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
-    copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
+        progress = console.make_progress()
+        task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
 
-    if copied_count > 0:
-        console.info(f"Copied {copied_count} images without posterization.")
-    if posterized_count > 0:
-        console.info(f"Posterized {posterized_count} images.")
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
+
+        results: list[PosterizedResult] = []
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+            for result in pool.imap_unordered(
+                _posterize_simple_wrapper_star,
+                [(log_q, img_path, real_output, num_bits, ssim_opt) for img_path in all_files],
+            ):
+                results.append(result)
+                progress.update(task, advance=1)
+
+        console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.", skip_total=True)
+
+        posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
+
+        if copied_count > 0:
+            console.info(f"Copied {copied_count} images without posterization.")
+        if posterized_count > 0:
+            console.info(f"Posterized {posterized_count} images.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
 
 
 def _autoposterize_wrapper(
@@ -263,6 +291,7 @@ def _autoposterize_wrapper_star(args: tuple[term.MessageQueue, Path, Path, float
     help="Use palette mode for posterization instead of direct color mapping (may produce better results)",
 )
 @options.threads
+@options.recursive
 @time_program
 def auto_posterize(
     path_or_archive: Path,
@@ -270,6 +299,7 @@ def auto_posterize(
     threshold_pct: float,
     use_palette_mode: bool,
     threads: int,
+    recursive: bool,
 ):
     """
     Automatically analyze and posterize images in a directory to an optimal bit depth using Pillow.
@@ -288,32 +318,58 @@ def auto_posterize(
             param_hint="threshold_pct",
         )
 
-    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
-    total_files = len(all_files)
-    console.info(f"Found {total_files} files in the directory.")
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to autoposterize.")
 
-    progress = console.make_progress()
-    taks = progress.add_task("Auto-posterizing images...", finished_text="Auto-posterized images", total=total_files)
-    dest_output.mkdir(parents=True, exist_ok=True)
+    if not candidates and recursive:
+        console.warning("No valid folders found to autoposterize.")
+        return 1
 
-    results: list[PosterizedResult] = []
-    console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
-        for result in pool.imap_unordered(
-            _autoposterize_wrapper_star,
-            [(log_q, img_path, dest_output, threshold_pct, use_palette_mode) for img_path in all_files],
-        ):
-            results.append(result)
-            progress.update(taks, advance=1)
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
 
-    console.stop_progress(progress, f"Auto-posterized {total_files} images.")
-    posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
-    copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}")
+            continue
+        console.info(f"Found {total_files} files in the directory.")
 
-    if copied_count > 0:
-        console.info(f"Copied {copied_count} images without autoposterize.")
-    if posterized_count > 0:
-        console.info(f"Posterized {posterized_count} images.")
+        progress = console.make_progress()
+        taks = progress.add_task(
+            "Auto-posterizing images...", finished_text="Auto-posterized images", total=total_files
+        )
+
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
+
+        results: list[PosterizedResult] = []
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+            for result in pool.imap_unordered(
+                _autoposterize_wrapper_star,
+                [(log_q, img_path, real_output, threshold_pct, use_palette_mode) for img_path in all_files],
+            ):
+                results.append(result)
+                progress.update(taks, advance=1)
+
+        console.stop_progress(progress, f"Auto-posterized {total_files} images.")
+        posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
+
+        if copied_count > 0:
+            console.info(f"Copied {copied_count} images without autoposterize.")
+        if posterized_count > 0:
+            console.info(f"Posterized {posterized_count} images.")
 
 
 @click.command(
