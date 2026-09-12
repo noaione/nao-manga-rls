@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     class InferenceSessionWithScale(ort.InferenceSession):
         scale_factor: int | None
         use_halfp: bool
+        clamped_batch_size_warned: bool
 
 
 __all__ = (
@@ -230,6 +231,62 @@ def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: i
     out = session.run([output_name], {input_name: x})
     scale_height = np.array(out[0]).shape[-1]
     return scale_height // real_tile_size, is_float16
+
+
+def get_model_fixed_batch_size(model: "InferenceSessionWithScale") -> int | None:
+    """Get the batch size that is hardcoded into the model input, if there is one.
+
+    Some exports (the chaiNNer/spandrel ones, usually) declare a static batch dimension, most
+    commonly `1`. ONNX Runtime rejects any bigger batch on those models, so callers have to stay
+    within the declared batch size.
+
+    :param model: The ONNX Runtime inference session
+    :return: The fixed batch size, or `None` if the batch dimension is dynamic
+    """
+
+    input_shape = model.get_inputs()[0].shape
+    batch_dim = input_shape[0] if input_shape else None
+    if isinstance(batch_dim, int) and batch_dim > 0:
+        return batch_dim
+    return None
+
+
+def resolve_model_input_sizes(model: "InferenceSessionWithScale", *, batch_size: int, tile_size: int) -> int:
+    """Resolve the batch size that the model input actually accepts.
+
+    Models with fixed input dimensions reject everything else with an opaque `INVALID_ARGUMENT`
+    error, so the batch size is clamped to the declared one (warning once per session), while a
+    tile size that does not match a fixed spatial dimension is reported as a proper error.
+
+    :param model: The ONNX Runtime inference session
+    :param batch_size: The requested batch size
+    :param tile_size: The requested tile size
+    :return: The batch size that the model accepts
+    :raises ValueError: If the model declares a fixed tile size different from `tile_size`
+    """
+
+    input_shape = model.get_inputs()[0].shape
+    if len(input_shape) < 4:
+        return batch_size
+
+    fixed_batch_size = get_model_fixed_batch_size(model)
+    if fixed_batch_size is not None and fixed_batch_size < batch_size:
+        if not getattr(model, "clamped_batch_size_warned", False):
+            model.clamped_batch_size_warned = True
+            get_console().warning(
+                f"Model declares a fixed batch size of {fixed_batch_size}; "
+                f"clamping the requested batch size of {batch_size} down to {fixed_batch_size}."
+            )
+        batch_size = fixed_batch_size
+
+    fixed_spatial_dims = [dim for dim in input_shape[-2:] if isinstance(dim, int) and dim > 0]
+    if fixed_spatial_dims and any(dim != tile_size for dim in fixed_spatial_dims):
+        fixed_tile_size = "x".join(str(dim) for dim in fixed_spatial_dims)
+        raise ValueError(
+            f"The model only accepts a fixed tile size of {fixed_tile_size}, but {tile_size} was requested. "
+            f"Re-run with the tile size set to {fixed_tile_size}."
+        )
+    return batch_size
 
 
 def prepare_model_runtime(
@@ -680,6 +737,8 @@ def denoise_single_image(
         raise ValueError("Model scale factor is not set. Ensure the model was prepared correctly.")
     input_channel_count: int = model.get_inputs()[0].shape[1]
     is_grayscale = bool(input_channel_count == 1)
+    # Some models declare fixed input dimensions, only feed them what they accept.
+    batch_size = resolve_model_input_sizes(model, batch_size=batch_size, tile_size=tile_size)
 
     orig_img_mode = input_image.mode
     orig_img_palette = input_image.palette
@@ -838,6 +897,8 @@ def denoise_single_image_with_overlap(
         raise ValueError("Model scale factor is not set. Ensure the model was prepared correctly.")
     input_channel_count: int = model.get_inputs()[0].shape[1]
     is_grayscale = input_channel_count == 1
+    # Some models declare fixed input dimensions, only feed them what they accept.
+    batch_size = resolve_model_input_sizes(model, batch_size=batch_size, tile_size=tile_size)
 
     orig_img_mode = input_image.mode
     orig_img_palette = input_image.palette

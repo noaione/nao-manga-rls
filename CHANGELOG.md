@@ -359,3 +359,9 @@ Rewritten every thing as a module with `nmanga` namespace.
   - Alternatively, use `compress_level` in the `pack` orchestrator action
 - Move from standard `click` to `rich-click` for better CLI experience
 - Make threaded worker run function serially when threads is set to 1 to avoid overhead
+
+**Fixes**
+- `nmanga upscale-trt` and `nmanga denoise-trt` - Clamp the batch size down to the one hardcoded in the model
+  (e.g. an input shape of `[1, 3, height, width]`) instead of failing with an `INVALID_ARGUMENT` error
+- `nmanga upscale-trt` and `nmanga denoise-trt` - Report a proper error when the model declares a fixed tile size
+  that differs from the requested one
