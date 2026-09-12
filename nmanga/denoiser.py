@@ -26,6 +26,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import ctypes
+import importlib
 import json
 import logging
 import os
@@ -320,6 +321,40 @@ def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, int] | None:
         return None
 
 
+_TRT_RUNTIME_VERSION_MODULES: tuple[tuple[str, str], ...] = (
+    ("trt", "tensorrt"),
+    ("ep", "onnxruntime_ep_nv_tensorrt_rtx"),
+    ("ort", "onnxruntime"),
+)
+
+
+def _get_trt_runtime_version_tag() -> str:
+    """
+    Build a cache-key tag out of the TRT-RTX runtime component versions.
+
+    TensorRT compiles engines against a fixed engine serialization version and refuses to
+    deserialize anything produced by an incompatible runtime (the
+    ``stdVersionRead == kSERIALIZATION_VERSION`` failure). Folding the runtime versions into
+    the cache key makes sure a stale engine is rebuilt instead of being reused after an upgrade.
+
+    :return: A filesystem-safe version tag, or ``"unknown"`` if nothing could be detected.
+    """
+
+    versions: list[str] = []
+    for tag, module_name in _TRT_RUNTIME_VERSION_MODULES:
+        if importutil.find_spec(module_name) is None:
+            continue
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        module_version = getattr(module, "__version__", None)
+        versions.append(f"{tag}{module_version}" if module_version is not None else f"{tag}unknown")
+    if not versions:
+        return "unknown"
+    return "-".join(versions)
+
+
 def _get_nvrtx_compiled_model_path(model_path: Path, data_dir: Path, cache_key: str) -> Path:
     cache_hash = md5(cache_key.encode("utf-8")).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
     return data_dir / "rtx_compiled" / f"{model_path.stem}_{cache_hash}_ctx.onnx"
@@ -428,7 +463,8 @@ def prepare_model_runtime_builders(
     cache_onv_dir.mkdir(parents=True, exist_ok=True)
 
     hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
-    cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}"
+    runtime_version = _get_trt_runtime_version_tag()
+    cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}_{runtime_version}"
 
     torch_info = get_torch_memory_limit_and_rtx(device_id)
     memory_limit = int(torch_info[0] * 0.75) if torch_info else 2 * (1024**3)  # 2GB or 75% of GPU memory
