@@ -181,6 +181,8 @@ class ActionKind(str, Enum):
     """Convert color images to JPEG format with cjpegli"""
     COLOR_DETECT = "color_detect"
     """Detect color pages with ML-based model or Pillow"""
+    PAUSE = "pause"
+    """Pause the action chain until the user confirms to continue"""
     INTERRUPT = "interrupt"
     """Interrupt the action chain"""
     CHANGE_CWD = "change_cwd"

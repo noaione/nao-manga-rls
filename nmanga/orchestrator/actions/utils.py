@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 __all__ = (
     "ActionChangeCwd",
     "ActionInterrupt",
+    "ActionPause",
 )
 
 
@@ -118,3 +119,50 @@ class ActionInterrupt(BaseAction):
             return
 
         raise OrchestratorInterruptError(self.whole_chain)
+
+
+class ActionPause(BaseAction):
+    """
+    Action to pause the action chain
+
+    This will "pause" the action chain in-place and block until the user confirms
+    to continue. Unlike the interrupt action, this will never stop the processing.
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Pause Action",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    kind: Literal[ActionKind.PAUSE] = Field(ActionKind.PAUSE, title="Pause Action")
+    """The kind of action"""
+    message: str | None = Field(None, title="Pause Message")
+    """Optional message to show before pausing"""
+
+    def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
+        """
+        Run the action on a volume
+
+        This will "pause" the action chain in-place and block until the user confirms
+        to continue. This action never stops the chain, declining the confirmation
+        will just ask again.
+
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        """
+
+        if context.dry_run:
+            if self.message:
+                context.terminal.info(f"- Message: {self.message}")
+            context.terminal.info("- Action chain will pause until confirmed")
+            return
+
+        if self.message:
+            context.terminal.info(self.message)
+
+        # Block until the user confirms, this action never aborts the chain
+        while not context.terminal.confirm("Continue the action chain?"):
+            context.terminal.warning("Action chain is paused, confirm to continue...")

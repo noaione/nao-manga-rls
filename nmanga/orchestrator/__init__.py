@@ -24,6 +24,7 @@ __all__ = (
     "ActionMoveColor",
     "ActionOptimize",
     "ActionPack",
+    "ActionPause",
     "ActionPosterize",
     "ActionRename",
     "ActionRescale",

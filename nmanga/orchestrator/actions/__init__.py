@@ -37,6 +37,7 @@ __all__ = (
     "ActionMoveColor",
     "ActionOptimize",
     "ActionPack",
+    "ActionPause",
     "ActionPosterize",
     "ActionRename",
     "ActionRescale",
@@ -69,6 +70,7 @@ ActionType: TypeAlias = (  # ruff: ignore[non-empty-init-module]
     | ActionColorJpegify
     | ActionColorDetect
     | ActionPack
+    | ActionPause
     | ActionInterrupt
     | ActionChangeCwd
 )

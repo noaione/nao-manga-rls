@@ -757,6 +757,67 @@
             "title": "nmanga Orchestrator - Pack Action",
             "type": "object"
         },
+        "ActionPause": {
+            "additionalProperties": false,
+            "description": "Action to pause the action chain\n\nThis will \"pause\" the action chain in-place and block until the user confirms\nto continue. Unlike the interrupt action, this will never stop the processing.",
+            "properties": {
+                "conditions": {
+                    "anyOf": [
+                        {
+                            "discriminator": {
+                                "mapping": {
+                                    "and": "#/$defs/AndModel",
+                                    "condition": "#/$defs/ConditionModel",
+                                    "not": "#/$defs/NotModel",
+                                    "or": "#/$defs/OrModel"
+                                },
+                                "propertyName": "op"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ConditionModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/AndModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/OrModel"
+                                },
+                                {
+                                    "$ref": "#/$defs/NotModel"
+                                }
+                            ],
+                            "title": "Rule"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Conditions to run the action"
+                },
+                "kind": {
+                    "const": "pause",
+                    "default": "pause",
+                    "title": "Pause Action",
+                    "type": "string"
+                },
+                "message": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Pause Message"
+                }
+            },
+            "title": "nmanga Orchestrator - Pause Action",
+            "type": "object"
+        },
         "ActionPosterize": {
             "additionalProperties": false,
             "description": "Action to posterize all images in a volume with imagemagick or Pillow",
@@ -920,7 +981,7 @@
                     "title": "Title of the Series"
                 },
                 "volume_filename": {
-                    "default": false,
+                    "default": true,
                     "title": "Use Volume in Filename",
                     "type": "boolean"
                 }
@@ -2313,6 +2374,7 @@
                         "move_color": "#/$defs/ActionMoveColor",
                         "optimize": "#/$defs/ActionOptimize",
                         "pack": "#/$defs/ActionPack",
+                        "pause": "#/$defs/ActionPause",
                         "posterize": "#/$defs/ActionPosterize",
                         "rename": "#/$defs/ActionRename",
                         "rescale": "#/$defs/ActionRescale",
@@ -2368,6 +2430,9 @@
                     },
                     {
                         "$ref": "#/$defs/ActionPack"
+                    },
+                    {
+                        "$ref": "#/$defs/ActionPause"
                     },
                     {
                         "$ref": "#/$defs/ActionInterrupt"
