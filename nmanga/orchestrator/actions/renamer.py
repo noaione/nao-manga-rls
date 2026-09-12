@@ -138,7 +138,7 @@ class ActionRename(BaseAction):
     """The kind of action"""
     title: str | None = Field(None, title="Title of the Series")
     """Override title for the rename action"""
-    volume_filename: bool = Field(False, title="Use Volume in Filename")
+    volume_filename: bool = Field(True, title="Use Volume in Filename")
     """Use volume in filename, ignoring the volume number from the volume config"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
@@ -238,7 +238,7 @@ class ActionRename(BaseAction):
                 publication_type=volume.publication,
                 ripper_credit=orchestrator.credit,
                 bracket_type=orchestrator.bracket_type,
-                manga_volume=vol_actual,
+                manga_volume=vol_actual if self.volume_filename else volume.number_fallback,
                 extra_metadata=extra_name,
                 image_quality=volume_quality,
                 rls_revision=volume.revision,
