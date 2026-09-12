@@ -162,7 +162,7 @@ def lookup_nongray_images(
             console.info(f"Processing: {path_real}")
         all_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_real)]
         if not all_images:
-            console.info(f"No images found in {path_real}, skipping.")
+            console.warning(f"No images found in {path_real}, skipping.")
             continue
 
         real_output = dest_output
@@ -272,7 +272,7 @@ def lookup_color_images(
             console.info(f"Processing: {path_real}")
         all_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_real)]
         if not all_images:
-            console.info(f"No images found in {path_real}, skipping.")
+            console.warning(f"No images found in {path_real}, skipping.")
             continue
 
         real_output = dest_output
@@ -382,7 +382,7 @@ def lookup_broken_images(
             console.info(f"Processing: {path_real}")
         all_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_real)]
         if not all_images:
-            console.info(f"No images found in {path_real}, skipping.")
+            console.warning(f"No images found in {path_real}, skipping.")
             continue
 
         console.info(f"Using {threads} CPU threads for processing.")

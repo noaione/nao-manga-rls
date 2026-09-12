@@ -546,8 +546,11 @@ def autolevel2(
             console.info(f"Processing: {path_real}")
         all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
         total_files = len(all_files)
-        console.info(f"Found {total_files} files in the directory.")
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
 
+        console.info(f"Found {total_files} files in the directory.")
         full_config = Autolevel2Config(
             upper_limit=upper_limit,
             peak_offset=peak_offset,

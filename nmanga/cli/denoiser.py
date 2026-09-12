@@ -458,6 +458,9 @@ def denoiser_trt(
             console.info(f"Processing: {path_real}")
         all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
         total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
 
         real_output = dest_output
         if recursive:

@@ -204,6 +204,9 @@ def upscale_trt(
             console.info(f"Processing: {candidate}")
         all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(candidate)]
         total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {candidate}, skipping.")
+            continue
 
         real_output = dest_output
         if recursive:

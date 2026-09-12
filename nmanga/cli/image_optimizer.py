@@ -179,15 +179,14 @@ def image_jpegify(
         image_candidates: list[Path] = [
             img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(path_real)
         ]
+        total_images = len(image_candidates)
+        if total_images <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
 
         real_output = dest_output
         if recursive:
             real_output = dest_output / path_real.name
-
-        total_images = len(image_candidates)
-        if total_images == 0:
-            console.info(f"No images found in {path_real}, skipping.")
-            continue
 
         real_output.mkdir(parents=True, exist_ok=True)
         quality = max(0, min(100, jpeg_quality))
@@ -326,15 +325,14 @@ def image_jxlify(
         image_candidates: list[Path] = [
             img_path for img_path, _, _, _ in file_handler.collect_image_from_folder(path_real)
         ]
+        total_images = len(image_candidates)
+        if total_images <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
 
         real_output = dest_output
         if recursive:
             real_output = dest_output / path_real.name
-
-        total_images = len(image_candidates)
-        if total_images == 0:
-            console.info(f"No images found in {path_real}, skipping.")
-            continue
 
         real_output.mkdir(parents=True, exist_ok=True)
 
