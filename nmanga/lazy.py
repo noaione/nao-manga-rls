@@ -30,7 +30,9 @@ import functools
 
 __all__ = (
     "get_numpy",
+    "get_scipy_ndimage",
     "get_scipy_signal",
+    "get_vapoursynth",
 )
 
 
@@ -50,6 +52,16 @@ def get_scipy_signal():
         from scipy import signal  # type: ignore
 
         return signal
+    except ImportError as exc:
+        raise ImportError("scipy is required to do the following action. Please install scipy.") from exc
+
+
+@functools.lru_cache(maxsize=1)
+def get_scipy_ndimage():
+    try:
+        from scipy import ndimage  # type: ignore
+
+        return ndimage
     except ImportError as exc:
         raise ImportError("scipy is required to do the following action. Please install scipy.") from exc
 
