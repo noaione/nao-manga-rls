@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "OGSOV",
+    "DetectedColor",
     "detect_image_color",
     "detect_image_color_ogsov",
     "is_grayscale_palette",

@@ -29,13 +29,16 @@ from __future__ import annotations
 import shutil
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 
 import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
-from ..ogsov import detect_image_color, detect_image_color_ogsov
+from ..lazy import get_vapoursynth
+from ..ogsov import detect_image_color_ogsov
+from ..vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_find_missing_plugins, vs_prepare_image_bulk
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -219,30 +222,36 @@ def lookup_nongray_images(
     "color_model_path",
     type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
     help="The path to the color model file to use for our lookup.",
+    required=True,
 )
 @click.option(
-    "--fast",
-    "fast_lookup",
-    is_flag=True,
-    default=False,
-    help="Use faster image features vector computation, use more memory with similar accuracy",
+    "-m",
+    "--method",
+    "lookup_method",
+    type=click.Choice(["orig", "fast", "vs", "vs-vulkan"]),
+    help="The method to use for OGSOV lookup, orig and fast is the same with different algo, vs-* is VapourSynth",
+    default="fast",
 )
 @options.recursive
 @options.force
+@options.threads
 @time_program
 def lookup_color_images(
     path_or_archive: Path,
     dest_output: Path,
-    color_model_path: Path | None,
-    fast_lookup: bool,
+    color_model_path: Path,
+    lookup_method: Literal["orig", "fast", "vs", "vs-vulkan"],
     recursive: bool,
     force: bool,
+    threads: int,
 ):
     """
     Find color images inside a folder, then split them into a separate folder.
 
     We also support ML based approach if you provided a color model file.
     This can be more accurate rather than the naive approach.
+
+    Threads are only used in VapourSynth to make loading faster.
     """
 
     if not path_or_archive.is_dir():
@@ -265,6 +274,14 @@ def lookup_color_images(
         console.warning("No valid folders found to lookup.")
         return
 
+    if lookup_method == "vs" or lookup_method == "vs-vulkan":
+        console.info("Using VapourSynth for color lookup...")
+        vs_attach_logger(console)
+        missing_plugins = vs_find_missing_plugins(["xyz.n4o.ogsov", "xyz.n4o.imgseqs"])
+        if missing_plugins:
+            console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
+            raise click.Abort()
+
     dest_output.mkdir(parents=True, exist_ok=True)
 
     for path_real in candidates:
@@ -283,34 +300,68 @@ def lookup_color_images(
         task_moving = progress.add_task("Processing images...", finished_text="Processed images", total=len(all_images))
         found_img = 0
         grayscaled_img = 0
-        for img_path in all_images:
-            if color_model_path is not None:
-                img_bytes = img_path.read_bytes()
-                detected = detect_image_color_ogsov(img_bytes, weights_file=color_model_path, fast_method=fast_lookup)
-                del img_bytes
-            else:
-                img = Image.open(img_path)
-                detected = detect_image_color(img)
-                img.close()
+        if lookup_method.startswith("vs"):
+            core = get_vapoursynth().core
+            clip = vs_prepare_image_bulk(
+                all_images,
+                debug=console.debugged,
+                prefetch=threads,
+            )
 
-            if detected.is_color:
-                dest_file = real_output / img_path.name
-                if force and dest_file.exists():
-                    dest_file.unlink()
-                if force:
-                    shutil.move(img_path, dest_file)
-                else:
-                    shutil.copy2(img_path, dest_file)
-                found_img += 1
-            elif not detected.is_color and detected.should_convert:
-                # Check if this lossless image
-                if img_path.suffix.lower() in (".png", ".webp", ".bmp", ".tiff", ".tif"):
-                    # Convert to grayscale and save back to the same path
-                    with Image.open(img_path) as img:
-                        gray_img = img.convert("L")
-                        gray_img.save(img_path)
-                    grayscaled_img += 1
-            progress.update(task_moving, advance=1)
+            if lookup_method == "vs":
+                analyzed = core.ogsov.Analyze(clip)
+            else:
+                analyzed = core.ogsov.AnalyzeVk(core.std.GPUUpload(clip))
+
+            for n in range(analyzed.num_frames):
+                frame = analyzed.get_frame(n)
+                detected, img_path = vs_analyze_ogsov_frame(frame)
+                if detected.is_color:
+                    dest_file = real_output / img_path.name
+                    if force and dest_file.exists():
+                        dest_file.unlink()
+                    if force:
+                        shutil.move(img_path, dest_file)
+                    else:
+                        shutil.copy2(img_path, dest_file)
+                    found_img += 1
+                elif not detected.is_color and detected.should_convert:
+                    # Check if this lossless image
+                    if img_path.suffix.lower() in (".png", ".bmp", ".tiff", ".tif"):
+                        # Convert to grayscale and save back to the same path
+                        with Image.open(img_path) as img:
+                            gray_img = img.convert("L")
+                            gray_img.save(img_path)
+                        grayscaled_img += 1
+                progress.update(task_moving, advance=1)
+            del clip
+            del analyzed
+        else:
+            for img_path in all_images:
+                img_bytes = img_path.read_bytes()
+                detected = detect_image_color_ogsov(
+                    img_bytes, weights_file=color_model_path, fast_method=lookup_method == "fast"
+                )
+                del img_bytes
+
+                if detected.is_color:
+                    dest_file = real_output / img_path.name
+                    if force and dest_file.exists():
+                        dest_file.unlink()
+                    if force:
+                        shutil.move(img_path, dest_file)
+                    else:
+                        shutil.copy2(img_path, dest_file)
+                    found_img += 1
+                elif not detected.is_color and detected.should_convert:
+                    # Check if this lossless image
+                    if img_path.suffix.lower() in (".png", ".bmp", ".tiff", ".tif"):
+                        # Convert to grayscale and save back to the same path
+                        with Image.open(img_path) as img:
+                            gray_img = img.convert("L")
+                            gray_img.save(img_path)
+                        grayscaled_img += 1
+                progress.update(task_moving, advance=1)
 
         console.stop_progress(progress, f"Completed processing {path_real}")
         if found_img:

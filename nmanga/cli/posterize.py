@@ -45,7 +45,7 @@ from ..autolevel import (
 )
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
-from ..vapour import vs_find_missing_plugins, vs_prepare_image, vs_ssimulacra2
+from ..vapour import vs_attach_logger, vs_find_missing_plugins, vs_prepare_image, vs_ssimulacra2
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -177,6 +177,17 @@ def posterize_simple(
         console.warning("No valid folders found to posterize.")
         return 1
 
+    if use_ssimulacra2:
+        vs_attach_logger(console)
+        core = get_vapoursynth().core
+        core.num_threads = 1
+        console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
+        missing_plugins = vs_find_missing_plugins(["com.lumen.vship", "com.vapoursynth.bestsource"])
+
+        if missing_plugins:
+            console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
+            raise click.Abort()
+
     for path_real in candidates:
         if recursive:
             console.info(f"Processing: {path_real}")
@@ -188,16 +199,6 @@ def posterize_simple(
 
         console.info(f"Found {total_files} files in the directory.")
         ssim_opt = SsimOption(enabled=use_ssimulacra2, minimum=ssim_min)
-
-        if ssim_opt:
-            core = get_vapoursynth().core
-            core.num_threads = 1
-            console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
-            missing_plugins = vs_find_missing_plugins(["com.lumen.vship", "com.vapoursynth.bestsource"])
-
-            if missing_plugins:
-                console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
-                raise click.Abort()
 
         progress = console.make_progress()
         task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)

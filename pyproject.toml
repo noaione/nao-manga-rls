@@ -41,13 +41,14 @@ dependencies = [
     "click-pwsh==0.9.7",
     "beautifulsoup4>=4.15.0",
     "pikepdf==10.13.0.post1",
+    "natsort==8.4.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "ruff>=0.16.7",
+    "ruff>=0.16.8",
 ]
 autostuff = [
     "numpy>=2.5.3",
@@ -72,7 +73,9 @@ denoiser = [
     "winrt-windows-system>=3.2.1; sys_platform == 'win32'",
 ]
 vapoursynth = [
-    "vapoursynth==79"
+    "vapoursynth==80",
+    "vapoursynth-imageseqs==0.1.0",
+    "vsrepo"
 ]
 epub-render = ["playwright>=1.62.0"]
 

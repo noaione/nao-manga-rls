@@ -40,6 +40,7 @@ from typing import IO, Generator, TypeAlias
 
 import ftfy
 import py7zr
+from natsort import natsorted
 from unrar.cffi import rarfile
 
 from .utils import decode_or, encode_or
@@ -150,7 +151,7 @@ def is_image(file_name: str) -> bool:
 def collect_image_from_cbz(cbz_file: zipfile.ZipFile):
     all_contents = cbz_file.filelist.copy()
     valid_images = [x for x in all_contents if not x.is_dir() and is_image(x.filename)]
-    valid_images.sort(key=lambda x: Path(x.filename).name)
+    valid_images = natsorted(valid_images, key=lambda x: x.filename)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, cbz_file, total_count, YieldType.CBZ
@@ -159,7 +160,7 @@ def collect_image_from_cbz(cbz_file: zipfile.ZipFile):
 def collect_image_from_rar(rar_file: rarfile.RarFile):
     all_contents: list[rarfile.RarInfo] = rar_file.infolist()
     valid_images = [x for x in all_contents if not x.is_dir() and is_image(x.filename)]
-    valid_images.sort(key=lambda x: Path(x.filename).name)
+    valid_images = natsorted(valid_images, key=lambda x: x.filename)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, rar_file, total_count, YieldType.RAR
@@ -168,7 +169,7 @@ def collect_image_from_rar(rar_file: rarfile.RarFile):
 def collect_image_from_7z(sevenzip_file: py7zr.SevenZipFile):
     all_contents = sevenzip_file.list()
     valid_images = [x for x in all_contents if not x.is_directory and is_image(x.filename)]
-    valid_images.sort(key=lambda x: Path(x.filename).name)
+    valid_images = natsorted(valid_images, key=lambda x: x.filename)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, sevenzip_file, total_count, YieldType.SEVENZIP
@@ -177,7 +178,7 @@ def collect_image_from_7z(sevenzip_file: py7zr.SevenZipFile):
 def collect_image_from_tar(tararchive_file: tarfile.TarFile):
     all_contents = tararchive_file.getmembers()
     valid_images = [x for x in all_contents if not x.isdir() and is_image(x.name)]
-    valid_images.sort(key=lambda x: Path(x.name).name)
+    valid_images = natsorted(valid_images, key=lambda x: x.name)
     total_count = len(valid_images)
     for content in valid_images:
         yield content, tararchive_file, total_count, YieldType.TAR
@@ -186,7 +187,7 @@ def collect_image_from_tar(tararchive_file: tarfile.TarFile):
 def collect_image_from_folder(folder_path: Path):
     all_contents = list(folder_path.glob("*"))
     valid_images = [x for x in all_contents if is_image(x.name)]
-    valid_images.sort(key=lambda x: Path(x.name).name)
+    valid_images = natsorted(valid_images, key=lambda x: x.name)
     total_count = len(valid_images)
     for file in valid_images:
         yield file, folder_path, total_count, YieldType.FOLDER

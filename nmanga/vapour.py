@@ -28,15 +28,19 @@ from __future__ import annotations
 
 from functools import partial
 from os import PathLike
-from typing import TYPE_CHECKING, Any, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Sequence, cast
 
 from PIL import Image
 
 from .lazy import get_numpy, get_vapoursynth
+from .ogsov import DetectedColor
 
 if TYPE_CHECKING:
     import numpy as np
-    from vapoursynth import PresetVideoFormat, VideoFrame, VideoNode
+    from vapoursynth import MessageType, PresetVideoFormat, VideoFrame, VideoNode
+
+    from .term import Console
 
 
 def fill_frame_rgb24(n: int, f: "VideoFrame | list[VideoFrame]", *, array: "np.ndarray[Any]") -> "VideoFrame":
@@ -86,6 +90,25 @@ def get_pil_image_with_callback(img: Image.Image) -> tuple[partial["VideoFrame"]
             raise ValueError(f"Unsupported image mode: {img.mode}")
 
 
+def vs_attach_logger(console: "Console"):
+    if not console.debugged:
+        return
+
+    vs = get_vapoursynth()
+    type_to_str = {
+        vs.MESSAGE_TYPE_DEBUG: "DEBUG",
+        vs.MESSAGE_TYPE_INFORMATION: "INFO",
+        vs.MESSAGE_TYPE_WARNING: "WARNING",
+        vs.MESSAGE_TYPE_CRITICAL: "CRITICAL",
+        vs.MESSAGE_TYPE_FATAL: "FATAL",
+    }
+
+    def _log_message(msg_type: "MessageType", message: str):
+        console.log(f"[VapourSynth {type_to_str[msg_type]}]", message)
+
+    vs.core.add_log_handler(_log_message)
+
+
 def vs_prepare_image(img: str | PathLike | Image.Image) -> "VideoNode":
     vs = get_vapoursynth()
     core = vs.core
@@ -108,6 +131,43 @@ def vs_prepare_image(img: str | PathLike | Image.Image) -> "VideoNode":
     else:
         clip = core.bs.VideoSource(str(img))  # type: ignore
     return clip
+
+
+def vs_fix_odd_size_chain(n: int, *, source: "VideoNode", plain_rgb: "VideoNode") -> "VideoNode":
+    vs = get_vapoursynth()
+    frame = source.get_frame(n)  # this frame's format and size
+    right = frame.width % 2 if frame.format.subsampling_w else 0
+    bottom = frame.height % 2 if frame.format.subsampling_h else 0
+    if not right and not bottom:
+        return plain_rgb
+    even = vs.core.std.CropAbs(source, width=frame.width - right, height=frame.height - bottom)
+    rgb = vs.core.resize.Bicubic(even, format=vs.RGB24, matrix_in_s="470bg", range_in_s="limited")
+    return vs.core.std.AddBorders(rgb, right=right, bottom=bottom)
+
+
+def vs_prepare_image_bulk(images: Sequence[PathLike], *, debug: bool = False, prefetch: int = 6) -> "VideoNode":
+    vs = get_vapoursynth()
+    core = vs.core
+    source = core.imgseqs.Read(files=[str(path) for path in images], mismatch=True, prefetch=prefetch, debug=debug)
+    plain_rgb = core.resize.Bicubic(source, format=vs.RGB24, matrix_in_s="470bg", range_in_s="limited")
+    rgb = core.std.FrameEval(source, partial(vs_fix_odd_size_chain, source=source, plain_rgb=plain_rgb))
+    rgb = core.resize.Bicubic(rgb, format=vs.RGB24)  # FrameEval cannot promise a format
+    return rgb
+
+
+def vs_analyze_ogsov_frame(frame: "VideoFrame") -> tuple[DetectedColor, Path]:
+    props = frame.props
+    img_path = Path(str(props["ImgSeqPath"]))
+    confidence = round(cast(float, props["OGSOVConfidence"]))
+    is_color = props["OGSOVIsColor"] == 1
+    is_gray_already = str(props["ImgSeqOriginalColorType"]).upper().startswith("L")
+    reasoning = DetectedColor(
+        is_color,
+        confidence,
+        reason="ML-based detection via VapourSynth",
+        should_convert=not is_color and not is_gray_already,
+    )
+    return reasoning, img_path
 
 
 def vs_ssimulacra2(reference: "VideoNode", distorted: "VideoNode") -> float:
