@@ -9,6 +9,7 @@ dist/
 
 .coverage
 coverage.*
+pytest.xml
 .pytest_cache
 
 .DS_Store
