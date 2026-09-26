@@ -27,7 +27,12 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
-      
+
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libfontconfig1 libxkbcommon0
+
       - name: Lint with Ruff
         run: uv run ruff check .
       
@@ -36,6 +41,21 @@ jobs:
       
       - name: Run coverage report
         run: uv run coverage report
+
+      - name: Attach coverage report to the job summary
+        if: always()
+        run: |
+          {
+            echo "## Coverage report"
+            echo
+            echo "**Total coverage: $(uv run coverage report --format=total)%**"
+            echo
+            echo "<details><summary>Per-file coverage</summary>"
+            echo
+            uv run coverage report --format=markdown
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pytest coverage comment
         uses: MishaKav/pytest-coverage-comment@v1

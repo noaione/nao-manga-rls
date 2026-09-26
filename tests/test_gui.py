@@ -24,7 +24,7 @@ SOFTWARE.
 
 # Tests for the optional PySide6 manual split GUI.
 #
-# The whole module is skipped when PySide6 is not installed (it is an optional
+# The whole module is skipped when PySide6 cannot be imported (it is an optional
 # `gui` extra), and the widgets run against Qt's offscreen platform so no
 # display is needed.
 
@@ -37,13 +37,18 @@ from typing import Any, Generator, cast
 
 import pytest
 
-pytest.importorskip("PySide6")
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
-from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
+try:
+    from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDropEvent
+    from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
+except ImportError as error:
+    # Importing the package is not enough: even when PySide6 is installed, the Qt
+    # wheels dynamically load system libraries (``libEGL.so.1``, ``libGL.so.1``,
+    # ...) that a headless machine may not have. Skip instead of breaking
+    # collection for the rest of the suite.
+    pytest.skip(f"PySide6 is not usable: {error}", allow_module_level=True)
 
 from nmanga.chapter_split import SourcePage
 from nmanga.common import ChapterRange, format_page_numbers
