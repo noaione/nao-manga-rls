@@ -232,6 +232,14 @@ def lookup_nongray_images(
     help="The method to use for OGSOV lookup, orig and fast is the same with different algo, vs-* is VapourSynth",
     default="fast",
 )
+@click.option(
+    "-gr",
+    "--force-gray",
+    "force_gray",
+    is_flag=True,
+    default=False,
+    help="Force convert all images to grayscale for image that is detected as non-color and is not gray yet",
+)
 @options.recursive
 @options.force
 @options.threads
@@ -241,6 +249,7 @@ def lookup_color_images(
     dest_output: Path,
     color_model_path: Path,
     lookup_method: Literal["orig", "fast", "vs", "vs-vulkan"],
+    force_gray: bool,
     recursive: bool,
     force: bool,
     threads: int,
@@ -325,7 +334,7 @@ def lookup_color_images(
                     else:
                         shutil.copy2(img_path, dest_file)
                     found_img += 1
-                elif not detected.is_color and detected.should_convert:
+                elif not detected.is_color and detected.should_convert and force_gray:
                     # Check if this lossless image
                     if img_path.suffix.lower() in (".png", ".bmp", ".tiff", ".tif"):
                         # Convert to grayscale and save back to the same path
@@ -353,7 +362,7 @@ def lookup_color_images(
                     else:
                         shutil.copy2(img_path, dest_file)
                     found_img += 1
-                elif not detected.is_color and detected.should_convert:
+                elif not detected.is_color and detected.should_convert and force_gray:
                     # Check if this lossless image
                     if img_path.suffix.lower() in (".png", ".bmp", ".tiff", ".tif"):
                         # Convert to grayscale and save back to the same path
