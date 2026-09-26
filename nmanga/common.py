@@ -60,9 +60,11 @@ __all__ = (
     "lowest_or",
     "make_metadata_command",
     "optimize_images",
+    "parse_volume_number",
     "run_pingo_and_verify",
     "safe_int",
     "threaded_worker",
+    "validate_volume_number",
 )
 
 
@@ -229,12 +231,20 @@ def format_daiz_like_numbering(
 
 class ChapterRange:
     def __init__(
-        self, number: int | float, name: str | None = None, range: list[int] | None = None, is_single: bool = False
+        self,
+        number: int | float,
+        name: str | None = None,
+        range: list[int] | None = None,
+        is_single: bool = False,
+        *,
+        volume: VolumeNumberT | None = None,
     ):
         self.number = number
         self.name = name
         self.range: list[int] = range or []
         self.is_single = is_single
+        # Optional per-chapter volume, may be a tuple for omnibus ranges (e.g. ``(1, 2)``).
+        self.volume: VolumeNumberT | None = volume
 
     def __repr__(self):
         if isinstance(self.number, float):
@@ -252,7 +262,13 @@ class ChapterRange:
     def page_num_str(self) -> str:
         if self.is_single:
             return f"{self.range[0]:03d}-end"
-        return f"{self.range[0]:03d}-{self.range[-1]:03d}"
+
+        pages = sorted(set(self.range))
+        if pages == list(range(pages[0], pages[-1] + 1)):
+            return f"{pages[0]:03d}-{pages[-1]:03d}"
+
+        # Pages were picked by hand, so spell out the skipped ones as gaps.
+        return format_page_numbers(pages)
 
     @property
     def bnum(self):
@@ -271,6 +287,20 @@ class ChapterRange:
             return None
         _, f = str(self.number).split(".")
         return int(f)
+
+    @property
+    def has_volume(self) -> bool:
+        """Return True if this chapter range carries its own volume."""
+        return self.volume is not None
+
+    @property
+    def is_omnibus(self) -> bool:
+        """Return True if the chapter volume is an omnibus range (e.g. ``(1, 2)``)."""
+        return isinstance(self.volume, tuple)
+
+    def with_volume(self, volume: VolumeNumberT | None) -> ChapterRange:
+        """Return a copy of this chapter range with a different volume."""
+        return ChapterRange(self.number, self.name, list(self.range), self.is_single, volume=volume)
 
 
 def check_cbz_exist(base_path: Path, filename: str):
@@ -381,48 +411,225 @@ def int_or_float(value: str) -> int | float | None:
     return safe_int(value)
 
 
+def _parse_ch_segment(segment: str, *, open_ended: bool) -> tuple[list[int], bool]:
+    """
+    Parse a single ``x`` or ``x-y`` part of a chapter range expression.
+
+    Parameters
+    ----------
+    segment: :class:`str`
+        The part to parse, already stripped.
+    open_ended: :class:`bool`
+        Whether a bare page should be reported as open-ended.
+
+    Returns
+    -------
+    :class:`tuple` of (:class:`list` of :class:`int`, :class:`bool`)
+        The pages covered, and the open-ended flag.
+
+    Raises
+    ------
+    ValueError
+        If the part is not a page number, or a range ends before it starts.
+    """
+    if "-" not in segment:
+        page = safe_int(segment)
+        if page is None:
+            raise ValueError(f"Invalid page number {segment!r}")
+        return [page], open_ended
+
+    first, _, second = segment.partition("-")
+    start = safe_int(first.strip())
+    end = safe_int(second.strip())
+    if start is None or end is None:
+        raise ValueError(f"Invalid page range {segment!r}")
+    if end < start:
+        raise ValueError(f"Page range {segment!r} ends before it starts")
+    return list(range(start, end + 1)), False
+
+
 def parse_ch_ranges(data: str) -> tuple[list[int], bool]:
-    split_range = data.split("-")
-    if len(split_range) < 2:
-        return [int(data)], True
+    """
+    Parse a chapter range expression into the pages it covers.
 
-    first, second = split_range
-    return list(range(int(first), int(second) + 1)), False
+    Three forms are accepted:
+
+    - ``21``: page 21 to the end, reported as open-ended.
+    - ``1-20``: pages 1 through 20.
+    - ``1,5-20``: page 1 and pages 5 through 20, so pages 2 to 4 are skipped.
+
+    A comma means the pages were picked by hand, so a bare page inside a list is
+    only that page and never opens up to the end.
+
+    Parameters
+    ----------
+    data: :class:`str`
+        The expression to parse, e.g. ``"1,5-20"``.
+
+    Returns
+    -------
+    :class:`tuple` of (:class:`list` of :class:`int`, :class:`bool`)
+        The pages covered in the order they were written, and whether the
+        expression was the open-ended single page form.
+
+    Raises
+    ------
+    ValueError
+        If a part is not a page number, or a range ends before it starts.
+    """
+    segments = [segment.strip() for segment in data.split(",")]
+    if any(not segment for segment in segments):
+        raise ValueError(f"Invalid chapter range {data!r}: empty page or range")
+
+    if len(segments) == 1:
+        return _parse_ch_segment(segments[0], open_ended=True)
+
+    pages: list[int] = []
+    for segment in segments:
+        segment_pages, _ = _parse_ch_segment(segment, open_ended=False)
+        pages.extend(segment_pages)
+    return list(dict.fromkeys(pages)), False
 
 
-def validate_ch_ranges(current: str):
-    split_range = current.strip().split("-")
-    if len(split_range) < 2:
-        return safe_int(current) is not None
+def format_page_numbers(numbers: Iterable[int], *, limit: int | None = None) -> str:
+    """
+    Format page numbers, collapsing consecutive ones into ranges.
 
-    first, second = split_range
-    if not isinstance(second, str):  # pragma: no cover (this can't be entered anyway)
-        return False
+    Parameters
+    ----------
+    numbers: :class:`~collections.abc.Iterable` of :class:`int`
+        The page numbers to format, in any order; duplicates are ignored.
+    limit: :class:`int`, optional
+        Maximum number of entries to render. The rest is summarized as
+        ``… (+N more)``, which keeps a one-line status bar readable.
 
-    first = safe_int(first)
-    second = safe_int(second)
-    if first is None or second is None:
+    Returns
+    -------
+    :class:`str`
+        ``[3, 4, 5, 9]`` becomes ``"003-005, 009"``.
+    """
+    entries: list[str] = []
+    run: list[int] = []
+    for number in sorted(set(numbers)):
+        if run and number == run[-1] + 1:
+            run.append(number)
+            continue
+        if run:
+            entries.append(_format_page_run(run))
+        run = [number]
+    if run:
+        entries.append(_format_page_run(run))
+    if limit is not None and len(entries) > limit:
+        return ", ".join(entries[:limit]) + f", … (+{len(entries) - limit} more)"
+    return ", ".join(entries)
+
+
+def _format_page_run(run: list[int]) -> str:
+    """Format a run of consecutive page numbers as ``003`` or ``003-005``."""
+    if len(run) == 1:
+        return f"{run[0]:03d}"
+    return f"{run[0]:03d}-{run[-1]:03d}"
+
+
+def parse_volume_number(data: str) -> VolumeNumberT | None:
+    """
+    Parse a volume number input into either an int, a float, or an omnibus tuple.
+
+    Accepts a plain number (``1``, ``1.5``), an omnibus range (``1-2``), and both
+    of those with a leading ``v`` (``v01``, ``v01-02``) so it can round-trip the
+    output of :func:`format_volume_text`. Returns ``None`` when the input is
+    empty or not a valid volume number.
+
+    Examples
+    --------
+    >>> parse_volume_number("1")
+    1
+    >>> parse_volume_number("v01-02")
+    (1, 2)
+    >>> parse_volume_number("")
+    """
+    data = data.strip()
+    if data[:1] in ("v", "V"):
+        data = data[1:].strip()
+    if not data:
+        return None
+
+    if "-" in data:
+        first, _, second = data.partition("-")
+        start = int_or_float(first.strip())
+        end = int_or_float(second.strip())
+        if start is None or end is None or start == end:
+            return None
+        return (start, end)
+
+    return int_or_float(data)
+
+
+def validate_volume_number(current: str) -> bool:
+    """Return True if ``current`` is a parseable volume number (single or omnibus)."""
+    return parse_volume_number(current) is not None
+
+
+def validate_volume_number_or_empty(current: str) -> bool:
+    """Like :func:`validate_volume_number`, but also accepts an empty input."""
+    if not current.strip():
+        return True
+    return parse_volume_number(current) is not None
+
+
+def validate_ch_ranges(current: str) -> bool:
+    """Return True if ``current`` is a parseable chapter range expression."""
+    try:
+        parse_ch_ranges(current)
+    except ValueError:
         return False
     return True
 
 
 def inquire_chapter_ranges(
-    initial_prompt: str, continue_prompt: str, ask_title: bool = False
+    initial_prompt: str,
+    continue_prompt: str,
+    ask_title: bool = False,
+    ask_volume: bool = False,
+    default_volume: VolumeNumberT | None = None,
 ) -> list[ChapterRange]:  # pragma: no cover
+    """
+    Interactively collect chapter ranges.
+
+    When ``ask_volume`` is enabled the user is also asked for a volume for each
+    chapter range, which may be an omnibus range such as ``1-2``. Leaving the
+    prompt empty falls back to ``default_volume``.
+    """
     chapter_ranges: list[ChapterRange] = []
+    if default_volume is not None:
+        default_volume_text: str | None = format_volume_text(manga_volume=default_volume)
+    else:
+        default_volume_text = None
+
     while True:
         console.info(initial_prompt)
 
         ch_number = console.inquire("Chapter number", lambda y: int_or_float(y) is not None)
         ch_number = cast(int | float, int_or_float(ch_number))
 
-        ch_ranges = console.inquire("Chapter ranges (x-y or x)", validate_ch_ranges)
+        ch_ranges = console.inquire("Chapter ranges (x-y, x, or a comma list like 1,5-20)", validate_ch_ranges)
         actual_ranges, is_single = parse_ch_ranges(ch_ranges)
 
         ch_title: str | None = None
         if ask_title:
             ch_title = console.inquire("Chapter title", lambda y: len(y.strip()) > 0)
-        simple_range = ChapterRange(ch_number, ch_title, actual_ranges, is_single)
+
+        ch_volume: VolumeNumberT | None = default_volume
+        if ask_volume:
+            volume_input = console.inquire(
+                "Chapter volume (1, 1.5, or 1-2 for omnibus; empty for none)",
+                validate_volume_number_or_empty,
+                default=default_volume_text,
+            )
+            if volume_input:
+                ch_volume = parse_volume_number(volume_input)
+
+        simple_range = ChapterRange(ch_number, ch_title, actual_ranges, is_single, volume=ch_volume)
         chapter_ranges.append(simple_range)
 
         do_more = console.confirm(continue_prompt)

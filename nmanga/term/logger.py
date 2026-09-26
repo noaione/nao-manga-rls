@@ -371,7 +371,7 @@ class Console(ConsoleInterface):
         if not choices:
             raise ValueError("No choices provided")
         message = message or "Please choose an option"
-        console_choice = []
+        console_choice: list[str | None] = []
         any_cchoice = False
         for choice in choices:
             if isinstance(choice, ConsoleChoice):
@@ -384,7 +384,7 @@ class Console(ConsoleInterface):
             default_val = default.value
         else:
             default_val = default
-        answers = inquirer.list_input(message, choices=console_choice, default=default_val)
+        answers = cast(str, inquirer.list_input(message, choices=console_choice, default=default_val))
         if any_cchoice:
             return choices[console_choice.index(answers)]
         return answers
@@ -450,7 +450,7 @@ class Console(ConsoleInterface):
 
     def confirm(self, prompt: str | None = None) -> bool:
         prompt = prompt or "Are you sure?"
-        return inquirer.confirm(prompt, default=False)
+        return cast(bool, inquirer.confirm(prompt, default=False))
 
     def enter(self):
         self.console.print()

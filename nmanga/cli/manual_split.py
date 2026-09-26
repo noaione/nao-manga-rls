@@ -33,13 +33,12 @@ from typing import Pattern
 
 import rich_click as click
 
-from .. import exporter, file_handler, term, utils
+from .. import chapter_split, file_handler, term
+from .._ntypes import VolumeNumberT
+from ..chapter_split import ChapterSplitObserver, SplitReport
 from ..common import (
     ChapterRange,
-    PseudoChapterMatch,
-    check_cbz_exist,
-    create_chapter,
-    format_daiz_like_numbering,
+    format_volume_text,
     inquire_chapter_ranges,
     safe_int,
 )
@@ -50,35 +49,20 @@ from .base import NMangaCommandHandler
 console = term.get_console()
 
 
-def extract_page_num(
-    filename: str, custom_data: dict[str, int] | None = None, regex_data: Pattern[str] | None = None
-) -> list[int]:
-    # Remove until pXXX
-    if custom_data is None:
-        custom_data = {}
-    if regex_data is not None:
-        filename = re.sub(regex_data, r"\1-\2", filename)
-    for pg_match, pg_num in custom_data.items():
-        if pg_match in filename:
-            return [pg_num]
-    if filename.endswith("-"):
-        filename = filename[:-1]
-    try:
-        matching_part = re.match(r"(\d+)[-~](\d+)", filename)
-        if matching_part is None:
-            return [int(filename)]
-        first_part = matching_part.group(1)
-        second_part = matching_part.group(2)
-        return [int(first_part), int(second_part)]
-    except ValueError:
-        return [int(filename)]
+class _ConsoleSplitObserver(ChapterSplitObserver):
+    """Forward chapter split progress events to the terminal console."""
 
+    def on_chapter_start(self, chapter: str) -> None:
+        console.info(f"[+] Creating chapter: {chapter}")
 
-def coerce_number_page(number: int | float) -> str:
-    if isinstance(number, int):
-        return f"{number:03d}"
-    base, floating = str(number).split(".")
-    return f"{int(base):03d}.{floating}"
+    def on_chapter_finish(self, chapter: str, target: Path) -> None:
+        console.info(f"[+] Finishing chapter: {chapter}")
+
+    def on_chapter_skip(self, chapter: str) -> None:
+        console.warning(f"[?] Skipping chapter: {chapter}")
+
+    def on_page_unassigned(self, page: int, filename: str) -> None:
+        console.warning(f"Page {page} ({filename}) is not in any chapter ranges, skipping!")
 
 
 def _collect_custom_page():  # pragma: no cover
@@ -99,74 +83,56 @@ def _collect_custom_page():  # pragma: no cover
     return custom_data
 
 
-def _collect_archive_to_chapters(
-    target_path: Path,
-    archive_file: Path,
-    chapters_mapping: list[ChapterRange],
-    volume_num: int | float | None = None,
+def _default_output_dir(source: Path, volume_num: VolumeNumberT | None) -> Path:
+    """Derive the default output folder from the source path and its volume."""
+    parent_dir = source.parent
+    if volume_num is not None:
+        volume_text = format_volume_text(manga_volume=volume_num)
+        if volume_text is not None:
+            return parent_dir / volume_text
+    return parent_dir / "v00"
+
+
+def _run_split(
+    source: Path,
+    target_dir: Path,
+    chapters: list[ChapterRange],
+    volume_num: VolumeNumberT | None,
     custom_data: dict[str, int] | None = None,
     regex_data: Pattern[str] | None = None,
-):  # pragma: no cover
-    if custom_data is None:
-        custom_data = {}
-    console.info(f"Collecting chapters from {archive_file.name}")
+    overwrite: bool = False,
+) -> SplitReport:  # pragma: no cover
+    console.info(f"Splitting {source.name} into chapter archives...")
+    report = chapter_split.split_chapters(
+        source,
+        target_dir,
+        chapters,
+        volume=volume_num,
+        custom_data=custom_data,
+        regex_data=regex_data,
+        overwrite=overwrite,
+        observer=_ConsoleSplitObserver(),
+    )
 
-    collected_chapters: dict[str, exporter.CBZMangaExporter] = {}
-    skipped_chapters: list[str] = []
-    with file_handler.MangaArchive(archive_file) as archive:
-        for image, _ in archive:
-            filename = Path(image.filename)
-            page_numbers = extract_page_num(filename.stem, custom_data, regex_data)
-
-            first_page = page_numbers[0]
-            selected_chapter: ChapterRange | None = None
-            for chapter in chapters_mapping:
-                if chapter.is_single:
-                    if first_page >= chapter.range[0]:
-                        selected_chapter = chapter
-                        break
-                else:
-                    if first_page in chapter.range:
-                        selected_chapter = chapter
-                        break
-
-            if selected_chapter is None:
-                console.warning(f"Page {first_page} is not in any chapter ranges, skipping!")
-                continue
-
-            chapter_info = PseudoChapterMatch()
-            as_bnum = selected_chapter.bnum.split("x", 1)
-            chapter_info.set("ch", as_bnum[0])
-            if len(as_bnum) > 1:
-                chapter_info.set("ex", "x" + as_bnum[1])
-            if volume_num is not None:
-                chapter_info.set("vol", f"v{format_daiz_like_numbering(volume_num, 2, False, '.')}")
-            if selected_chapter.name is not None:
-                chapter_info.set("title", selected_chapter.name)
-
-            chapter_data = create_chapter(chapter_info)
-            if chapter_data in skipped_chapters:
-                continue
-
-            if chapter_data not in collected_chapters:
-                target_archive = utils.unsecure_filename(utils.secure_filename(chapter_data))
-                if check_cbz_exist(target_path, target_archive):
-                    console.warning(f"[?] Skipping chapter: {chapter_data}")
-                    skipped_chapters.append(chapter_data)
-                    continue
-                console.info(f"[+] Creating chapter: {chapter_data}")
-                collected_chapters[chapter_data] = exporter.CBZMangaExporter(target_archive, target_path)
-
-            collected_chapters[chapter_data].add_image(filename.name, archive.read(image))
-
-    for chapter, cbz_export in collected_chapters.items():
-        console.info(f"[+] Finishing chapter: {chapter}")
-        cbz_export.close()
     console.enter()
+    if report.pages_total < 1:
+        console.warning(f"No image found in {source}!")
+    elif report.created_chapters > 0:
+        console.success(f"[+] Created {report.created_chapters} chapter archive(s) in {target_dir}")
+    if report.skipped:
+        console.warning(f"[?] Skipped {len(report.skipped)} chapter(s) that already exist")
+    if report.has_unassigned:
+        console.warning(f"[!] {len(report.unassigned_pages)} page(s) were not assigned to any chapter")
+    return report
 
 
 def _handle_page_number_mode(
-    archive_file: Path, volume_num: int | None, custom_mode_enabled: bool = False
+    source: Path,
+    target_dir: Path,
+    volume_num: VolumeNumberT | None,
+    custom_mode_enabled: bool = False,
+    ask_volume: bool = False,
+    overwrite: bool = False,
 ):  # pragma: no cover
     console.info(f"Handling in page number mode (custom enabled? {custom_mode_enabled!r})")
 
@@ -179,23 +145,25 @@ def _handle_page_number_mode(
         "Please input information for each chapter",
         "Do you want to add another chapter?",
         has_ch_title,
+        ask_volume=ask_volume,
+        default_volume=volume_num,
     )
 
-    parent_dir = archive_file.parent
-    if volume_num is not None:
-        TARGET_DIR = parent_dir / f"v{volume_num:02d}"
-    else:
-        TARGET_DIR = parent_dir / "v00"
-
-    _collect_archive_to_chapters(TARGET_DIR, archive_file, split_chapter_ranges, volume_num, custom_data)
+    _run_split(source, target_dir, split_chapter_ranges, volume_num, custom_data, None, overwrite)
 
 
 def _handle_regex_mode(
-    archive_file: Path, volume_num: int | None, custom_mode_enabled: bool = False
+    source: Path,
+    target_dir: Path,
+    volume_num: VolumeNumberT | None,
+    custom_mode_enabled: bool = False,
+    ask_volume: bool = False,
+    overwrite: bool = False,
 ):  # pragma: no cover
     console.info(f"Handling in regex mode (custom enabled? {custom_mode_enabled!r})")
 
     default_regex = r"p(?:([\d]{1,4})(?:-)?([\d]{1,4})?).*"
+    console.info("Only needed when the page number is neither a bare number nor the standard `p001`/`p001-002` naming.")
     regex_data = console.inquire("Enter regex", default=default_regex)
 
     custom_data: dict[str, int] = {}
@@ -208,17 +176,11 @@ def _handle_regex_mode(
         "Please input information for each chapter",
         "Do you want to add another chapter?",
         has_ch_title,
+        ask_volume=ask_volume,
+        default_volume=volume_num,
     )
 
-    parent_dir = archive_file.parent
-    if volume_num is not None:
-        TARGET_DIR = parent_dir / f"v{volume_num:02d}"
-    else:
-        TARGET_DIR = parent_dir / "v00"
-
-    _collect_archive_to_chapters(
-        TARGET_DIR, archive_file, split_chapter_ranges, volume_num, custom_data, regex_compiled
-    )
+    _run_split(source, target_dir, split_chapter_ranges, volume_num, custom_data, regex_compiled, overwrite)
 
 
 @click.command(
@@ -226,35 +188,59 @@ def _handle_regex_mode(
     help="Manually split volumes into chapters using multiple modes",
     cls=NMangaCommandHandler,
 )
-@options.path_or_archive(disable_folder=True)
+@options.path_or_archive()
 @click.option(
     "-vol",
     "--volume",
     "volume_num",
-    type=int,
+    type=options.VOLUME_NUMBER,
     required=False,
-    help="The volume number for the archive",
+    help="The volume number for the source, use `1-2` for an omnibus range",
     default=None,
 )
+@click.option(
+    "-pcv",
+    "--per-chapter-volume",
+    "per_chapter_volume",
+    is_flag=True,
+    default=False,
+    help="Ask for a volume for each chapter range (useful for omnibus volumes)",
+)
+@options.dest_output(optional=True)
+@options.force
 @time_program
-def manual_split(path_or_archive: Path, volume_num: int | None = None):  # pragma: no cover
+def manual_split(
+    path_or_archive: Path,
+    volume_num: VolumeNumberT | None = None,
+    per_chapter_volume: bool = False,
+    dest_output: Path | None = None,
+    force: bool = False,
+):  # pragma: no cover
     """
     Manually split volumes into chapters using multiple modes
     """
 
-    if path_or_archive.is_dir():
-        console.warning("Directory split is not supported yet")
-        return 1
-
-    if not file_handler.is_archive(path_or_archive):
+    if path_or_archive.is_file() and not file_handler.is_archive(path_or_archive):
         console.warning("Provided path is not a valid archive!")
         return 1
+
+    if path_or_archive.is_dir() and not any(path_or_archive.glob("*")):
+        console.warning("Provided folder is empty!")
+        return 1
+
+    target_dir = dest_output if dest_output is not None else _default_output_dir(path_or_archive, volume_num)
 
     select_option = console.choice(
         "Select mode",
         choices=[
-            term.ConsoleChoice("page_number", "Page number mode (all filename must be page number)"),
-            term.ConsoleChoice("regex", "Regex mode (Enter regex that should atleast match the page number!)"),
+            term.ConsoleChoice(
+                "page_number",
+                "Page number mode (bare `001`, or the standard `p001`/`p001-002` naming)",
+            ),
+            term.ConsoleChoice(
+                "regex",
+                "Regex mode (custom regex with two capture groups for the page number)",
+            ),
             term.ConsoleChoice("page_number_and_custom", "Page number mode with custom page number mapping"),
             term.ConsoleChoice("regex_and_custom", "Regex mode with custom page number mapping"),
         ],
@@ -262,9 +248,23 @@ def manual_split(path_or_archive: Path, volume_num: int | None = None):  # pragm
 
     select_name = select_option.name
     if select_name.startswith("page_number"):
-        _handle_page_number_mode(path_or_archive, volume_num, "_and_custom" in select_name)
+        _handle_page_number_mode(
+            path_or_archive,
+            target_dir,
+            volume_num,
+            "_and_custom" in select_name,
+            per_chapter_volume,
+            force,
+        )
     elif select_name.startswith("regex"):
-        _handle_regex_mode(path_or_archive, volume_num, "_and_custom" in select_name)
+        _handle_regex_mode(
+            path_or_archive,
+            target_dir,
+            volume_num,
+            "_and_custom" in select_name,
+            per_chapter_volume,
+            force,
+        )
     else:
         console.error("Unknown mode selected!")
         return 1

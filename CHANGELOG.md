@@ -348,9 +348,23 @@ Rewritten every thing as a module with `nmanga` namespace.
   - `nmanga denoise-trt`
   - `nmanga autolevel2`
   - `nmanga jpegify`
+- `nmanga-gui` - Optional PySide6 GUI for the manual split feature, install with the `gui` extra
+  - Load a folder of images or an archive and see the pages as a thumbnail grid
+  - Drag a folder or archive from the file manager and drop it anywhere on the window to load it
+  - Drag-select pages into chapter ranges, type the ranges directly, or press Add to append the next range
+  - Skip pages with a comma separated list such as `1,5-20`, which is kept visible in the range and in the
+    uncovered page warnings
+  - Preview which chapter owns each page, and get warned about uncovered, overlapping, or missing pages,
+    with the page numbers listed
+  - Carry a volume per chapter, so an omnibus can be split into `v01-02` chapters
 
 **Changes**
 - Improve manual split filename matcher
+- `nmanga manualsplit` now accepts a folder of images, not just an archive
+- `nmanga manualsplit` supports a volume per chapter range (including omnibus ranges such as `1-2`)
+  - Use `-vol 1-2` for a whole-omnibus default, or `--per-chapter-volume` to set one per chapter
+- `nmanga manualsplit` accepts a comma separated list of pages (for example `1,5-20`) to skip pages inside a
+  chapter range; a comma turns off the bare number "until the end" form so the last page must be given
 - Move denoise and spreads joiner to the main nmanga module instead of in CLI part only
 - Adjust image gray level peak detection
 - Fix some issues with PDF images extraction and compositing
@@ -365,3 +379,9 @@ Rewritten every thing as a module with `nmanga` namespace.
   (e.g. an input shape of `[1, 3, height, width]`) instead of failing with an `INVALID_ARGUMENT` error
 - `nmanga upscale-trt` and `nmanga denoise-trt` - Report a proper error when the model declares a fixed tile size
   that differs from the requested one
+- `nmanga-gui` - Check the chapter ranges against the images of the source, so a range ending on the second half
+  of a spread is no longer reported as referencing a page missing from the source
+- `nmanga-gui` - Forget the loaded pages and chapter ranges when a source fails to load, instead of silently
+  keeping the previous source
+- `nmanga-gui` - Spell out the skipped pages of a hand picked chapter range (for example `001, 005-007`)
+  instead of collapsing them into one start-to-end label

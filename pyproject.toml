@@ -48,8 +48,9 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "ruff>=0.16.8",
+    "ruff==0.16.9",
 ]
+gui = ["PySide6>=6.7"]
 autostuff = [
     "numpy>=2.5.3",
     "scipy>=1.18.1",
@@ -77,7 +78,7 @@ vapoursynth = [
     "vapoursynth-imageseqs==0.1.0",
     "vsrepo"
 ]
-epub-render = ["playwright>=1.62.0"]
+epub-render = ["playwright==1.63.0"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nmanga._metadata.__version__"}
@@ -88,9 +89,18 @@ version = {attr = "nmanga._metadata.__version__"}
 
 [project.scripts]
 nmanga = "nmanga.cmd:main"
+nmanga-gui = "nmanga.gui:main"
 
 [tool.setuptools]
-packages = ["nmanga", "nmanga.cli", "nmanga.term", "nmanga.templates", "nmanga.orchestrator", "nmanga.orchestrator.actions"]
+packages = [
+    "nmanga",
+    "nmanga.cli",
+    "nmanga.gui",
+    "nmanga.term",
+    "nmanga.templates",
+    "nmanga.orchestrator",
+    "nmanga.orchestrator.actions",
+]
 
 [tool.uv]
 override-dependencies = ["onnxruntime-windowsml; sys_platform == 'never'"]

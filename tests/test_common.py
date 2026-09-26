@@ -26,6 +26,8 @@ import math
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, cast
 
+import pytest
+
 from nmanga.common import (
     ChapterRange,
     PseudoChapterMatch,
@@ -49,13 +51,14 @@ class TestFormatDaizLikeFilename:
     _TITLE = "Test Title"
     _PUBLISHER = "Real Publisher"
     _YEAR = 2023
-    _CURRENT = ChapterRange(1, "Introduction", [0, 41], True)
-    _CURRENT_NO_TITLE = ChapterRange(1, None, [0, 41], True)
-    _CURRENT_EXTRA = ChapterRange(1.5, "Extra Story", [0, 51], False)
-    _CURRENT_EXTRA_NO_TITLE = ChapterRange(1.5, None, [0, 51], False)
-    _CURRENT_SPLIT_A = ChapterRange(2.1, "Split A", [52, 69], False)
-    _CURRENT_SPLIT_B = ChapterRange(2.2, "Split B", [70, 110], False)
-    _CURRENT_SPLIT_EXTRA = ChapterRange(2.5, "Split C", [111, 114], False)
+    # Ranges are full page lists, matching what parse_ch_ranges/to_chapter_ranges produce.
+    _CURRENT = ChapterRange(1, "Introduction", list(range(0, 42)), True)
+    _CURRENT_NO_TITLE = ChapterRange(1, None, list(range(0, 42)), True)
+    _CURRENT_EXTRA = ChapterRange(1.5, "Extra Story", list(range(0, 52)), False)
+    _CURRENT_EXTRA_NO_TITLE = ChapterRange(1.5, None, list(range(0, 52)), False)
+    _CURRENT_SPLIT_A = ChapterRange(2.1, "Split A", list(range(52, 70)), False)
+    _CURRENT_SPLIT_B = ChapterRange(2.2, "Split B", list(range(70, 111)), False)
+    _CURRENT_SPLIT_EXTRA = ChapterRange(2.5, "Split C", list(range(111, 115)), False)
     _CURRENT_SPLIT_EXTRA_TWO = ChapterRange(2.6, "Split D", [115], True)
 
     _BRACKET = "square"
@@ -811,6 +814,15 @@ class TestValidateChapterRange:
     def test_multi_length_float(self):
         assert not validate_ch_ranges("1.5-3.5")
 
+    def test_comma_list(self):
+        assert validate_ch_ranges("1,5-20")
+
+    def test_comma_list_with_empty_part(self):
+        assert not validate_ch_ranges("1,")
+
+    def test_reversed_range(self):
+        assert not validate_ch_ranges("5-1")
+
 
 class TestRangeParsing:
     def test_single_length(self):
@@ -820,6 +832,37 @@ class TestRangeParsing:
     def test_multi_length(self):
         r_num, is_single = parse_ch_ranges("1-3")
         assert r_num == [1, 2, 3] and not is_single
+
+    def test_comma_list_covers_both_forms(self):
+        r_num, is_single = parse_ch_ranges("1,2-5")
+        assert r_num == [1, 2, 3, 4, 5] and not is_single
+
+    def test_comma_list_skips_pages(self):
+        r_num, is_single = parse_ch_ranges("1,5-7")
+        assert r_num == [1, 5, 6, 7] and not is_single
+
+    def test_comma_disables_the_open_ended_bare_page(self):
+        # In a list a bare page is only that page, never "to the end".
+        r_num, is_single = parse_ch_ranges("1,5")
+        assert r_num == [1, 5] and not is_single
+
+    def test_comma_tolerates_spaces(self):
+        assert parse_ch_ranges(" 1 , 5-6 ")[0] == [1, 5, 6]
+
+    def test_comma_deduplicates_repeated_pages(self):
+        assert parse_ch_ranges("1-3,2-4")[0] == [1, 2, 3, 4]
+
+    def test_comma_with_empty_part(self):
+        with pytest.raises(ValueError):
+            parse_ch_ranges("1,")
+
+    def test_reversed_range(self):
+        with pytest.raises(ValueError):
+            parse_ch_ranges("5-1")
+
+    def test_non_numeric(self):
+        with pytest.raises(ValueError):
+            parse_ch_ranges("abc")
 
 
 class TestNumberConverter:
@@ -878,8 +921,19 @@ class TestChapterRange:
     def test_repr_extra(self):
         assert repr(self._CHAPTER_EXTRA) == "<ChapterRange c1.5 - Extra Story [p000-051]>"
 
+    def test_repr_of_hand_picked_pages(self):
+        # A comma list can skip pages, so the repr spells the gaps out.
+        chapter = ChapterRange(3, "Hand Picked", [1, 5, 6, 7], False)
+
+        assert repr(chapter) == "<ChapterRange c003 - Hand Picked [p001, 005-007]>"
+
+    def test_repr_of_an_unsorted_hand_picked_range(self):
+        chapter = ChapterRange(4, "Unsorted", [7, 1, 5, 6, 5], False)
+
+        assert repr(chapter) == "<ChapterRange c004 - Unsorted [p001, 005-007]>"
+
     def test_eq(self):
-        CHAPTER_ONE = ChapterRange(1, "Unknown", [0, 41], True)
+        CHAPTER_ONE = ChapterRange(1, "Unknown", list(range(0, 42)), True)
 
         assert self._CHAPTER != self._CHAPTER_EXTRA
         assert self._CHAPTER == CHAPTER_ONE
