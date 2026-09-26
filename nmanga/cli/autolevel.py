@@ -32,11 +32,13 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
+from io import BytesIO
 from pathlib import Path
 from typing import TypedDict
 
 import rich_click as click
 from PIL import Image
+from wand.image import Image as WandImage
 
 from .. import file_handler, term
 from ..autolevel import (
@@ -347,6 +349,7 @@ class Autolevel2Config:
     keep_colorspace: bool
     image_fmt: str
     no_white: bool
+    use_magick: bool = False
 
 
 def _autolevel2_wrapper(
@@ -402,12 +405,19 @@ def _autolevel2_wrapper(
         img = img.convert("L")
     gamma_correct = gamma_correction(black_level)
 
-    adjusted_img = apply_levels(
-        img,
-        black_point=black_level + config.peak_offset,
-        white_point=255 if config.no_white else white_level,
-        gamma=gamma_correct,
-    )
+    if config.use_magick:
+        wand_channel_map = {"L": "I", "LA": "IA"}.get(img.mode, img.mode)
+        with WandImage.from_array(img, channel_map=wand_channel_map) as wand_img:
+            wand_img.level(black_level, white_level, gamma=gamma_correct)
+            bytes_data = BytesIO(wand_img.make_blob("png"))  # type: ignore
+            adjusted_img = Image.open(bytes_data).convert(img.mode)
+    else:
+        adjusted_img = apply_levels(
+            img,
+            black_point=black_level + config.peak_offset,
+            white_point=255 if config.no_white else white_level,
+            gamma=gamma_correct,
+        )
 
     # if jpeg, set quality to 98
     params = {}
@@ -504,6 +514,14 @@ def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autoleve
     default=False,
     help="Use legacy autolevel analysis",
 )
+@click.option(
+    "-um",
+    "--use-magick",
+    "use_magick",  # type: ignore
+    is_flag=True,
+    default=False,
+    help="Use ImageMagick for level adjustment instead of Pillow",
+)
 @options.threads
 @options.recursive
 @time_program
@@ -519,6 +537,7 @@ def autolevel2(
     image_fmt: str,
     no_white: bool,
     legacy: bool,
+    use_magick: bool,
     threads: int,
     recursive: bool,
 ):  # pragma: no cover
@@ -560,6 +579,7 @@ def autolevel2(
             keep_colorspace=keep_colorspace,
             image_fmt=image_fmt,
             no_white=no_white,
+            use_magick=use_magick,
         )
 
         real_output = dest_output

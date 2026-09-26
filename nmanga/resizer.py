@@ -33,8 +33,6 @@ from cykooz_resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOp
 from PIL import Image
 from wand.image import Image as WandImage
 
-from .lazy import get_numpy
-
 __all__ = (
     "ResizeKernel",
     "ResizeMode",
@@ -115,13 +113,10 @@ class WandResizeOptions:
         param_a: float | int | None = None,
         param_b: float | int | None = None,
     ) -> Image.Image:
-        np = get_numpy()
-
         filters = self.apply_filters(param_a, param_b)
-        img_arr = np.array(img)  # type: ignore
         # wand's channel_map uses 'I' (intensity) for grayscale and 'IA' for grayscale+alpha
         wand_channel_map = {"L": "I", "LA": "IA"}.get(img.mode, img.mode)
-        with WandImage.from_array(img_arr, channel_map=wand_channel_map) as wand_img:
+        with WandImage.from_array(img, channel_map=wand_channel_map) as wand_img:
             # Apply the filters as needed based on the kernel
             for filter_name, filter_value in filters.items():
                 wand_img.artifacts[filter_name] = filter_value  # type: ignore
