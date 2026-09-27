@@ -408,7 +408,7 @@ def _autolevel2_wrapper(
     if config.use_magick:
         wand_channel_map = {"L": "I", "LA": "IA"}.get(img.mode, img.mode)
         with WandImage.from_array(img, channel_map=wand_channel_map) as wand_img:
-            wand_img.level(black_level, white_level, gamma=gamma_correct)
+            wand_img.level((black_level + config.peak_offset) / 255.0, white_level / 255.0, gamma=gamma_correct)
             bytes_data = BytesIO(wand_img.make_blob("png"))  # type: ignore
             adjusted_img = Image.open(bytes_data).convert(img.mode)
     else:
