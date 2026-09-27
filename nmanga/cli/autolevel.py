@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
@@ -704,6 +705,51 @@ def write_page(
     return AutoLevelResult.PROCESSED
 
 
+class BoundedWritePool:
+    """
+    Write completed pages on a thread pool, keeping the frame loop on the main thread.
+
+    Pillow releases the GIL while it encodes a PNG, so the write is the one stage of
+    `autolevel3` and `posterize2` that parallelises with threads. The VapourSynth side is left
+    alone: the frames are pulled one at a time in page order, because that is what keeps the
+    decoder readahead useful and the plugin's per frame log in order.
+
+    At most `workers` pages are held, so the pool cannot outrun the loop and pile up decoded
+    images in memory. `submit` returns a future once that limit is passed so the caller can
+    wait on the oldest one instead of blocking inside here.
+    """
+
+    def __init__(self, workers: int):
+        self._workers = max(workers, 1)
+        self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="nmanga-write")
+        self._pending: list[Future] = []
+
+    def submit(self, fn, *args) -> Future | None:
+        """Queue one page, returning the oldest queued page if the pool is now full."""
+        self._pending.append(self._pool.submit(fn, *args))
+        if len(self._pending) >= self._workers:
+            return self._pending.pop(0)
+        return None
+
+    def pending(self) -> list[Future]:
+        """Take the queued futures, oldest first, leaving the pool empty."""
+        pending, self._pending = self._pending, []
+        return pending
+
+    def __enter__(self) -> BoundedWritePool:
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        # On an error the pending writes are dropped rather than waited on, so the original
+        # exception is what reaches the user.
+        if exc_type is not None:
+            for future in self._pending:
+                future.cancel()
+            self._pending.clear()
+        self._pool.shutdown(wait=exc_type is None)
+        return False
+
+
 def _level_color_page(
     chain: AutolevelChain, index: int, black_level: int, white_level: int, config: Autolevel3Config
 ) -> Image.Image:
@@ -819,6 +865,7 @@ def _level_color_page(
     show_default=True,
     help="VapourSynth frame cache in MiB",
 )
+@options.prefetch
 @options.threads
 @options.recursive
 @time_program
@@ -834,6 +881,7 @@ def autolevel3(
     image_fmt: str,
     no_white: bool,
     cache_mb: int,
+    prefetch: int,
     threads: int,
     recursive: bool,
 ):  # pragma: no cover
@@ -842,8 +890,9 @@ def autolevel3(
 
     The analysis and the leveling both happen inside the `nimages` VapourSynth plugin, one
     clip per directory, and VapourSynth schedules the pages across its own worker threads.
-    `--threads` is therefore only how many pages the decoder reads ahead of the page being
-    processed. Pass `-v` for the plugin's per frame log lines.
+    `--prefetch` is how many pages the decoder reads ahead, and `--threads` is how many pages
+    are encoded and written at once, which is where most of the time goes. Pass `-v` for the
+    plugin's per frame log lines.
     """
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -903,7 +952,7 @@ def autolevel3(
         chain = vs_autolevel_clip(
             all_files,
             options=full_config,
-            prefetch=threads,
+            prefetch=prefetch,
             debug=console.debugged,
             core=vs.core,
         )
@@ -912,30 +961,38 @@ def autolevel3(
         progress = console.make_progress()
         task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
 
-        for n, img_path in enumerate(all_files):
-            # Pull the levelled frame once per page. Asking `stats` first and then `leveled`
-            # would analyse every page twice, and VapourSynth keeps no intermediate frame
-            # between two external requests.
-            with chain.leveled.get_frame(n) as frame:
-                black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore
-                white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore
-                black_found = bool(frame.props["NImagesBlackPeakFound"])
-                white_found = bool(frame.props["NImagesWhitePeakFound"])
-                image = vs_frame_to_image(frame)
+        with BoundedWritePool(threads) as pool:
+            for n, img_path in enumerate(all_files):
+                # Pull the levelled frame once per page. Asking `stats` first and then `leveled`
+                # would analyse every page twice, and VapourSynth keeps no intermediate frame
+                # between two external requests.
+                with chain.leveled.get_frame(n) as frame:
+                    black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore
+                    white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore
+                    black_found = bool(frame.props["NImagesBlackPeakFound"])
+                    white_found = bool(frame.props["NImagesWhitePeakFound"])
+                    image = vs_frame_to_image(frame)
 
-            console.log(
-                f"{img_path.name}: black={black_level} (found={black_found}) white={white_level} (found={white_found})"
-            )
+                console.log(
+                    f"{img_path.name}: black={black_level} (found={black_found}) "
+                    f"white={white_level} (found={white_found})"
+                )
 
-            # Level the colour page itself rather than its luma, carrying the levels the gray
-            # page was leveled with onto it.
-            if full_config.keep_colorspace:
-                color_image = _level_color_page(chain, n, black_level, white_level, full_config)
-                image.close()
-                image = color_image
+                # Level the colour page itself rather than its luma, carrying the levels the
+                # gray page was leveled with onto it.
+                if full_config.keep_colorspace:
+                    color_image = _level_color_page(chain, n, black_level, white_level, full_config)
+                    image.close()
+                    image = color_image
 
-            results.append(write_page(img_path, real_output, image, black_level, white_level, full_config))
-            progress.update(task, advance=1)
+                oldest = pool.submit(write_page, img_path, real_output, image, black_level, white_level, full_config)
+                if oldest is not None:
+                    results.append(oldest.result())
+                    progress.update(task, advance=1)
+
+            for future in pool.pending():
+                results.append(future.result())
+                progress.update(task, advance=1)
 
         console.stop_progress(progress, f"Processed {total_files} images.")
         autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)

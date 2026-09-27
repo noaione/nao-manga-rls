@@ -56,6 +56,7 @@ from ..vapour import (
 )
 from . import options
 from ._deco import time_program
+from .autolevel import BoundedWritePool
 from .base import NMangaCommandHandler
 
 console = term.get_console()
@@ -70,6 +71,22 @@ class PosterizedResult(int, Enum):
 class SsimOption:
     enabled: bool
     minimum: float
+
+
+def _save_png(image: Image.Image, dest_path: Path) -> PosterizedResult:
+    """Encode and write one finished page. Runs on the write pool."""
+    image.save(dest_path, format="PNG")
+    image.close()
+    return PosterizedResult.PROCESSED
+
+
+def _copy_page(img_path: Path, dest_path: Path) -> PosterizedResult:
+    """Copy the source page over the output. Runs on the write pool."""
+    if dest_path.exists():
+        console.warning(f"Skipping existing file: {dest_path}")
+        return PosterizedResult.COPIED
+    shutil.copy2(img_path, dest_path)
+    return PosterizedResult.COPIED
 
 
 def _posterize_simple_wrapper(
@@ -280,6 +297,7 @@ def posterize_simple(
     show_default=True,
     help="VapourSynth frame cache in MiB",
 )
+@options.prefetch
 @options.threads
 @options.recursive
 @time_program
@@ -290,6 +308,7 @@ def posterize2(
     use_ssimulacra2: bool,
     ssim_min: float,
     cache_mb: int,
+    prefetch: int,
     threads: int,
     recursive: bool,
 ):
@@ -297,9 +316,10 @@ def posterize2(
     Posterize images in a directory to a specific bit depth using VapourSynth.
 
     This will always use PNG as the output format. One clip is built for the whole directory
-    and VapourSynth schedules the pages across its own worker threads, so `--threads` is only
-    how many pages the decoder reads ahead of the page being processed. Pass `-v` for the
-    plugin's per frame log lines and the per page SSIM score.
+    and VapourSynth schedules the pages across its own worker threads. `--prefetch` is how
+    many pages the decoder reads ahead, and `--threads` is how many pages are encoded and
+    written at once. Pass `-v` for the plugin's per frame log lines and the per page SSIM
+    score.
     """
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -358,7 +378,7 @@ def posterize2(
         chain = vs_posterize_clip(
             all_files,
             bits=num_bits,
-            prefetch=threads,
+            prefetch=prefetch,
             debug=console.debugged,
             cache_mb=cache_mb,
             core=vs.core,
@@ -368,38 +388,39 @@ def posterize2(
         progress = console.make_progress()
         task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
 
-        for n, img_path in enumerate(all_files):
-            dest_path = real_output / img_path.with_suffix(".png").name
-            with chain.posterized.get_frame(n) as frame:
-                image = vs_frame_to_image(frame)
-                score = None
-                if ssim_opt.enabled:
-                    # The reference comes from the gray clip the posterize chain just decoded,
-                    # which VapourSynth serves out of its frame cache, so this costs no extra
-                    # decode. Comparing against it keeps the score about the posterization
-                    # alone rather than about the decoder as well.
-                    with chain.gray.get_frame(n) as source_frame:
-                        score = vs_ssimulacra2(
-                            vs_frame_to_grays(source_frame, core=vs.core),
-                            vs_frame_to_grays(frame, core=vs.core),
-                        )
-                    console.log(f"SSIM score for {img_path.name}: {score}")
-            if score is not None and score < ssim_opt.minimum:
-                image.close()
-                if dest_path.exists():
-                    console.warning(f"Skipping existing file: {dest_path}")
-                    results.append(PosterizedResult.COPIED)
-                    progress.update(task, advance=1)
-                    continue
-                shutil.copy2(img_path, dest_path)
-                results.append(PosterizedResult.COPIED)
-                progress.update(task, advance=1)
-                continue
+        with BoundedWritePool(threads) as pool:
+            for n, img_path in enumerate(all_files):
+                dest_path = real_output / img_path.with_suffix(".png").name
+                with chain.posterized.get_frame(n) as frame:
+                    image = vs_frame_to_image(frame)
+                    score = None
+                    if ssim_opt.enabled:
+                        # The reference comes from the gray clip the posterize chain just
+                        # decoded, which VapourSynth serves out of its frame cache, so this
+                        # costs no extra decode. Comparing against it keeps the score about
+                        # the posterization alone rather than about the decoder as well.
+                        with chain.gray.get_frame(n) as source_frame:
+                            score = vs_ssimulacra2(
+                                vs_frame_to_grays(source_frame, core=vs.core),
+                                vs_frame_to_grays(frame, core=vs.core),
+                            )
+                        console.log(f"SSIM score for {img_path.name}: {score}")
 
-            image.save(dest_path, format="PNG")
-            image.close()
-            results.append(PosterizedResult.PROCESSED)
-            progress.update(task, advance=1)
+                # The gate decision is made here, on the values the main thread holds; only the
+                # save or the copy, which is the expensive half, goes to the pool.
+                if score is not None and score < ssim_opt.minimum:
+                    image.close()
+                    oldest = pool.submit(_copy_page, img_path, dest_path)
+                else:
+                    oldest = pool.submit(_save_png, image, dest_path)
+
+                if oldest is not None:
+                    results.append(oldest.result())
+                    progress.update(task, advance=1)
+
+            for future in pool.pending():
+                results.append(future.result())
+                progress.update(task, advance=1)
 
         console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.", skip_total=True)
 

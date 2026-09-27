@@ -562,7 +562,7 @@ class TestPluginRegistration:
         result = runner.invoke(main, ["posterize2", ".", "-o", ".", "--debug"])
         assert result.exit_code != 0
 
-    def test_autolevel3_has_threads_and_cache(self):
+    def test_autolevel3_has_prefetch_threads_and_cache(self):
         from click.testing import CliRunner
 
         from nmanga.cmd import main
@@ -570,10 +570,11 @@ class TestPluginRegistration:
         runner = CliRunner()
         result = runner.invoke(main, ["autolevel3", "--help"])
         assert result.exit_code == 0
+        assert "--prefetch" in result.output
         assert "--threads" in result.output
         assert "--cache" in result.output
 
-    def test_posterize2_has_threads_and_cache(self):
+    def test_posterize2_has_prefetch_threads_and_cache(self):
         from click.testing import CliRunner
 
         from nmanga.cmd import main
@@ -581,5 +582,83 @@ class TestPluginRegistration:
         runner = CliRunner()
         result = runner.invoke(main, ["posterize2", "--help"])
         assert result.exit_code == 0
+        assert "--prefetch" in result.output
         assert "--threads" in result.output
         assert "--cache" in result.output
+
+    def test_prefetch_defaults_to_16(self):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["autolevel3", "--help"])
+        assert "Default: 16" in result.output
+
+    def test_prefetch_rejects_a_negative_value(self):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["autolevel3", ".", "-o", ".", "--prefetch", "-1"])
+        assert result.exit_code != 0
+
+
+class TestBoundedWritePool:
+    """The write pool that keeps the encode off the frame loop."""
+
+    def test_runs_every_submitted_call(self):
+        from nmanga.cli.autolevel import BoundedWritePool
+
+        seen: list[int] = []
+        with BoundedWritePool(4) as pool:
+            for index in range(20):
+                oldest = pool.submit(seen.append, index)
+                if oldest is not None:
+                    oldest.result()
+            for future in pool.pending():
+                future.result()
+        assert sorted(seen) == list(range(20))
+
+    def test_hands_back_the_oldest_page_once_full(self):
+        from nmanga.cli.autolevel import BoundedWritePool
+
+        with BoundedWritePool(3) as pool:
+            assert pool.submit(lambda: None) is None
+            assert pool.submit(lambda: None) is None
+            # The third page fills the pool, so the first one comes back to be waited on, and
+            # the pool stays at its bound from there on.
+            assert pool.submit(lambda: None) is not None
+            assert pool.submit(lambda: None) is not None
+            assert len(pool.pending()) == 2
+
+    def test_hands_pages_back_in_order(self):
+        """The bound is only a memory bound if the oldest page is the one returned."""
+        from nmanga.cli.autolevel import BoundedWritePool
+
+        with BoundedWritePool(2) as pool:
+            assert pool.submit(int, 1) is None
+            second = pool.submit(int, 2)
+            assert second is not None
+            assert second.result() == 1
+
+    def test_a_failing_write_is_raised_on_result(self):
+        from nmanga.cli.autolevel import BoundedWritePool
+
+        def boom():
+            raise ValueError("write failed")
+
+        with pytest.raises(ValueError, match="write failed"):
+            # One worker, so the first page is already handed back to be waited on.
+            with BoundedWritePool(1) as pool:
+                oldest = pool.submit(boom)
+                assert oldest is not None
+                oldest.result()
+
+    def test_workers_is_at_least_one(self):
+        from nmanga.cli.autolevel import BoundedWritePool
+
+        # Zero workers would mean no write ever completes, so it is clamped to one.
+        with BoundedWritePool(0) as pool:
+            assert pool.submit(int, 7) is not None

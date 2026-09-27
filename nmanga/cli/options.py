@@ -585,6 +585,16 @@ threads_alt = click.option(
     help="The number of threads to use for processing",
     panel="Performance Options",
 )
+prefetch = click.option(
+    "-p",
+    "--prefetch",
+    "prefetch",
+    type=ZERO_POSITIVE_INT,
+    default=16,
+    show_default=True,
+    help="How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+    panel="Performance Options",
+)
 
 
 def dest_output(file_okay: bool = False, dir_okay: bool = True, optional: bool = False):
