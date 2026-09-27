@@ -39,7 +39,7 @@ from rich.box import MINIMAL_HEAVY_HEAD
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
-from .cli.autolevel import analyze_level, autolevel, autolevel2, force_gray
+from .cli.autolevel import analyze_level, autolevel, autolevel2, autolevel3, force_gray
 from .cli.base import NMangaCommandHandler
 from .cli.config import cli_config
 from .cli.debugging import simulate_progress
@@ -53,7 +53,7 @@ from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.orchestrator import orchestractor
 from .cli.pdf_stuff import pdf_group
-from .cli.posterize import analyze_shades, auto_posterize, posterize_simple
+from .cli.posterize import analyze_shades, auto_posterize, posterize2, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
 from .cli.rescaler import rescale_image
@@ -172,7 +172,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Auto Processing",
     help="Commands for automatically analyzing and processing images",
-    commands=["orchestra", "autolevel", "autolevel2", "autoposterize"],
+    commands=["orchestra", "autolevel", "autolevel2", "autolevel3", "autoposterize"],
 )
 @click.command_panel(
     name="ML Processing",
@@ -213,7 +213,18 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Image Utilities",
     help="Commands for optimizing and converting images",
-    commands=["forcegray", "posterize", "rescale", "jpegify", "jxlify", "spreads", "optimize", "mixmatch", "imops"],
+    commands=[
+        "forcegray",
+        "posterize",
+        "posterize2",
+        "rescale",
+        "jpegify",
+        "jxlify",
+        "spreads",
+        "optimize",
+        "mixmatch",
+        "imops",
+    ],
 )
 @click.command_panel(
     name="Configuration",
@@ -304,9 +315,11 @@ main.add_command(image_mixmatch)
 main.add_command(timewizard_modify)
 main.add_command(autolevel)
 main.add_command(autolevel2)
+main.add_command(autolevel3)
 main.add_command(force_gray)
 main.add_command(analyze_level)
 main.add_command(posterize_simple)
+main.add_command(posterize2)
 main.add_command(auto_posterize)
 main.add_command(analyze_shades)
 main.add_command(denoiser)

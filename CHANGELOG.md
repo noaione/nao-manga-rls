@@ -385,3 +385,23 @@ Rewritten every thing as a module with `nmanga` namespace.
   keeping the previous source
 - `nmanga-gui` - Spell out the skipped pages of a hand picked chapter range (for example `001, 005-007`)
   instead of collapsing them into one start-to-end label
+- `nmanga autolevel3` - (Experimental) automatic color leveling backed by the `nimages` VapourSynth plugin
+  - One clip is built per directory and VapourSynth schedules the pages across its own threads, so
+    `--threads` is only how many pages `imgseqs` decodes ahead of the page being processed; `--cache`
+    bounds its frame cache instead
+  - Same per page decisions as `autolevel2` (`--keep-colorspace`, `--force-gray`, `--no-white`,
+    `--peak-offset`, `-f/--format`, `-r/--recursive`), minus `--legacy` and `--use-magick` which have no
+    plugin equivalent
+  - Pass `-v` for the plugin's resolved arguments, per frame stage timings, and the black/white level and
+    peak-found flags of every page
+  - Unlike `autolevel2 --format jpg`, which raises a `KeyError` because Pillow has no `JPG` writer, this
+    command writes a real JPEG
+- `nmanga posterize2` - (Experimental) posterize to a fixed bit depth backed by the `nimages` VapourSynth plugin
+  - Same `--bits`, `--use-ssimulacra2`, `--ssim-min`, `--threads` and `-r/--recursive` options as `posterize`
+  - `--threads` sizes the `imgseqs` readahead; there is no python thread pool because the SSIMULACRA2 gate
+    is a single GPU filter that a pool would only queue behind
+  - The SSIMULACRA2 gate compares the posterized page against the gray clip the posterize chain already
+    decoded, so the second pull costs no extra decode
+  - Pass `-v` for the plugin's resolved arguments and per frame stage timings
+  - Output is byte identical to `posterize` on lossless input; on lossy input the two decoders differ by one
+    code value on a small share of pixels, so a byte comparison is only valid on png

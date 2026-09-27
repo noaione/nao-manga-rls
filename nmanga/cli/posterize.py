@@ -45,7 +45,15 @@ from ..autolevel import (
 )
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
-from ..vapour import vs_attach_logger, vs_find_missing_plugins, vs_prepare_image, vs_ssimulacra2
+from ..vapour import (
+    vs_attach_logger,
+    vs_find_missing_plugins,
+    vs_frame_to_grays,
+    vs_frame_to_image,
+    vs_posterize_clip,
+    vs_prepare_image,
+    vs_ssimulacra2,
+)
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -217,6 +225,181 @@ def posterize_simple(
             ):
                 results.append(result)
                 progress.update(task, advance=1)
+
+        console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.", skip_total=True)
+
+        posterized_count = sum(1 for result in results if result == PosterizedResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == PosterizedResult.COPIED)
+
+        if copied_count > 0:
+            console.info(f"Copied {copied_count} images without posterization.")
+        if posterized_count > 0:
+            console.info(f"Posterized {posterized_count} images.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
+
+
+@click.command(
+    name="posterize2",
+    help="Force posterize images to a specific bit depth using VapourSynth (experimental)",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output(optional=False)
+@click.option(
+    "-b",
+    "--bits",
+    "num_bits",
+    type=click.IntRange(1, 8),
+    default=4,
+    show_default=True,
+    help="The number of bits to posterize the image to (1-8)",
+)
+@click.option(
+    "-ssim",
+    "--use-ssimulacra2",
+    "use_ssimulacra2",
+    is_flag=True,
+    default=False,
+    help="Try to detect and fix bad posterization, utilize vapoursynth",
+)
+@click.option(
+    "-smin",
+    "--ssim-min",
+    "ssim_min",
+    type=click.FloatRange(0.0, 100.0),
+    default=80.0,  # anything above 80% is good
+    show_default=True,
+    help="The minimum SSIM score for an image to be considered good",
+)
+@click.option(
+    "--cache",
+    "cache_mb",
+    type=click.IntRange(64, 8192),
+    default=512,
+    show_default=True,
+    help="VapourSynth frame cache in MiB",
+)
+@options.threads
+@options.recursive
+@time_program
+def posterize2(
+    path_or_archive: Path,
+    dest_output: Path,
+    num_bits: int,
+    use_ssimulacra2: bool,
+    ssim_min: float,
+    cache_mb: int,
+    threads: int,
+    recursive: bool,
+):
+    """
+    Posterize images in a directory to a specific bit depth using VapourSynth.
+
+    This will always use PNG as the output format. One clip is built for the whole directory
+    and VapourSynth schedules the pages across its own worker threads, so `--threads` is only
+    how many pages the decoder reads ahead of the page being processed. Pass `-v` for the
+    plugin's per frame log lines and the per page SSIM score.
+    """
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    vs = get_vapoursynth()
+    vs_attach_logger(console)
+
+    # The gate decodes nothing itself, so unlike `posterize` this never needs bestsource.
+    required_plugins = ["xyz.n4o.nimages", "xyz.n4o.imgseqs"]
+    if use_ssimulacra2:
+        required_plugins.append("com.lumen.vship")
+    missing_plugins = vs_find_missing_plugins(required_plugins)
+    if missing_plugins:
+        console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
+        raise click.Abort()
+
+    if use_ssimulacra2:
+        vs.core.num_threads = 1
+        console.info(f"Using vapoursynth to detect and fix bad posterization... (minimum score {ssim_min}%)")
+
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to posterize.")
+
+    if not candidates and recursive:
+        console.warning("No valid folders found to posterize.")
+        return 1
+
+    ssim_opt = SsimOption(enabled=use_ssimulacra2, minimum=ssim_min)
+
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
+
+        all_files.sort(key=lambda path: path.stem)
+        console.info(f"Found {total_files} files in the directory.")
+
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
+
+        chain = vs_posterize_clip(
+            all_files,
+            bits=num_bits,
+            prefetch=threads,
+            debug=console.debugged,
+            cache_mb=cache_mb,
+            core=vs.core,
+        )
+
+        results: list[PosterizedResult] = []
+        progress = console.make_progress()
+        task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_files)
+
+        for n, img_path in enumerate(all_files):
+            dest_path = real_output / img_path.with_suffix(".png").name
+            with chain.posterized.get_frame(n) as frame:
+                image = vs_frame_to_image(frame)
+                score = None
+                if ssim_opt.enabled:
+                    # The reference comes from the gray clip the posterize chain just decoded,
+                    # which VapourSynth serves out of its frame cache, so this costs no extra
+                    # decode. Comparing against it keeps the score about the posterization
+                    # alone rather than about the decoder as well.
+                    with chain.gray.get_frame(n) as source_frame:
+                        score = vs_ssimulacra2(
+                            vs_frame_to_grays(source_frame, core=vs.core),
+                            vs_frame_to_grays(frame, core=vs.core),
+                        )
+                    console.log(f"SSIM score for {img_path.name}: {score}")
+            if score is not None and score < ssim_opt.minimum:
+                image.close()
+                if dest_path.exists():
+                    console.warning(f"Skipping existing file: {dest_path}")
+                    results.append(PosterizedResult.COPIED)
+                    progress.update(task, advance=1)
+                    continue
+                shutil.copy2(img_path, dest_path)
+                results.append(PosterizedResult.COPIED)
+                progress.update(task, advance=1)
+                continue
+
+            image.save(dest_path, format="PNG")
+            image.close()
+            results.append(PosterizedResult.PROCESSED)
+            progress.update(task, advance=1)
 
         console.stop_progress(progress, f"Posterized {total_files} images to {num_bits} bits.", skip_total=True)
 

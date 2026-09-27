@@ -49,6 +49,15 @@ from ..autolevel import (
     gamma_correction,
 )
 from ..common import lowest_or, threaded_worker
+from ..lazy import get_vapoursynth
+from ..vapour import (
+    AutolevelChain,
+    vs_attach_logger,
+    vs_autolevel_clip,
+    vs_carry_levels,
+    vs_find_missing_plugins,
+    vs_frame_to_image,
+)
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
@@ -599,6 +608,334 @@ def autolevel2(
             ):
                 results.append(result)
                 progress.update(task, advance=1)
+
+        console.stop_progress(progress, f"Processed {total_files} images.")
+        autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)
+        grayscaled_count = sum(1 for result in results if result == AutoLevelResult.GRAYSCALED)
+
+        if copied_count > 0:
+            console.info(f"Copied {copied_count} images without autolevel.")
+        if autolevel_count > 0:
+            console.info(f"Autoleveled {autolevel_count} images.")
+        if grayscaled_count > 0:
+            console.info(f"Grayscaled {grayscaled_count} images.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
+
+
+@dataclass
+class Autolevel3Config:
+    upper_limit: int
+    peak_offset: int
+    peak_min_pct: float | None
+    peak_prom_pct: float | None
+    force_gray: bool
+    keep_colorspace: bool
+    image_fmt: str
+    no_white: bool
+    cache_mb: int = 512
+
+
+def write_page(
+    img_path: Path,
+    dest_output: Path,
+    image: Image.Image,
+    black_level: int,
+    white_level: int,
+    config: Autolevel3Config,
+) -> AutoLevelResult:
+    """
+    Write, grayscale or copy one already-levelled page.
+
+    This is the tail of `_autolevel2_wrapper`: the same skip decisions, the same
+    `force_gray` grayscale, the same "skipping existing file" warning and the same
+    `AutoLevelResult` values, so the two commands stay comparable.
+
+    The per page decisions are byte for byte `autolevel2`'s, including the `black_level <= 0`
+    skip. `PeakStats` can tell a real peak on bin 0 from a missing one through
+    `NImagesBlackPeakFound`, and `not black_found` is the check `autolevel2` meant to write,
+    but switching to it would level pages `autolevel2` copies and make the two commands
+    produce different output for the same input. `--debug` reports both found flags per page,
+    so the choice stays visible.
+
+    One thing deliberately differs, because reproducing it would mean reproducing a bug:
+    `_autolevel2_wrapper` asks Pillow for a format named by the upper cased `--format`
+    choice, and Pillow has no `JPG` writer, so `autolevel2 --format jpg` raises a
+    `KeyError`. The format is mapped properly here.
+    """
+    pillow_format = {"jpg": "JPEG"}.get(config.image_fmt, config.image_fmt.upper())
+
+    is_black_bad = black_level <= 0
+    is_white_bad = white_level >= 255 if not config.no_white else False
+
+    if (
+        (is_black_bad and is_white_bad and not config.no_white)  # both levels are bad
+        or (is_black_bad and config.no_white)
+        or black_level > config.upper_limit
+    ):
+        dest_path = dest_output / img_path.name
+        if config.force_gray:
+            image = image.convert("L")
+            image.save(dest_path.with_suffix(".png"), format="PNG")
+            image.close()
+            return AutoLevelResult.GRAYSCALED
+
+        image.close()
+
+        if dest_path.exists():
+            console.warning(f"Skipping existing file: {dest_path}")
+            return AutoLevelResult.COPIED
+        shutil.copy2(img_path, dest_path)
+        return AutoLevelResult.COPIED
+
+    dest_path = dest_output / img_path.with_suffix(f".{config.image_fmt}").name
+    if dest_path.exists():
+        console.warning(f"Skipping existing file: {dest_path}")
+        image.close()
+        return AutoLevelResult.COPIED
+
+    # If jpeg, set quality to 98
+    params = {}
+    if config.image_fmt == "jpg":
+        params["quality"] = 98
+    image.save(dest_path, format=pillow_format, **params)
+    image.close()
+    return AutoLevelResult.PROCESSED
+
+
+def _level_color_page(
+    chain: AutolevelChain, index: int, black_level: int, white_level: int, config: Autolevel3Config
+) -> Image.Image:
+    """
+    Level one page's own colour planes with the levels found on its luma.
+
+    `PeakStats` only ever sees the gray normalisation of a page, so levelling the colour page
+    with the same curve means moving the two detected level properties onto the colour frame
+    and letting `Levels(use_props=True)` rewrite every plane. `Levels` reads the properties
+    from the frame of *its* input, so the colour frame has to be the one `vs_carry_levels`
+    produced; handing it `chain.stats` would read the gray page's own levels and level with a
+    curve derived from a different page.
+    """
+    vs = get_vapoursynth()
+    with chain.source.get_frame(index) as source_frame:
+        # `vs_carry_levels` takes a clip; a bare frame is wrapped into a one frame clip of its
+        # own size and format, so the properties land on a single frame with index 0.
+        carried = vs_carry_levels(source_frame, chain.stats, core=vs.core)
+        with vs.core.nimages.Levels(
+            carried,
+            use_props=True,
+            auto_gamma=True,
+            peak_offset=config.peak_offset,
+            debug=int(console.debugged),
+        ).get_frame(0) as result:
+            planes = [vs_frame_to_image(result, plane) for plane in range(result.format.num_planes)]
+
+    if len(planes) == 1:
+        return planes[0]
+    return Image.merge("RGB", planes[:3])
+
+
+@click.command(
+    name="autolevel3",
+    help="Automatically adjust the levels of images in a directory using VapourSynth (experimental)",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output()
+@click.option(
+    "-ul",
+    "--upper-limit",
+    "upper_limit",
+    type=click.IntRange(1, 255),
+    default=60,
+    show_default=True,
+    help="The upper limit for finding local peaks in the histogram",
+)
+@click.option(
+    "-pmp",
+    "--peak-min-pct",
+    "peak_min_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=0.25,
+    show_default=True,
+    help="The minimum percentage of pixels for a peak to be considered valid",
+)
+@click.option(
+    "-ppm",
+    "--peak-prominence-pct",
+    "peak_prom_pct",
+    type=click.FloatRange(0.0, 100.0),
+    default=None,
+    show_default=True,
+    help="Minimum prominence relative to nearby shades to be considered a peak.",
+)
+@click.option(
+    "-po",
+    "--peak-offset",
+    "peak_offset",
+    type=click.IntRange(-100, 100),
+    default=0,
+    show_default=True,
+    help="The offset to add to the detected black level, as a code value",
+)
+@click.option(
+    "-gr",
+    "--force-gray",
+    "force_gray",
+    is_flag=True,
+    default=False,
+    help="Force convert all images to grayscale for image that is not autoleveled",
+)
+@click.option(
+    "-kc",
+    "--keep-colorspace",
+    "keep_colorspace",
+    is_flag=True,
+    default=False,
+    help="Keep the original colorspace of the image instead of converting to grayscale",
+)
+@click.option(
+    "-f",
+    "--format",
+    "image_fmt",
+    default="png",
+    show_default=True,
+    type=click.Choice(["png", "jpg"]),
+    help="The format of the output image",
+)
+@click.option(
+    "--no-white",
+    "no_white",
+    is_flag=True,
+    default=False,
+    help="Do not adjust white level, only adjust black level",
+)
+@click.option(
+    "--cache",
+    "cache_mb",
+    type=click.IntRange(64, 8192),
+    default=512,
+    show_default=True,
+    help="VapourSynth frame cache in MiB",
+)
+@options.threads
+@options.recursive
+@time_program
+def autolevel3(
+    path_or_archive: Path,
+    dest_output: Path,
+    upper_limit: int,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
+    peak_offset: int,
+    force_gray: bool,
+    keep_colorspace: bool,
+    image_fmt: str,
+    no_white: bool,
+    cache_mb: int,
+    threads: int,
+    recursive: bool,
+):  # pragma: no cover
+    """
+    Automatically adjust the levels of all images in a directory using VapourSynth.
+
+    The analysis and the leveling both happen inside the `nimages` VapourSynth plugin, one
+    clip per directory, and VapourSynth schedules the pages across its own worker threads.
+    `--threads` is therefore only how many pages the decoder reads ahead of the page being
+    processed. Pass `-v` for the plugin's per frame log lines.
+    """
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    vs = get_vapoursynth()
+    vs_attach_logger(console)
+    missing_plugins = vs_find_missing_plugins(["xyz.n4o.nimages", "xyz.n4o.imgseqs"])
+    if missing_plugins:
+        console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
+        raise click.Abort()
+
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to autolevel.")
+
+    if not candidates and recursive:
+        console.warning("No valid folders found to autolevel.")
+        return 1
+
+    full_config = Autolevel3Config(
+        upper_limit=upper_limit,
+        peak_offset=peak_offset,
+        peak_min_pct=peak_min_pct,
+        peak_prom_pct=peak_prom_pct,
+        force_gray=force_gray,
+        keep_colorspace=keep_colorspace,
+        image_fmt=image_fmt,
+        no_white=no_white,
+        cache_mb=cache_mb,
+    )
+
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
+
+        all_files.sort(key=lambda path: path.stem)
+        console.info(f"Found {total_files} files in the directory.")
+
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
+
+        chain = vs_autolevel_clip(
+            all_files,
+            options=full_config,
+            prefetch=threads,
+            debug=console.debugged,
+            core=vs.core,
+        )
+
+        results: list[AutoLevelResult] = []
+        progress = console.make_progress()
+        task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
+
+        for n, img_path in enumerate(all_files):
+            # Pull the levelled frame once per page. Asking `stats` first and then `leveled`
+            # would analyse every page twice, and VapourSynth keeps no intermediate frame
+            # between two external requests.
+            with chain.leveled.get_frame(n) as frame:
+                black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore
+                white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore
+                black_found = bool(frame.props["NImagesBlackPeakFound"])
+                white_found = bool(frame.props["NImagesWhitePeakFound"])
+                image = vs_frame_to_image(frame)
+
+            console.log(
+                f"{img_path.name}: black={black_level} (found={black_found}) white={white_level} (found={white_found})"
+            )
+
+            # Level the colour page itself rather than its luma, carrying the levels the gray
+            # page was leveled with onto it.
+            if full_config.keep_colorspace:
+                color_image = _level_color_page(chain, n, black_level, white_level, full_config)
+                image.close()
+                image = color_image
+
+            results.append(write_page(img_path, real_output, image, black_level, white_level, full_config))
+            progress.update(task, advance=1)
 
         console.stop_progress(progress, f"Processed {total_files} images.")
         autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)

@@ -26,10 +26,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import partial
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence, cast
+from typing import TYPE_CHECKING, Any, Protocol, Sequence, cast
 
 from PIL import Image
 
@@ -38,9 +39,28 @@ from .ogsov import DetectedColor
 
 if TYPE_CHECKING:
     import numpy as np
-    from vapoursynth import MessageType, PresetVideoFormat, VideoFrame, VideoNode
+    from vapoursynth import Core, MessageType, PresetVideoFormat, VideoFrame, VideoNode
 
     from .term import Console
+
+    class AutolevelOptions(Protocol):
+        """The subset of the `autolevel3` config that reaches the plugin."""
+
+        upper_limit: int
+        peak_min_pct: float | None
+        peak_prom_pct: float | None
+        peak_offset: int
+        no_white: bool
+        cache_mb: int
+
+
+def fill_frame_from_frame(n: int, f: "VideoFrame | list[VideoFrame]", *, frame: "VideoFrame") -> "VideoFrame":
+    """Copy every plane of `frame` into the blank clip this is a selector for."""
+    fout = (f[n] if isinstance(f, list) else f).copy()
+    np = get_numpy()
+    for plane in range(fout.format.num_planes):
+        np.asarray(fout[plane])[:] = np.asarray(frame[plane])
+    return fout
 
 
 def fill_frame_rgb24(n: int, f: "VideoFrame | list[VideoFrame]", *, array: "np.ndarray[Any]") -> "VideoFrame":
@@ -185,3 +205,244 @@ def vs_find_missing_plugins(plugins: str | list[str]) -> list[str]:
 
     # return missing plugins
     return list(plugins_set - identifiers)
+
+
+def _trim_and_convert(clip: "VideoNode", width: int, height: int, core: "Core") -> "VideoNode":
+    """
+    Convert a YUV clip to a constant `GRAY8` through `RGB24`.
+
+    An odd width or height cannot be 4:2:0, and every filter but the decoder refuses it,
+    so an odd edge is trimmed before the conversion and padded back after it.
+    """
+    vs = get_vapoursynth()
+
+    right = width % 2 if clip.format.subsampling_w else 0
+    bottom = height % 2 if clip.format.subsampling_h else 0
+    region = clip
+    if right or bottom:
+        region = core.std.CropAbs(clip, width=width - right, height=height - bottom)
+
+    # No matrix or range arguments: the frame properties carry both and are what makes
+    # this round trip agree with a Pillow convert("L").
+    rgb = cast(Any, core).resize.Bicubic(region, format=vs.RGB24)
+    gray = cast(Any, core).resize.Bicubic(rgb, format=vs.GRAY8, matrix_s="470bg", range_s="full")
+    if right or bottom:
+        gray = core.std.AddBorders(gray, right=right, bottom=bottom)
+    return gray
+
+
+def vs_to_gray8(source: "VideoNode", core: "Core | None" = None) -> "VideoNode":
+    """
+    Normalise a sequence to a constant `GRAY8`.
+
+    `imgseqs` hands out whatever the container holds: `RGB24` for jpeg and png, `YUV420P8`
+    for lossy webp, heif and avif. A YUV clip cannot be converted by taking its luma plane,
+    because that is the decoder's limited range Y and it does not hold the same values a
+    Pillow `convert("L")` of the same page does. Routing it through RGB makes both sides
+    analyse the same samples.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    if source.format.color_family == vs.RGB:
+        return cast(Any, core).resize.Bicubic(source, format=vs.GRAY8, matrix_s="470bg", range_s="full")
+    if source.format.color_family == vs.YUV:
+        return _trim_and_convert(source, source.width, source.height, core)
+
+    # The clip varies, so this node reports an undefined format and cannot say whether its
+    # frames are RGB. One probe answers it.
+    probe = source.get_frame(0)
+    if probe.format.color_family == vs.RGB:
+        return cast(Any, core).resize.Bicubic(source, format=vs.GRAY8, matrix_s="470bg", range_s="full")
+
+    # A sequence mixing both has to be converted one frame at a time.
+    plain_gray = cast(Any, core).resize.Bicubic(source, format=vs.GRAY8, matrix_s="470bg", range_s="full")
+
+    def convert(n: int = 0, **_):
+        frame = source.get_frame(n)
+        if frame.format.color_family == vs.RGB:
+            return plain_gray
+        return _trim_and_convert(source, frame.width, frame.height, core)
+
+    gray = core.std.FrameEval(source, convert)
+    return cast(Any, core).resize.Bicubic(gray, format=vs.GRAY8)
+
+
+@dataclass
+class AutolevelChain:
+    """The nodes `vs_autolevel_clip` built, kept so a caller can pull frames from them."""
+
+    source: "VideoNode"
+    gray: "VideoNode"
+    stats: "VideoNode"
+    leveled: "VideoNode"
+
+
+def vs_autolevel_clip(
+    files: Sequence[PathLike],
+    *,
+    options: "AutolevelOptions",
+    prefetch: int = 0,
+    debug: bool = False,
+    core: "Core | None" = None,
+) -> AutolevelChain:
+    """
+    Read `files` and build the `PeakStats` to `Levels` chain over their gray form.
+
+    `gray` is the analysed clip and `leveled` is the same pages levelled with the levels
+    found on them. Pull the frame you want from `leveled` and read the level properties off
+    it, rather than pulling from `stats` and then `leveled`, which analyses every page twice.
+
+    `prefetch` is how many pages `imgseqs` decodes ahead of the frame being asked for, and
+    `debug` turns on the plugin's log lines.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    core.max_cache_size = options.cache_mb
+    source = core.imgseqs.Read(
+        files=[str(path) for path in files],
+        mismatch=True,
+        prefetch=prefetch,
+        debug=int(debug),
+    )
+    gray = vs_to_gray8(source, core=core)
+
+    stats_args: dict[str, Any] = {
+        "upper_limit": options.upper_limit,
+        "peak_percentage": options.peak_min_pct,
+        "skip_white": 1 if options.no_white else 0,
+        "debug": int(debug),
+    }
+    # `None` is not a value a VapourSynth argument list can carry, so the argument has to
+    # be left off entirely to leave prominence disabled.
+    if options.peak_prom_pct is not None:
+        stats_args["peak_prominence"] = options.peak_prom_pct
+
+    stats = core.nimages.PeakStats(gray, **stats_args)
+    leveled = core.nimages.Levels(
+        stats,
+        use_props=True,
+        peak_offset=options.peak_offset,
+        auto_gamma=True,
+        debug=int(debug),
+    )
+    return AutolevelChain(source=source, gray=gray, stats=stats, leveled=leveled)
+
+
+def vs_carry_levels(rgb: "VideoNode | VideoFrame", stats: "VideoNode", core: "Core | None" = None) -> "VideoNode":
+    """
+    Copy the level properties from the analysed gray clip onto `rgb`.
+
+    `Levels(use_props=True)` reads the levels from the frame properties of *its* input, so
+    levelling a colour page with the levels detected on its luma needs the two properties on
+    the colour clip. Feed the result to `Levels(..., use_props=True)` to rewrite every plane
+    with the same curve.
+
+    `rgb` may be a clip or a single frame. A frame is wrapped into a one frame clip of the
+    same size and format, which is what a caller holding a page pulled out of the chain has;
+    `ModifyFrame` needs a clip, not a frame.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    if isinstance(rgb, vs.VideoFrame):
+        frame = rgb
+        blank = core.std.BlankClip(
+            width=frame.width,
+            height=frame.height,
+            format=frame.format.id,
+            length=1,
+        )
+        rgb = core.std.ModifyFrame(blank, [blank], partial(fill_frame_from_frame, frame=frame))
+
+    def carry(n: int, f: "list[VideoFrame]"):
+        # The second parameter has to be called `f`: VapourSynth passes the frames as a
+        # keyword argument.
+        out = f[0].copy()
+        measured = f[1].props
+        out.props["NImagesBlackLevel"] = measured["NImagesBlackLevel"]
+        out.props["NImagesWhiteLevel"] = measured["NImagesWhiteLevel"]
+        return out
+
+    return core.std.ModifyFrame(rgb, [rgb, stats], carry)
+
+
+def vs_frame_to_image(frame: "VideoFrame", plane: int = 0) -> Image.Image:
+    """
+    Return plane `plane` of `frame` as a Pillow image.
+
+    `np.asarray` gives a `(height, width)` `uint8` view for every accepted format, so the
+    mode is `L` for a gray frame and the caller picks the plane for a colour one. The copy
+    matters: the array aliases the frame and the frame is released when the `with` block ends.
+    """
+    np = get_numpy()
+    return Image.fromarray(np.asarray(frame[plane]).copy())
+
+
+@dataclass
+class PosterizeChain:
+    """The nodes `vs_posterize_clip` built, keeping `gray` for the quality gate."""
+
+    source: "VideoNode"
+    gray: "VideoNode"
+    posterized: "VideoNode"
+
+
+def vs_posterize_clip(
+    files: Sequence[PathLike],
+    *,
+    bits: int,
+    prefetch: int = 0,
+    debug: bool = False,
+    cache_mb: int = 512,
+    core: "Core | None" = None,
+) -> PosterizeChain:
+    """
+    Read `files` and posterize them to `bits`, keeping the gray clip the gate compares to.
+
+    `prefetch` is how many pages `imgseqs` decodes ahead of the frame being asked for, and
+    `debug` turns on the plugin's log lines.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    core.max_cache_size = cache_mb
+    source = core.imgseqs.Read(
+        files=[str(path) for path in files],
+        mismatch=True,
+        prefetch=prefetch,
+        debug=int(debug),
+    )
+    gray = vs_to_gray8(source, core=core)
+    posterized = core.nimages.Posterize(gray, bits=bits, debug=int(debug))
+    return PosterizeChain(source=source, gray=gray, posterized=posterized)
+
+
+def vs_frame_to_grays(frame: "VideoFrame", core: "Core | None" = None) -> "VideoNode":
+    """
+    Return one frame as a one frame long float gray clip, which is what `vship` accepts.
+
+    The clip is rebuilt at one page's own size because `vship` takes a constant size and one
+    page at a time; handing it a clip holding pages of differing sizes fails inside its GPU
+    backend. The plane is scaled by `1/255` because a VapourSynth float format holds `0..1`,
+    not `0..255`.
+    """
+    vs = get_vapoursynth()
+    np = get_numpy()
+    if core is None:
+        core = vs.core
+
+    blank = core.std.BlankClip(width=frame.width, height=frame.height, format=vs.GRAYS, length=1)
+    scaled = np.asarray(frame[0]).astype(np.float32) / 255.0
+
+    def fill(n: int, f: "VideoFrame | list[VideoFrame]"):
+        out = (f[n] if isinstance(f, list) else f).copy()
+        np.asarray(out[0])[:] = scaled
+        return out
+
+    return core.std.ModifyFrame(blank, [blank], fill)
