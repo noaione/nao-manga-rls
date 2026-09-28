@@ -31,7 +31,12 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler
 from ...common import ChapterRange, RegexCollection, format_daiz_like_filename, format_volume_text
-from ...renamer import QualityMapping, determine_quality_suffix, shift_renaming_gen
+from ...renamer import (
+    QualityMapping,
+    apply_rename_order,
+    determine_quality_suffix,
+    shift_renaming_gen,
+)
 from ._base import ActionKind, BaseAction, WorkerContext
 
 if TYPE_CHECKING:
@@ -81,6 +86,8 @@ class ActionShiftName(BaseAction):
         if context.dry_run:
             context.terminal.info(f"- Starting Index: {self.start}")
             context.terminal.info(f"- Title Override: {self.title if self.title else 'None'}")
+            context.terminal.info(f"- Reverse Page Order: {'Yes' if self.reverse else 'No'}")
+            context.terminal.info("- Renaming order is decided automatically to avoid overwriting files")
             return
 
         if not context.current_dir.exists():
@@ -92,6 +99,10 @@ class ActionShiftName(BaseAction):
         all_images: list[Path] = []
         for image_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
             all_images.append(image_file.resolve())
+
+        if not all_images:
+            context.terminal.warning(f"No images found in {context.current_dir}, skipping shift renaming.")
+            return
 
         all_images.sort(key=lambda x: x.stem, reverse=self.reverse)
 
@@ -109,13 +120,13 @@ class ActionShiftName(BaseAction):
         )
 
         progress = context.terminal.make_progress()
-        task = progress.add_task("Renaming images...", finished_text="Renamed images", total=len(renaming_maps))
-        for original_path, new_path in renaming_maps.items():
-            original_path.rename(new_path)
-            progress.update(task, advance=1)
-        task_info = progress.tasks[task]
+        # The whole plan is validated before the first rename, so a conflict fails here
+        # with the folder untouched, and a failure mid-way is rolled back.
+        result = apply_rename_order(renaming_maps)
+        task = progress.add_task("Renaming images...", finished_text="Renamed images", total=len(result.moves))
+        progress.update(task, advance=len(result.applied))
 
-        context.terminal.stop_progress(progress, f"Renamed {task_info.completed} images in {context.current_dir}.")
+        context.terminal.stop_progress(progress, f"Renamed {len(result.applied)} images in {context.current_dir}.")
 
 
 class ActionRename(BaseAction):

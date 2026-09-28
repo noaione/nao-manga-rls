@@ -375,6 +375,20 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Make threaded worker run function serially when threads is set to 1 to avoid overhead
 
 **Fixes**
+- `nmanga shiftname` and the orchestrator `shift_rename` action - Work out the order to rename the files in
+  automatically, so no file is overwritten by another, and fail instead of guessing when no safe order exists
+  - A right shift is renamed descending and a left shift ascending, derived from the mapping itself; there is no
+    option to configure, and `-r/--reverse` keeps meaning "number the pages bottom up"
+  - The whole plan is validated before the first rename, so a mapping that cannot be done safely (a cycle such
+    as `--reverse` over already numbered pages, two files wanting one name, or a stray file sitting on a
+    destination) leaves the folder untouched
+  - A rename that fails partway is rolled back in reverse, which always restores the original names; if an undo
+    fails too, the error names the files that are still displaced instead of reporting a clean abort
+  - Refuses to replace an existing file during the move, atomically via `renameat2(RENAME_NOREPLACE)` on Linux
+    and `renamex_np(RENAME_EXCL)` on macOS, with a portable existence check as the fallback
+  - Add `-n/--dry-run` to print the order the files would be renamed in
+- `nmanga shiftname` - Report a non-zero exit code when a rename cannot be performed. The command previously
+  returned a value that click discards, so a failure still exited 0
 - `nmanga upscale-trt` and `nmanga denoise-trt` - Clamp the batch size down to the one hardcoded in the model
   (e.g. an input shape of `[1, 3, height, width]`) instead of failing with an `INVALID_ARGUMENT` error
 - `nmanga upscale-trt` and `nmanga denoise-trt` - Report a proper error when the model declares a fixed tile size
