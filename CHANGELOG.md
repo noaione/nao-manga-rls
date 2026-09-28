@@ -340,6 +340,14 @@ Rewritten every thing as a module with `nmanga` namespace.
 **New Features**
 - `nmanga orchestra` - Create/run a JSON file that will run multiple functions in nmanga together
 - `nmanga lookup imagesize` - Lookup image sizes in an archive or folder
+- Orchestrator `autolevel` action - The `v3` algorithm is now actually implemented, backed by the `nimages`
+  VapourSynth plugin like `nmanga autolevel3`. It builds one clip per volume and levels the pages with the same
+  per page decisions as `v2`; colour pages are levelled on their own planes with the levels found on their luma
+  - The action now carries the `cache_mb` and `prefetch` options the command has
+- Orchestrator `posterize` action - The `vapoursynth` mode is now actually implemented, like `nmanga posterize2`.
+  The SSIMULACRA2 gate compares against the gray clip the posterize chain already decoded, and colour pages are
+  copied as before
+  - The action now carries the `cache_mb` and `prefetch` options the command has
 - Reworked CLI display with `rich-click` for better experience
 - Implemented threaded tagging for better performance
 - Use `rich` progress bar for better progress display
@@ -375,6 +383,9 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Make threaded worker run function serially when threads is set to 1 to avoid overhead
 
 **Fixes**
+- Orchestrator `posterize` action - `bpc: auto` could not be used at all: the `ge`/`le` range on the field was
+  applied to the `auto` literal too, so constructing the action raised a `TypeError` from inside pydantic. The
+  range is now checked by a validator that leaves `auto` alone
 - `nmanga shiftname` and the orchestrator `shift_rename` action - Work out the order to rename the files in
   automatically, so no file is overwritten by another, and fail instead of guessing when no safe order exists
   - A right shift is renamed descending and a left shift ascending, derived from the mapping itself; there is no

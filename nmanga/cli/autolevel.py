@@ -30,7 +30,6 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
@@ -49,13 +48,12 @@ from ..autolevel import (
     find_local_peak_legacy,
     gamma_correction,
 )
-from ..common import lowest_or, threaded_worker
+from ..common import BoundedWritePool, lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
 from ..vapour import (
-    AutolevelChain,
+    level_color_page,
     vs_attach_logger,
     vs_autolevel_clip,
-    vs_carry_levels,
     vs_find_missing_plugins,
     vs_frame_to_image,
 )
@@ -705,83 +703,6 @@ def write_page(
     return AutoLevelResult.PROCESSED
 
 
-class BoundedWritePool:
-    """
-    Write completed pages on a thread pool, keeping the frame loop on the main thread.
-
-    Pillow releases the GIL while it encodes a PNG, so the write is the one stage of
-    `autolevel3` and `posterize2` that parallelises with threads. The VapourSynth side is left
-    alone: the frames are pulled one at a time in page order, because that is what keeps the
-    decoder readahead useful and the plugin's per frame log in order.
-
-    At most `workers` pages are held, so the pool cannot outrun the loop and pile up decoded
-    images in memory. `submit` returns a future once that limit is passed so the caller can
-    wait on the oldest one instead of blocking inside here.
-    """
-
-    def __init__(self, workers: int):
-        self._workers = max(workers, 1)
-        self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="nmanga-write")
-        self._pending: list[Future] = []
-
-    def submit(self, fn, *args) -> Future | None:
-        """Queue one page, returning the oldest queued page if the pool is now full."""
-        self._pending.append(self._pool.submit(fn, *args))
-        if len(self._pending) >= self._workers:
-            return self._pending.pop(0)
-        return None
-
-    def pending(self) -> list[Future]:
-        """Take the queued futures, oldest first, leaving the pool empty."""
-        pending, self._pending = self._pending, []
-        return pending
-
-    def __enter__(self) -> BoundedWritePool:
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        # On an error the pending writes are dropped rather than waited on, so the original
-        # exception is what reaches the user.
-        if exc_type is not None:
-            for future in self._pending:
-                future.cancel()
-            self._pending.clear()
-        self._pool.shutdown(wait=exc_type is None)
-        return False
-
-
-def _level_color_page(
-    chain: AutolevelChain, index: int, black_level: int, white_level: int, config: Autolevel3Config
-) -> Image.Image:
-    """
-    Level one page's own colour planes with the levels found on its luma.
-
-    `PeakStats` only ever sees the gray normalisation of a page, so levelling the colour page
-    with the same curve means moving the two detected level properties onto the colour frame
-    and letting `Levels(use_props=True)` rewrite every plane. `Levels` reads the properties
-    from the frame of *its* input, so the colour frame has to be the one `vs_carry_levels`
-    produced; handing it `chain.stats` would read the gray page's own levels and level with a
-    curve derived from a different page.
-    """
-    vs = get_vapoursynth()
-    with chain.source.get_frame(index) as source_frame:
-        # `vs_carry_levels` takes a clip; a bare frame is wrapped into a one frame clip of its
-        # own size and format, so the properties land on a single frame with index 0.
-        carried = vs_carry_levels(source_frame, chain.stats, core=vs.core)
-        with vs.core.nimages.Levels(
-            carried,
-            use_props=True,
-            auto_gamma=True,
-            peak_offset=config.peak_offset,
-            debug=int(console.debugged),
-        ).get_frame(0) as result:
-            planes = [vs_frame_to_image(result, plane) for plane in range(result.format.num_planes)]
-
-    if len(planes) == 1:
-        return planes[0]
-    return Image.merge("RGB", planes[:3])
-
-
 @click.command(
     name="autolevel3",
     help="Automatically adjust the levels of images in a directory using VapourSynth (experimental)",
@@ -981,7 +902,7 @@ def autolevel3(
                 # Level the colour page itself rather than its luma, carrying the levels the
                 # gray page was leveled with onto it.
                 if full_config.keep_colorspace:
-                    color_image = _level_color_page(chain, n, black_level, white_level, full_config)
+                    color_image = level_color_page(chain, n, full_config, debug=console.debugged)
                     image.close()
                     image = color_image
 

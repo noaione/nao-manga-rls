@@ -102,10 +102,29 @@
                     "title": "Skip Color Images",
                     "type": "boolean"
                 },
-                "legacy_mode": {
-                    "default": false,
-                    "title": "Use the initial auto level algorithm",
-                    "type": "boolean"
+                "algorithm": {
+                    "default": "v2",
+                    "enum": [
+                        "v1",
+                        "v2",
+                        "v3"
+                    ],
+                    "title": "The algorithm or mode to use for peaks + leveling",
+                    "type": "string"
+                },
+                "cache_mb": {
+                    "default": 512,
+                    "maximum": 8192,
+                    "minimum": 64,
+                    "title": "VapourSynth Frame Cache in MiB",
+                    "type": "integer"
+                },
+                "prefetch": {
+                    "default": 16,
+                    "description": "How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+                    "minimum": 0,
+                    "title": "VapourSynth Decoder Prefetch",
+                    "type": "integer"
                 },
                 "dump_stats": {
                     "default": false,
@@ -879,6 +898,7 @@
                         }
                     ],
                     "default": 4,
+                    "description": "The number of bitdepth to reduce the image to, or `auto` to detect it per image",
                     "examples": [
                         1,
                         2,
@@ -886,8 +906,6 @@
                         8,
                         "auto"
                     ],
-                    "ge": 1,
-                    "le": 8,
                     "title": "Bits Per Channel"
                 },
                 "threshold": {
@@ -896,11 +914,6 @@
                     "minimum": 0.0,
                     "title": "Threshold for Auto bitdepth",
                     "type": "number"
-                },
-                "pillow": {
-                    "default": false,
-                    "title": "Use Python Pillow",
-                    "type": "boolean"
                 },
                 "ssimulacra2": {
                     "anyOf": [
@@ -913,6 +926,30 @@
                     ],
                     "default": null,
                     "title": "SSIMULACRA2 Check"
+                },
+                "mode": {
+                    "default": "pillow",
+                    "enum": [
+                        "pillow",
+                        "magick",
+                        "vapoursynth"
+                    ],
+                    "title": "The processor to use for posterizing",
+                    "type": "string"
+                },
+                "cache_mb": {
+                    "default": 512,
+                    "maximum": 8192,
+                    "minimum": 64,
+                    "title": "VapourSynth Frame Cache in MiB",
+                    "type": "integer"
+                },
+                "prefetch": {
+                    "default": 16,
+                    "description": "How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+                    "minimum": 0,
+                    "title": "VapourSynth Decoder Prefetch",
+                    "type": "integer"
                 },
                 "threads": {
                     "minimum": 1,

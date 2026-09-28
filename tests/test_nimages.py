@@ -609,7 +609,7 @@ class TestBoundedWritePool:
     """The write pool that keeps the encode off the frame loop."""
 
     def test_runs_every_submitted_call(self):
-        from nmanga.cli.autolevel import BoundedWritePool
+        from nmanga.common import BoundedWritePool
 
         seen: list[int] = []
         with BoundedWritePool(4) as pool:
@@ -622,7 +622,7 @@ class TestBoundedWritePool:
         assert sorted(seen) == list(range(20))
 
     def test_hands_back_the_oldest_page_once_full(self):
-        from nmanga.cli.autolevel import BoundedWritePool
+        from nmanga.common import BoundedWritePool
 
         with BoundedWritePool(3) as pool:
             assert pool.submit(lambda: None) is None
@@ -635,7 +635,7 @@ class TestBoundedWritePool:
 
     def test_hands_pages_back_in_order(self):
         """The bound is only a memory bound if the oldest page is the one returned."""
-        from nmanga.cli.autolevel import BoundedWritePool
+        from nmanga.common import BoundedWritePool
 
         with BoundedWritePool(2) as pool:
             assert pool.submit(int, 1) is None
@@ -644,7 +644,7 @@ class TestBoundedWritePool:
             assert second.result() == 1
 
     def test_a_failing_write_is_raised_on_result(self):
-        from nmanga.cli.autolevel import BoundedWritePool
+        from nmanga.common import BoundedWritePool
 
         def boom():
             raise ValueError("write failed")
@@ -657,7 +657,7 @@ class TestBoundedWritePool:
                 oldest.result()
 
     def test_workers_is_at_least_one(self):
-        from nmanga.cli.autolevel import BoundedWritePool
+        from nmanga.common import BoundedWritePool
 
         # Zero workers would mean no write ever completes, so it is clamped to one.
         with BoundedWritePool(0) as pool:

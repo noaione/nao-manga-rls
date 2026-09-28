@@ -25,12 +25,13 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+import shutil
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
 from PIL import Image
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
 from ... import file_handler, term
 from ...autolevel import (
@@ -39,12 +40,21 @@ from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
-from ...common import lowest_or, threaded_worker
-from ...vapour import vs_prepare_image, vs_ssimulacra2
+from ...common import BoundedWritePool, lowest_or, threaded_worker
+from ...lazy import get_vapoursynth
+from ...vapour import (
+    vs_attach_logger,
+    vs_frame_to_grays,
+    vs_frame_to_image,
+    vs_posterize_clip,
+    vs_prepare_image,
+    vs_ssimulacra2,
+)
 from ..common import SkipActionKind, SSIMULACRA2CheckConfig, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
+    from ...term import ConsoleInterface
     from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = ("ActionPosterize",)
@@ -167,6 +177,30 @@ def _runner_posterize_threaded_star(
     return _runner_posterize_threaded(*args)
 
 
+# The VapourSynth page writes: both return whether the page was written, and the caller maps
+# that to a `ThreadedResult`. They are module level so the write pool can call them directly.
+def _posterize_write_png(image: Image.Image, dest_path: Path) -> bool:
+    """Encode and write one finished page. Runs on the write pool."""
+    image.save(dest_path, format="PNG")
+    image.close()
+    return True
+
+
+def _posterize_copy_page(img_path: Path, dest_path: Path, cnsl: "ConsoleInterface") -> bool:
+    """Copy the source page over the output. Runs on the write pool."""
+    if dest_path.exists():
+        cnsl.warning(f"Skipping existing file: {dest_path}")
+        return False
+    shutil.copy2(img_path, dest_path)
+    return False
+
+
+def _posterize_result(written: bool) -> ThreadedResult:
+    """Map a write pool result to the action's own result."""
+
+    return ThreadedResult.PROCESSED if written else ThreadedResult.COPIED
+
+
 class ActionPosterize(BaseAction, ActionColorMixin):
     """
     Action to posterize all images in a volume with imagemagick or Pillow
@@ -183,16 +217,52 @@ class ActionPosterize(BaseAction, ActionColorMixin):
     """The kind of action"""
     base_path: str = Field("posterized", title="Output Base Path")
     """The base path to save the posterized images to"""
-    bpc: int | Literal["auto"] = Field(4, ge=1, le=8, title="Bits Per Channel", examples=[1, 2, 4, 8, "auto"])
-    """The number of bitdepth to reduce the image to"""
+    bpc: int | Literal["auto"] = Field(
+        4,
+        title="Bits Per Channel",
+        examples=[1, 2, 4, 8, "auto"],
+        description="The number of bitdepth to reduce the image to, or `auto` to detect it per image",
+    )
+    """The number of bitdepth to reduce the image to, or `auto` to detect it per image"""
     threshold: float = Field(0.01, ge=0.0, le=1.0, title="Threshold for Auto bitdepth")
     """The threshold to use when detecting bitdepth automatically"""
-    pillow: bool = Field(False, title="Use Python Pillow")
-    """Whether to use Pillow for posterizing instead of ImageMagick"""
     ssimulacra2: SSIMULACRA2CheckConfig | None = Field(None, title="SSIMULACRA2 Check")
     """Do a SSIMULACRA2 check for the posterized images, ensuring they are not lossy"""
+    mode: Literal["pillow", "magick", "vapoursynth"] = Field("pillow", title="The processor to use for posterizing")
+    """
+    The processor to use for posterizing:
+    - magick: Use ImageMagick for posterizing
+    - pillow: Use Pillow for posterizing (fast)
+    - vapoursynth: Use VapourSynth for posterizing (faster)
+    """
+    cache_mb: int = Field(512, ge=64, le=8192, title="VapourSynth Frame Cache in MiB")
+    """VapourSynth frame cache in MiB, only used by the `vapoursynth` mode"""
+    prefetch: int = Field(
+        16,
+        ge=0,
+        title="VapourSynth Decoder Prefetch",
+        description="How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+    )
+    """How many VapourSynth frames to decode ahead of the one being processed, only used by the `vapoursynth` mode"""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
+
+    @field_validator("bpc", mode="after")
+    @classmethod
+    def _check_bpc(cls, value: int | Literal["auto"]) -> int | Literal["auto"]:
+        """
+        Range check the numeric bit depth, and leave ``auto`` alone.
+
+        The range cannot be expressed as `ge`/`le` on the field: those constraints would be
+        applied to the ``"auto"`` literal as well, which raises a `TypeError` from inside
+        pydantic and makes ``bpc: auto`` impossible to construct.
+        """
+
+        if value == "auto":
+            return value
+        if not 1 <= value <= 8:
+            raise ValueError("bpc must be between 1 and 8, or 'auto'")
+        return value
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -209,7 +279,10 @@ class ActionPosterize(BaseAction, ActionColorMixin):
         if context.dry_run:
             context.terminal.info(f"- Output Base Path: {self.base_path}")
             context.terminal.info(f"- Bits Per Channel: {self.bpc}")
-            context.terminal.info(f"- Use Pillow: {'Yes' if self.pillow else 'No'}")
+            context.terminal.info(f"- Mode: {self.mode}")
+            if self.mode == "vapoursynth":
+                context.terminal.info(f"- VapourSynth Frame Cache: {self.cache_mb} MiB")
+                context.terminal.info(f"- VapourSynth Decoder Prefetch: {self.prefetch}")
             context.terminal.info(f"- Processing Threads: {self.threads}")
             context.update_cwd(output_dir)
             return
@@ -221,8 +294,12 @@ class ActionPosterize(BaseAction, ActionColorMixin):
             context.update_cwd(output_dir)  # We still need to update CWD
             return
 
+        if self.mode == "vapoursynth":
+            self._run_vapoursynth(context, volume, orchestrator, output_dir)
+            return
+
         imagick = context.toolsets.get("magick")
-        if imagick is None and not self.pillow:
+        if imagick is None and self.mode == "magick":
             context.terminal.error("ImageMagick is required for posterizing, but not found!")
             raise RuntimeError("Spreads action failed due to missing ImageMagick.")
 
@@ -271,6 +348,141 @@ class ActionPosterize(BaseAction, ActionColorMixin):
         # Update CWD
         context.update_cwd(output_dir)
 
+    def _run_vapoursynth(
+        self,
+        context: WorkerContext,
+        volume: "VolumeConfig",
+        orchestrator: "OrchestratorConfig",
+        output_dir: Path,
+    ) -> None:
+        """
+        Posterize a volume with the `nimages` VapourSynth plugin, mirroring `nmanga posterize2`.
+
+        One clip is built for the whole volume and the pages are pulled from it in order, so
+        the decoder readahead stays useful. The gate decision is made on this thread, from the
+        gate's own clips; only the save or the copy goes to the write pool, which is the
+        expensive half.
+
+        The frames are pulled on this thread, so this cannot go through `threaded_worker`: a
+        VapourSynth clip holds native state and cannot be handed to a worker process.
+        """
+
+        vs = get_vapoursynth()
+        vs_attach_logger(context.terminal)
+
+        all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
+        all_images.sort(key=lambda x: x.stem)
+        total_images = len(all_images)
+
+        to_process: list[Path] = []
+        skip_actions: list[tuple[Path, SkipActionKind]] = []
+        for image in all_images:
+            pg_num, is_color = self.is_color_page(image, context=context, volume=volume, orchestrator=orchestrator)
+            if is_color:
+                # Colour pages are never posterized, exactly as the Pillow path does.
+                skip_actions.append((image, SkipActionKind.COPY))
+                continue
+            if pg_num is not None and context.skip_action is not None and pg_num in context.skip_action.pages:
+                requested = context.skip_action.action
+                if requested != SkipActionKind.IGNORE:
+                    skip_actions.append((image, requested))
+                    continue
+            to_process.append(image)
+
+        context.terminal.info(f"Processing {context.current_dir} with posterizer (VapourSynth)...")
+
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Posterizing images...", finished_text="Posterized images", total=total_images)
+
+        results: list[ThreadedResult] = []
+        for image, skip_action in skip_actions:
+            perform_skip_action(image, output_dir, skip_action, context.terminal)
+            results.append(ThreadedResult.COPIED)
+            progress.update(task, advance=1)
+
+        if to_process:
+            # `auto` has no VapourSynth equivalent: the plugin takes a fixed bit depth and the
+            # shade analysis that picks one is Pillow work. Resolved once, up front, and only
+            # when a page is actually the subject of it.
+            bits = self._resolve_bpc(to_process, context)
+            gate = self.ssimulacra2
+
+            chain = vs_posterize_clip(
+                to_process,
+                bits=bits,
+                prefetch=self.prefetch,
+                debug=context.terminal.debugged,
+                cache_mb=self.cache_mb,
+                core=vs.core,
+            )
+
+            with BoundedWritePool(self.threads) as pool:
+                for index, img_path in enumerate(to_process):
+                    dest_path = output_dir / f"{img_path.stem}.png"
+                    with chain.posterized.get_frame(index) as frame:
+                        image = vs_frame_to_image(frame)
+                        copy_instead = False
+                        if gate is not None and gate.enabled:
+                            # The reference is the gray clip the posterize chain already
+                            # decoded, which VapourSynth serves from its frame cache, so the
+                            # second pull costs no extra decode and the score is about the
+                            # posterization alone rather than the decoder as well.
+                            with chain.gray.get_frame(index) as source_frame:
+                                score = vs_ssimulacra2(
+                                    vs_frame_to_grays(source_frame, core=vs.core),
+                                    vs_frame_to_grays(frame, core=vs.core),
+                                )
+                            context.terminal.log(f"SSIM score for {img_path.name}: {score}")
+                            copy_instead = score < gate.minimum
+
+                    if copy_instead:
+                        image.close()
+                        oldest = pool.submit(_posterize_copy_page, img_path, dest_path, context.terminal)
+                    else:
+                        oldest = pool.submit(_posterize_write_png, image, dest_path)
+
+                    if oldest is not None:
+                        results.append(_posterize_result(oldest.result()))
+                        progress.update(task, advance=1)
+
+                for future in pool.pending():
+                    results.append(_posterize_result(future.result()))
+                    progress.update(task, advance=1)
+
+        context.terminal.stop_progress(progress, f"Posterized {total_images} images in {context.current_dir}")
+
+        posterized_count = sum(1 for result in results if result == ThreadedResult.PROCESSED)
+        copied_count = sum(1 for result in results if result == ThreadedResult.COPIED)
+        ignored_count = sum(1 for result in results if result == ThreadedResult.IGNORED)
+        if copied_count > 0:
+            context.terminal.info(f" Copied {copied_count} images without posterizing.")
+        if posterized_count > 0:
+            context.terminal.info(f" Posterized {posterized_count} images.")
+        if ignored_count > 0:
+            context.terminal.info(f" Ignored {ignored_count} images.")
+
+        context.update_cwd(output_dir)
+
+    def _resolve_bpc(self, images: list[Path], context: WorkerContext) -> int:
+        """
+        Turn :attr:`bpc` into a concrete bit depth for the VapourSynth clip.
+
+        ``auto`` is decided from the first page, because the plugin takes one bit depth for
+        the whole clip. The Pillow path decides per page, so an ``auto`` volume can differ
+        between the two modes; the CLI has the same property.
+        """
+
+        if self.bpc != "auto":
+            return self.bpc
+        if not images:
+            return 8
+
+        first = images[0]
+        with Image.open(first) as img:
+            detected = _detect_auto_bpc(img, threshold=self.threshold)
+        context.terminal.info(f"Auto detected bit depth {detected} from {first.name}")
+        return detected
+
     def get_tools(self):
         """
         Get the required tools for the action
@@ -278,9 +490,20 @@ class ActionPosterize(BaseAction, ActionColorMixin):
         :return: A dictionary of tool names and their kinds
         """
 
-        if self.pillow:
-            return {}
+        ssim = {}
+        if self.ssimulacra2 is not None and self.ssimulacra2.enabled:
+            ssim = {"vapoursynth": ToolsKind.PACKAGE, "com.lumen.vship": ToolsKind.VAPOURSYNTH}
 
-        return {
-            "magick": ToolsKind.BINARY,
-        }
+        if self.mode == "magick":
+            return {
+                "magick": ToolsKind.BINARY,
+            }
+        elif self.mode == "vapoursynth":
+            base = {
+                "vapoursynth": ToolsKind.PACKAGE,
+                "xyz.n4o.nimages": ToolsKind.VAPOURSYNTH,
+                "xyz.n4o.imgseqs": ToolsKind.VAPOURSYNTH,
+            }
+            return {**base, **ssim}
+
+        return ssim

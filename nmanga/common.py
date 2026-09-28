@@ -32,6 +32,7 @@ import signal
 import subprocess as sp
 import threading
 import traceback
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from multiprocessing.pool import Pool as MpPool
 from pathlib import Path
@@ -44,6 +45,7 @@ from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPubl
 __all__ = (
     "ALLOWED_TAG_EXTENSIONS",
     "BRACKET_MAPPINGS",
+    "BoundedWritePool",
     "ChapterRange",
     "PseudoChapterMatch",
     "RegexCollection",
@@ -1104,3 +1106,48 @@ class RegexCollection:
     @classmethod
     def page_re(cls) -> Pattern[str]:
         return re.compile(r"(?P<any>.*)p(?P<a>[\d]{1,3})\-?(?P<b>[\d]{1,3})?(?P<anyback>.*)")
+
+
+class BoundedWritePool:
+    """
+    Write completed pages on a thread pool, keeping the frame loop on the main thread.
+
+    Pillow releases the GIL while it encodes a PNG, so the write is the one stage of
+    `autolevel3` and `posterize2` that parallelises with threads. The VapourSynth side is left
+    alone: the frames are pulled one at a time in page order, because that is what keeps the
+    decoder readahead useful and the plugin's per frame log in order.
+
+    At most `workers` pages are held, so the pool cannot outrun the loop and pile up decoded
+    images in memory. `submit` returns a future once that limit is passed so the caller can
+    wait on the oldest one instead of blocking inside here.
+    """
+
+    def __init__(self, workers: int):
+        self._workers = max(workers, 1)
+        self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="nmanga-write")
+        self._pending: list[Future] = []
+
+    def submit(self, fn, *args) -> Future | None:
+        """Queue one page, returning the oldest queued page if the pool is now full."""
+        self._pending.append(self._pool.submit(fn, *args))
+        if len(self._pending) >= self._workers:
+            return self._pending.pop(0)
+        return None
+
+    def pending(self) -> list[Future]:
+        """Take the queued futures, oldest first, leaving the pool empty."""
+        pending, self._pending = self._pending, []
+        return pending
+
+    def __enter__(self) -> BoundedWritePool:
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        # On an error the pending writes are dropped rather than waited on, so the original
+        # exception is what reaches the user.
+        if exc_type is not None:
+            for future in self._pending:
+                future.cancel()
+            self._pending.clear()
+        self._pool.shutdown(wait=exc_type is None)
+        return False

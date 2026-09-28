@@ -43,7 +43,7 @@ from ..autolevel import (
     posterize_image_by_bits,
     posterize_image_by_shades,
 )
-from ..common import lowest_or, threaded_worker
+from ..common import BoundedWritePool, lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
 from ..vapour import (
     vs_attach_logger,
@@ -56,7 +56,6 @@ from ..vapour import (
 )
 from . import options
 from ._deco import time_program
-from .autolevel import BoundedWritePool
 from .base import NMangaCommandHandler
 
 console = term.get_console()

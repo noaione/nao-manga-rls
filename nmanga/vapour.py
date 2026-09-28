@@ -371,6 +371,50 @@ def vs_carry_levels(rgb: "VideoNode | VideoFrame", stats: "VideoNode", core: "Co
     return core.std.ModifyFrame(rgb, [rgb, stats], carry)
 
 
+def level_color_page(
+    chain: AutolevelChain,
+    index: int,
+    config: "AutolevelOptions",
+    *,
+    debug: bool = False,
+    core: "Core | None" = None,
+) -> Image.Image:
+    """
+    Level one page's own colour planes with the levels found on its luma.
+
+    `PeakStats` only ever sees the gray normalisation of a page, so levelling the colour page
+    with the same curve means moving the two detected level properties onto the colour frame
+    and letting `Levels(use_props=True)` rewrite every plane. `Levels` reads the properties
+    from the frame of *its* input, so the colour frame has to be the one :func:`vs_carry_levels`
+    produced; handing it `chain.stats` would read the gray page's own levels and level with a
+    curve derived from a different page.
+
+    Only `peak_offset` is read from `config`, so anything satisfying :class:`AutolevelOptions`
+    works.
+    """
+
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    with chain.source.get_frame(index) as source_frame:
+        # `vs_carry_levels` takes a clip; a bare frame is wrapped into a one frame clip of its
+        # own size and format, so the properties land on a single frame with index 0.
+        carried = vs_carry_levels(source_frame, chain.stats, core=core)
+        with core.nimages.Levels(
+            carried,
+            use_props=True,
+            auto_gamma=True,
+            peak_offset=config.peak_offset,
+            debug=int(debug),
+        ).get_frame(0) as result:
+            planes = [vs_frame_to_image(result, plane) for plane in range(result.format.num_planes)]
+
+    if len(planes) == 1:
+        return planes[0]
+    return Image.merge("RGB", planes[:3])
+
+
 def vs_frame_to_image(frame: "VideoFrame", plane: int = 0) -> Image.Image:
     """
     Return plane `plane` of `frame` as a Pillow image.
