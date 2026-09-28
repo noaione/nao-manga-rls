@@ -37,6 +37,7 @@ import rich_click as click
 from .. import term
 from .._ntypes import VolumeNumberT
 from ..orchestrator import *
+from ..vapour import vs_find_missing_plugins
 from . import options
 from ._deco import check_config_first, time_program
 from .base import (
@@ -192,6 +193,7 @@ def orchestrator_runner(
     # Tools detection
     toolsets = {}
     tested_pkg = set()
+    tested_vs_pkg = set()
     console.info("Detecting needed tools...")
     for action in config.actions:
         action_name = action.kind.name
@@ -223,8 +225,19 @@ def orchestrator_runner(
                         console.error(f"Required binary '{tool_name}' for action '{action_name}' not found!")
                         raise click.Abort()
                     toolsets[tool_name] = tool_path
+                case ToolsKind.VAPOURSYNTH:
+                    if tool_name in tested_vs_pkg:
+                        continue
+                    missing_plugins = vs_find_missing_plugins([tool_name])
+                    if missing_plugins:
+                        console.error(
+                            f"Required vapoursynth plugin '{tool_name}' for action '{action_name}' not found!"
+                        )
+                        raise click.Abort()
+                    tested_vs_pkg.add(tool_name)
     console.info(f"Detected tools: {', '.join(toolsets.keys()) if toolsets else 'None'}")
     console.info(f"Detected packages: {', '.join(tested_pkg) if tested_pkg else 'None'}")
+    console.info(f"Detected vapoursynth plugins: {', '.join(tested_vs_pkg) if tested_vs_pkg else 'None'}")
 
     input_dir = full_base / Path(config.base_path)
     stop_whole_chain = False

@@ -198,6 +198,8 @@ class ToolsKind(str, Enum):
     """The tool is an executable binary"""
     PACKAGE = "package"
     """The tool is a python package"""
+    VAPOURSYNTH = "vapoursynth"
+    """The tool is a vapoursynth plugins"""
 
 
 class BaseAction(BaseModel, abc.ABC):
