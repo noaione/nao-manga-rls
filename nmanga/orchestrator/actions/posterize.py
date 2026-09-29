@@ -35,6 +35,7 @@ from pydantic import ConfigDict, Field, field_validator
 
 from ... import file_handler, term
 from ...autolevel import (
+    PosterizePointMethod,
     analyze_gray_shades,
     npow2,
     posterize_image_by_bits,
@@ -129,7 +130,7 @@ def _runner_posterize_threaded(
             perform_skip_action(img_path, output_dir, SkipActionKind.COPY, cnsl)
             return ThreadedResult.COPIED
 
-        quant = posterize_image_by_bits(img, num_bits=cast(int, real_bpc))
+        quant = posterize_image_by_bits(img, num_bits=cast(int, real_bpc), method=action.method)
 
         if ssimulacra2 is not None and ssimulacra2.enabled:
             cnsl = term.with_thread_queue(log_q)
@@ -235,6 +236,12 @@ class ActionPosterize(BaseAction, ActionColorMixin):
     - pillow: Use Pillow for posterizing (fast)
     - vapoursynth: Use VapourSynth for posterizing (faster)
     """
+    method: PosterizePointMethod = Field(PosterizePointMethod.LLOYD, title="Posterizing method to be used")
+    """
+    The method to use for posterizing
+    - even: Evenly distribute the shades
+    - lloyd: Use Lloyd-Max quantization to distribute the shades
+    """
     cache_mb: int = Field(512, ge=64, le=8192, title="VapourSynth Frame Cache in MiB")
     """VapourSynth frame cache in MiB, only used by the `vapoursynth` mode"""
     prefetch: int = Field(
@@ -280,6 +287,7 @@ class ActionPosterize(BaseAction, ActionColorMixin):
             context.terminal.info(f"- Output Base Path: {self.base_path}")
             context.terminal.info(f"- Bits Per Channel: {self.bpc}")
             context.terminal.info(f"- Mode: {self.mode}")
+            context.terminal.info(f"- Method: {self.method}")
             if self.mode == "vapoursynth":
                 context.terminal.info(f"- VapourSynth Frame Cache: {self.cache_mb} MiB")
                 context.terminal.info(f"- VapourSynth Decoder Prefetch: {self.prefetch}")
@@ -410,6 +418,7 @@ class ActionPosterize(BaseAction, ActionColorMixin):
             chain = vs_posterize_clip(
                 to_process,
                 bits=bits,
+                method=self.method.to_nimages(),
                 prefetch=self.prefetch,
                 debug=context.terminal.debugged,
                 cache_mb=self.cache_mb,
