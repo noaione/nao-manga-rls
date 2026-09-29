@@ -439,7 +439,7 @@ def posterize2(
                 # save or the copy, which is the expensive half, goes to the pool.
                 if score is not None and score < ssim_opt.minimum:
                     image.close()
-                    oldest = pool.submit(_copy_page, img_path, dest_path)
+                    oldest = pool.submit(_copy_page, img_path, dest_path.with_suffix(img_path.suffix))
                 else:
                     oldest = pool.submit(_save_png, image, dest_path)
 

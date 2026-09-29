@@ -446,7 +446,9 @@ class ActionPosterize(BaseAction, ActionColorMixin):
 
                     if copy_instead:
                         image.close()
-                        oldest = pool.submit(_posterize_copy_page, img_path, dest_path, context.terminal)
+                        oldest = pool.submit(
+                            _posterize_copy_page, img_path, dest_path.with_suffix(img_path.suffix), context.terminal
+                        )
                     else:
                         oldest = pool.submit(_posterize_write_png, image, dest_path)
 
