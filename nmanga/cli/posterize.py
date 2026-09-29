@@ -37,6 +37,7 @@ from PIL import Image
 
 from .. import file_handler, term
 from ..autolevel import (
+    PosterizePointMethod,
     analyze_gray_shades,
     detect_nearest_bpc,
     pad_shades_to_bpc,
@@ -89,11 +90,16 @@ def _copy_page(img_path: Path, dest_path: Path) -> PosterizedResult:
 
 
 def _posterize_simple_wrapper(
-    log_q: term.MessageQueue, img_path: Path, dest_output: Path, num_bits: int, ssim: SsimOption
+    log_q: term.MessageQueue,
+    img_path: Path,
+    dest_output: Path,
+    num_bits: int,
+    method: PosterizePointMethod,
+    ssim: SsimOption,
 ) -> PosterizedResult:
     img = Image.open(img_path)
 
-    posterized = posterize_image_by_bits(img, num_bits)
+    posterized = posterize_image_by_bits(img, num_bits, method=method)
 
     dest_path = dest_output / img_path.with_suffix(".png").name
     if ssim.enabled:
@@ -128,7 +134,7 @@ def _posterize_simple_wrapper(
     return PosterizedResult.PROCESSED
 
 
-def _posterize_simple_wrapper_star(args: tuple[term.MessageQueue, Path, Path, int, SsimOption]):
+def _posterize_simple_wrapper_star(args: tuple[term.MessageQueue, Path, Path, int, PosterizePointMethod, SsimOption]):
     return _posterize_simple_wrapper(*args)
 
 
@@ -147,6 +153,15 @@ def _posterize_simple_wrapper_star(args: tuple[term.MessageQueue, Path, Path, in
     default=4,
     show_default=True,
     help="The number of bits to posterize the image to (1-8)",
+)
+@click.option(
+    "-m",
+    "--method",
+    "posterize_method",
+    type=click.Choice(["even", "lloyd"], case_sensitive=False),
+    default="lloyd",
+    show_default=True,
+    help="The method to use for posterization",
 )
 @click.option(
     "-ssim",
@@ -172,6 +187,7 @@ def posterize_simple(
     path_or_archive: Path,
     dest_output: Path,
     num_bits: int,
+    posterize_method: str,
     use_ssimulacra2: bool,
     ssim_min: float,
     threads: int,
@@ -200,6 +216,8 @@ def posterize_simple(
     if not candidates and recursive:
         console.warning("No valid folders found to posterize.")
         return 1
+
+    post_method = PosterizePointMethod.from_str(posterize_method)
 
     if use_ssimulacra2:
         vs_attach_logger(console)
@@ -237,7 +255,7 @@ def posterize_simple(
         with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
             for result in pool.imap_unordered(
                 _posterize_simple_wrapper_star,
-                [(log_q, img_path, real_output, num_bits, ssim_opt) for img_path in all_files],
+                [(log_q, img_path, real_output, num_bits, post_method, ssim_opt) for img_path in all_files],
             ):
                 results.append(result)
                 progress.update(task, advance=1)
@@ -272,6 +290,15 @@ def posterize_simple(
     help="The number of bits to posterize the image to (1-8)",
 )
 @click.option(
+    "-m",
+    "--method",
+    "posterize_method",
+    type=click.Choice(["even", "lloyd"], case_sensitive=False),
+    default="lloyd",
+    show_default=True,
+    help="The method to use for posterization",
+)
+@click.option(
     "-ssim",
     "--use-ssimulacra2",
     "use_ssimulacra2",
@@ -304,6 +331,7 @@ def posterize2(
     path_or_archive: Path,
     dest_output: Path,
     num_bits: int,
+    posterize_method: str,
     use_ssimulacra2: bool,
     ssim_min: float,
     cache_mb: int,
@@ -326,6 +354,7 @@ def posterize2(
             param_hint="path_or_archive",
         )
 
+    post_method = PosterizePointMethod.from_str(posterize_method)
     vs = get_vapoursynth()
     vs_attach_logger(console)
 
@@ -377,6 +406,7 @@ def posterize2(
         chain = vs_posterize_clip(
             all_files,
             bits=num_bits,
+            method=post_method.to_nimages(),
             prefetch=prefetch,
             debug=console.debugged,
             cache_mb=cache_mb,

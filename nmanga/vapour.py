@@ -440,6 +440,7 @@ def vs_posterize_clip(
     files: Sequence[PathLike],
     *,
     bits: int,
+    method: int,
     prefetch: int = 0,
     debug: bool = False,
     cache_mb: int = 512,
@@ -463,7 +464,7 @@ def vs_posterize_clip(
         debug=int(debug),
     )
     gray = vs_to_gray8(source, core=core)
-    posterized = core.nimages.Posterize(gray, bits=bits, debug=int(debug))
+    posterized = core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug))
     return PosterizeChain(source=source, gray=gray, posterized=posterized)
 
 

@@ -26,16 +26,21 @@ from __future__ import annotations
 
 import math
 import subprocess as sp
+from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from PIL import Image
 
 from .lazy import get_numpy, get_scipy_signal
 from .ogsov import is_grayscale_palette
 
+if TYPE_CHECKING:
+    from numpy import ndarray
+
 __all__ = (
+    "PosterizePointMethod",
     "analyze_gray_shades",
     "apply_levels",
     "create_magick_params",
@@ -51,6 +56,7 @@ __all__ = (
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
 Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
+LLOYD_ITERATIONS = 40
 
 
 class ShadeAnalysis(TypedDict):
@@ -58,6 +64,31 @@ class ShadeAnalysis(TypedDict):
     """The gray shade value in integer (0-255)"""
     percentage: float
     """The percentage of pixels in the image that have this shade."""
+
+
+class PosterizePointMethod(str, Enum):
+    EVEN = "even"
+    """Even distribution of shades."""
+    LLOYD = "lloyd"
+    """Lloyd-Max quantization algorithm."""
+
+    @classmethod
+    def from_str(cls, type_str: str) -> PosterizePointMethod:
+        type_str = type_str.lower()
+        if type_str == "even":
+            return cls.EVEN
+        elif type_str == "lloyd":
+            return cls.LLOYD
+        else:
+            raise ValueError(f"Unknown PosterizePointMethod string: {type_str}")
+
+    def to_nimages(self):
+        if self == PosterizePointMethod.EVEN:
+            return 0
+        elif self == PosterizePointMethod.LLOYD:
+            return 1
+        else:
+            raise ValueError(f"Unknown PosterizePointMethod: {self}")
 
 
 def find_local_peak(
@@ -319,7 +350,26 @@ def analyze_gray_shades(image: Image.Image, threshold: float = 0.01) -> list[Sha
     return filtered_shades
 
 
-def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
+def _lloyd_max_levels(img: Image.Image, colors: int) -> "ndarray":
+    """Returns a 256-entry LUT mapping each gray value to one of `colors` levels, with 0 and 255 pinned."""
+    np = get_numpy()
+    hist = np.bincount(np.asarray(img).ravel(), minlength=256).astype(float)
+    x = np.arange(256)
+    levels = np.linspace(0, 255, colors)
+    for _ in range(LLOYD_ITERATIONS):
+        edges = np.concatenate([[-1], (levels[:-1] + levels[1:]) / 2, [256]])
+        bucket = np.digitize(x, edges) - 1
+        for j in range(1, colors - 1):
+            mask = bucket == j
+            if hist[mask].sum() > 0:
+                levels[j] = (hist[mask] * x[mask]).sum() / hist[mask].sum()
+    edges = np.concatenate([[-1], (levels[:-1] + levels[1:]) / 2, [256]])
+    return np.round(levels[np.digitize(x, edges) - 1]).astype(np.uint8)
+
+
+def posterize_image_by_bits(
+    image: Image.Image, num_bits: int, *, method: PosterizePointMethod = PosterizePointMethod.EVEN
+) -> Image.Image:
     """
     Posterize an image to the specified gray shades.
 
@@ -329,9 +379,17 @@ def posterize_image_by_bits(image: Image.Image, num_bits: int) -> Image.Image:
     if image.mode != "L":
         image = image.convert("L")  # force grayscale
 
-    colors = 2**num_bits
+    colors: int = 2**num_bits
+
+    def _method_even(x: Image.ImagePointTransform) -> float:
+        return round(x * (colors - 1) / 255) * 255 / (colors - 1)  # pyright: ignore[reportArgumentType]
+
     # Posterize without fucking up luminance
-    posterized = image.point(lambda x: round(x * (colors - 1) / 255) * 255 / (colors - 1))
+    if method == PosterizePointMethod.LLOYD:
+        lut = _lloyd_max_levels(image, colors).tolist()
+    else:
+        lut = _method_even
+    posterized = image.point(lut)
     # Maybe can be commented out? optimizing with pingo give similar ssimulacra2 scores
     quantized = posterized.quantize(colors=colors, dither=Image.Dither.NONE)
     return quantized.convert("L")
