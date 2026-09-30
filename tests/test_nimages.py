@@ -532,6 +532,493 @@ class TestFrameToGrays:
         assert np.allclose(scaled, source.astype(np.float32) / 255.0)
 
 
+@requires_nimages
+@requires_imagseqs
+class TestClipToGrays:
+    """
+    The clip form of `vs_frame_to_grays`, which is what makes a clip score comparable to the
+    per page score the gate already computes.
+    """
+
+    def test_clip_form_matches_the_per_page_form(self, tmp_path: Path):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_clip_to_grays, vs_frame_to_grays, vs_to_gray8
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        vs = get_vapoursynth()
+        source = vs.core.imgseqs.Read(files=[str(path) for path in pages], mismatch=True, prefetch=0)
+        gray = vs_to_gray8(source, core=vs.core)
+        reference = vs_clip_to_grays(gray, core=vs.core)
+
+        assert reference.format.name == "GrayS"
+        assert reference.num_frames == len(pages)
+        for index in range(len(pages)):
+            with reference.get_frame(index) as clip_frame:
+                clip_plane = np.asarray(clip_frame[0]).copy()
+            with gray.get_frame(index) as gray_frame:
+                per_page = vs_frame_to_grays(gray_frame, core=vs.core)
+            with per_page.get_frame(0) as per_page_frame:
+                per_page_plane = np.asarray(per_page_frame[0]).copy()
+            assert clip_plane.shape == per_page_plane.shape
+            # The clip form is one conversion node over every page, the per page form is a
+            # `ModifyFrame` copy, and the two round the last float bit differently.
+            assert np.allclose(clip_plane, per_page_plane, atol=1e-6)
+
+    def test_full_range_scaling_is_not_rewritten(self, tmp_path: Path):
+        """A limited range conversion turns 255 into 235, and the score with it."""
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_clip_to_grays, vs_to_gray8
+
+        page = tmp_path / "white.png"
+        Image.new("L", (16, 16), 255).save(page)
+        vs = get_vapoursynth()
+        source = vs.core.imgseqs.Read(files=[str(page)], mismatch=True, prefetch=0)
+        reference = vs_clip_to_grays(vs_to_gray8(source, core=vs.core), core=vs.core)
+
+        with reference.get_frame(0) as frame:
+            plane = np.asarray(frame[0])
+        assert np.allclose(plane, 1.0)
+
+    def test_a_scored_pair_stays_in_the_usable_range(self, tmp_path: Path):
+        """
+        A score in the thousands means the scaling is wrong.
+
+        The recorded failure mode is `-15843` where `15.74` was correct, from handing `vship` a
+        plane that was not scaled into `0..1`. This can only catch a gross regression, but it is
+        the cheap guard on the property the per page path already lost once.
+        """
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_clip_to_grays, vs_metric_clip, vs_to_gray8
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        vs = get_vapoursynth()
+        source = vs.core.imgseqs.Read(files=[str(path) for path in pages], mismatch=True, prefetch=0)
+        gray = vs_to_gray8(source, core=vs.core)
+        reference = vs_clip_to_grays(gray, core=vs.core)
+        node = vs_metric_clip(reference, reference, "ssimulacra2")
+        with node.get_frame(0) as frame:
+            score = float(frame.props["_SSIMULACRA2"])  # type: ignore
+        assert 80.0 < score <= 100.0
+
+    def test_frame_to_image_round_trips_the_bytes(self, tmp_path: Path):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_clip_to_grays, vs_grays_frame_to_image, vs_to_gray8
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        vs = get_vapoursynth()
+        source = vs.core.imgseqs.Read(files=[str(path) for path in pages], mismatch=True, prefetch=0)
+        gray = vs_to_gray8(source, core=vs.core)
+        reference = vs_clip_to_grays(gray, core=vs.core)
+
+        for index in range(len(pages)):
+            with reference.get_frame(index) as frame:
+                image = vs_grays_frame_to_image(frame)
+            with gray.get_frame(index) as gray_frame:
+                expected = np.asarray(gray_frame[0]).copy()
+            assert np.array_equal(np.asarray(image), expected)
+
+
+@requires_nimages
+@requires_imagseqs
+class TestClipMetrics:
+    """
+    `vship` scores the whole clip in one call, so the fan-out costs one dispatch per candidate
+    rather than one per page.
+    """
+
+    def _reference(self, pages: list[Path]):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_clip_to_grays, vs_to_gray8
+
+        vs = get_vapoursynth()
+        source = vs.core.imgseqs.Read(files=[str(path) for path in pages], mismatch=True, prefetch=0)
+        gray = vs_to_gray8(source, core=vs.core)
+        return gray, vs_clip_to_grays(gray, core=vs.core)
+
+    def test_one_call_scores_every_page(self, tmp_path: Path):
+        from nmanga.vapour import vs_metric_clip
+
+        pages = _write_pages(tmp_path / "pages", 4)
+        _gray, reference = self._reference(pages)
+        branch = vs_metric_clip(reference, reference, "ssimulacra2")
+        assert branch.num_frames == len(pages)
+        with branch.get_frame(len(pages) - 1) as frame:
+            assert "_SSIMULACRA2" in frame.props
+
+    def test_clip_score_matches_the_per_page_score(self, tmp_path: Path):
+        """The two paths have to agree, or a candidate is scored against a different reference."""
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_clip_to_grays, vs_frame_to_grays, vs_metric_clip, vs_ssimulacra2
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        vs = get_vapoursynth()
+        gray, reference = self._reference(pages)
+        posterized = vs.core.nimages.Posterize(gray, bits=2, method=0)
+        branch = vs_clip_to_grays(posterized, core=vs.core)
+        clip_node = vs_metric_clip(reference, branch, "ssimulacra2")
+
+        for index in range(len(pages)):
+            with clip_node.get_frame(index) as frame:
+                clip_score = float(frame.props["_SSIMULACRA2"])  # type: ignore
+            with gray.get_frame(index) as gray_frame, posterized.get_frame(index) as branch_frame:
+                per_page = vs_ssimulacra2(
+                    vs_frame_to_grays(gray_frame, core=vs.core),
+                    vs_frame_to_grays(branch_frame, core=vs.core),
+                )
+            # The GPU reduction order differs slightly between the two, so this is a tight
+            # tolerance rather than equality.
+            assert abs(clip_score - per_page) < 0.01
+
+    def test_butteraugli_is_a_distance(self, tmp_path: Path):
+        """Its direction is confirmed before it is allowed to decide a depth."""
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import METRIC_HIGHER_IS_BETTER, vs_clip_to_grays, vs_metric_clip
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        vs = get_vapoursynth()
+        gray, reference = self._reference(pages)
+        node = vs_metric_clip(reference, reference, "butteraugli")
+        with node.get_frame(0) as frame:
+            identical = float(frame.props["_BUTTERAUGLI_QNorm"])  # type: ignore
+
+        posterized = vs.core.nimages.Posterize(gray, bits=1, method=0)
+        degraded = vs_metric_clip(reference, vs_clip_to_grays(posterized, core=vs.core), "butteraugli")
+        with degraded.get_frame(0) as frame:
+            lossy = float(frame.props["_BUTTERAUGLI_QNorm"])  # type: ignore
+
+        assert identical == pytest.approx(0.0)
+        assert lossy > identical
+        assert METRIC_HIGHER_IS_BETTER["butteraugli"] is False
+
+    def test_cvvdp_is_higher_is_better(self, tmp_path: Path):
+        """
+        CVVDP is a 0 to 10 quality score, and getting this backwards picks the worst depth.
+
+        The recorded failure: with the direction wired the wrong way the floor became `<= 9.9`,
+        a page scoring `4.251` at one bit passed it, and "fewest bits that passes" then chose one
+        bit over the three bits that scored `9.873`. The anchor is that a page scored against
+        itself is exactly 10 and degrading it lowers the score.
+        """
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import METRIC_DEFAULT_MINIMUM, METRIC_HIGHER_IS_BETTER, vs_clip_to_grays, vs_metric_clip
+
+        assert METRIC_HIGHER_IS_BETTER["cvvdp"] is True
+        assert METRIC_DEFAULT_MINIMUM["cvvdp"] == pytest.approx(9.9)
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        vs = get_vapoursynth()
+        gray, reference = self._reference(pages)
+
+        with vs_metric_clip(reference, reference, "cvvdp").get_frame(0) as frame:
+            identical = float(frame.props["_CVVDP"])  # type: ignore
+        assert identical == pytest.approx(10.0, abs=0.01)
+
+        posterized = vs.core.nimages.Posterize(gray, bits=1, method=0)
+        one_bit = vs_metric_clip(reference, vs_clip_to_grays(posterized, core=vs.core), "cvvdp")
+        with one_bit.get_frame(0) as frame:
+            degraded = float(frame.props["_CVVDP"])  # type: ignore
+        # Better means a larger number, so a degraded page is below the floor and is rejected.
+        assert degraded < identical
+        assert degraded < METRIC_DEFAULT_MINIMUM["cvvdp"]
+
+    def test_the_floor_rejects_a_degraded_candidate_and_finds_the_best_one(self):
+        """The reduction has to pick the fewest bits that clears a higher-is-better floor."""
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        # The KamiKatsu v03 p001 scores that exposed the inverted direction.
+        scores = {
+            "cvvdp": {
+                1: np.array([4.251]),
+                2: np.array([9.230]),
+                3: np.array([9.873]),
+                4: np.array([9.979]),
+            }
+        }
+        chosen = vs_select_posterize_bits(scores, candidates=[1, 2, 3, 4], minimums={"cvvdp": 9.9})
+        # One bit scores 4.251 and must not pass; four bits is the fewest that clears the floor.
+        assert np.array_equal(chosen, [4])
+
+    def test_cvvdp_models_a_four_k_display(self):
+        """The model is stated here rather than inherited from the plugin's own default."""
+        from nmanga.vapour import CVVDP_MODEL
+
+        assert CVVDP_MODEL == "standard_4k"
+
+
+@requires_nimages
+@requires_imagseqs
+class TestPosterizeGroup:
+    """One decode shared by the reference and every candidate branch."""
+
+    def test_every_candidate_is_built_off_one_chain(self, tmp_path: Path):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_posterize_group
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        vs = get_vapoursynth()
+        group = vs_posterize_group(pages, bits_candidates=[2, 4, 6], method=0, core=vs.core)
+
+        assert group.gray is not group.reference
+        assert set(group.branches) == {2, 4, 6}
+        assert group.size == (64, 48)
+        # The reference and the branches all report the same page size and length.
+        for branch in group.branches.values():
+            assert branch.num_frames == len(pages)
+            assert (branch.width, branch.height) == group.size
+            with branch.get_frame(0) as frame:
+                assert frame.format.name == "GrayS"
+
+    def test_scores_are_per_candidate_per_page(self, tmp_path: Path):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_posterize_group, vs_score_candidates
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        vs = get_vapoursynth()
+        group = vs_posterize_group(pages, bits_candidates=[1, 4], method=0, core=vs.core)
+        scores = vs_score_candidates(group, metrics=["ssimulacra2"], core=vs.core)
+
+        assert set(scores) == {"ssimulacra2"}
+        assert set(scores["ssimulacra2"]) == {1, 4}
+        for bits in (1, 4):
+            assert len(scores["ssimulacra2"][bits]) == len(pages)
+        # A coarser posterization cannot score better than a finer one on the same pages.
+        import numpy as np
+
+        assert np.all(scores["ssimulacra2"][4] > scores["ssimulacra2"][1])
+
+
+class TestSelectPosterizeBits:
+    """The reduction over the candidate axis, without a GPU or a plugin in the way."""
+
+    def _scores(self, **per_metric):
+        import numpy as np
+
+        return {
+            metric: {bits: np.array([value], dtype=float) for bits, value in values.items()}
+            for metric, values in per_metric.items()
+        }
+
+    def test_fewest_bits_that_passes_wins(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = self._scores(ssimulacra2={2: 85.0, 3: 90.0, 4: 99.0})
+        chosen = vs_select_posterize_bits(scores, candidates=[2, 3, 4], minimums={"ssimulacra2": 80.0})
+        assert np.array_equal(chosen, [2])
+
+    def test_no_candidate_passing_is_the_fallback(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = self._scores(ssimulacra2={2: 10.0, 4: 20.0})
+        chosen = vs_select_posterize_bits(scores, candidates=[2, 4], minimums={"ssimulacra2": 80.0})
+        assert np.array_equal(chosen, [-1])
+
+    def test_a_lower_is_better_metric_keeps_its_direction(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = self._scores(butteraugli={2: 3.0, 3: 0.4, 4: 0.1})
+        chosen = vs_select_posterize_bits(scores, candidates=[2, 3, 4], minimums={"butteraugli": 1.0})
+        # 2 fails, 3 and 4 both pass, so the fewest bits that passes is 3.
+        assert np.array_equal(chosen, [3])
+
+    def test_every_thresholded_metric_has_to_pass(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = self._scores(ssimulacra2={2: 85.0, 3: 88.0}, butteraugli={2: 2.0, 3: 0.4})
+        chosen = vs_select_posterize_bits(
+            scores,
+            candidates=[2, 3],
+            minimums={"ssimulacra2": 80.0, "butteraugli": 1.0},
+        )
+        assert np.array_equal(chosen, [3])
+
+    def test_a_metric_without_a_threshold_only_reports(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = self._scores(ssimulacra2={2: 85.0, 3: 90.0}, cvvdp={2: 10.0, 3: 10.0})
+        chosen = vs_select_posterize_bits(scores, candidates=[2, 3], minimums={"ssimulacra2": 80.0})
+        assert np.array_equal(chosen, [2])
+
+    def test_the_preference_order_only_breaks_ties(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = self._scores(ssimulacra2={2: 85.0, 3: 90.0, 4: 70.0})
+        chosen = vs_select_posterize_bits(
+            scores,
+            candidates=[4, 3, 2],
+            minimums={"ssimulacra2": 80.0},
+            order=[4, 3, 2],
+        )
+        # 4 fails and both 2 and 3 pass, so the caller's preference picks 3.
+        assert np.array_equal(chosen, [3])
+
+    def test_the_decision_is_per_page(self):
+        import numpy as np
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = {"ssimulacra2": {2: np.array([85.0, 20.0]), 3: np.array([90.0, 30.0])}}
+        chosen = vs_select_posterize_bits(scores, candidates=[2, 3], minimums={"ssimulacra2": 80.0})
+        assert np.array_equal(chosen, [2, -1])
+
+    def test_an_unknown_metric_raises(self):
+        import numpy as np
+        import pytest
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = {"ssimulacra2": {2: np.array([85.0])}}
+        with pytest.raises(ValueError, match="butteraugli"):
+            vs_select_posterize_bits(scores, candidates=[2], minimums={"butteraugli": 1.0})
+
+    def test_no_candidates_raises(self):
+        import numpy as np
+        import pytest
+
+        from nmanga.vapour import vs_select_posterize_bits
+
+        scores = {"ssimulacra2": {2: np.array([85.0])}}
+        with pytest.raises(ValueError, match="candidate"):
+            vs_select_posterize_bits(scores, candidates=[], minimums={"ssimulacra2": 80.0})
+
+
+class TestBitsOption:
+    """`--bits` is the whole candidate set: one depth, or several to choose between."""
+
+    def test_a_single_depth_is_one_candidate(self):
+        from nmanga.cli.posterize import parse_bits
+
+        assert parse_bits("4") == [4]
+
+    def test_a_range_expands_inclusively(self):
+        from nmanga.cli.posterize import parse_bits
+
+        assert parse_bits("2-5") == [2, 3, 4, 5]
+
+    def test_a_plain_list_keeps_the_order_it_was_written_in(self):
+        from nmanga.cli.posterize import parse_bits
+
+        assert parse_bits("5,4,3,2") == [5, 4, 3, 2]
+        assert parse_bits("2,3,4") == [2, 3, 4]
+
+    def test_ranges_and_depths_mix(self):
+        from nmanga.cli.posterize import parse_bits
+
+        assert parse_bits("1-2,4") == [1, 2, 4]
+
+    def test_duplicates_collapse(self):
+        from nmanga.cli.posterize import parse_bits
+
+        assert parse_bits("3,3,3") == [3]
+
+    @pytest.mark.parametrize("raw", ["9", "0", "3-1", "abc", "", "2-", "-3"])
+    def test_a_bad_selection_is_rejected(self, raw: str):
+        import click as click_module
+
+        from nmanga.cli.posterize import parse_bits
+
+        with pytest.raises(click_module.BadParameter):
+            parse_bits(raw)
+
+    def test_a_trailing_comma_is_ignored(self):
+        from nmanga.cli.posterize import parse_bits
+
+        assert parse_bits("4,") == [4]
+        assert parse_bits("2,3,") == [2, 3]
+
+    def test_a_range_is_fewest_bits_and_a_list_is_a_preference(self):
+        from nmanga.cli.posterize import resolve_candidates
+
+        assert resolve_candidates("2-5") == ([2, 3, 4, 5], True)
+        assert resolve_candidates("5,4,3,2") == ([5, 4, 3, 2], False)
+        assert resolve_candidates("2,3,4") == ([2, 3, 4], False)
+
+    def test_one_depth_has_nothing_to_choose_between(self):
+        from nmanga.cli.posterize import resolve_candidates
+
+        assert resolve_candidates("3") == ([3], True)
+        # The default is the fixed depth posterize this command always was.
+        assert resolve_candidates("4") == ([4], True)
+
+    def test_automatic_degradation_is_a_range(self):
+        from nmanga.cli.posterize import AUTO_BITS_RANGE, resolve_candidates
+
+        assert AUTO_BITS_RANGE == "1-6"
+        candidates, fewest = resolve_candidates(AUTO_BITS_RANGE)
+        assert (candidates, fewest) == ([1, 2, 3, 4, 5, 6], True)
+
+    def test_metric_thresholds_parse(self):
+        from nmanga.cli.posterize import parse_metric_minimums
+
+        assert parse_metric_minimums("ssimulacra2=85,butteraugli=1.5") == {
+            "ssimulacra2": 85.0,
+            "butteraugli": 1.5,
+        }
+
+    def test_metrics_default_to_ssimulacra2(self):
+        """Asking for candidates without naming a metric is a request to score them."""
+        from nmanga.cli.posterize import parse_metrics
+
+        assert parse_metrics(None) == ["ssimulacra2"]
+        assert parse_metrics("ssimulacra2,butteraugli") == ["ssimulacra2", "butteraugli"]
+        assert parse_metrics("CVVDP") == ["cvvdp"]
+
+    @pytest.mark.parametrize("raw", ["", ",", "nope", "ssimulacra2,nope"])
+    def test_a_bad_metric_name_is_rejected(self, raw: str):
+        import click as click_module
+
+        from nmanga.cli.posterize import parse_metrics
+
+        with pytest.raises(click_module.BadParameter):
+            parse_metrics(raw)
+
+    @pytest.mark.parametrize("raw", ["ssimulacra2", "nope=1", "ssimulacra2=x"])
+    def test_a_bad_metric_threshold_is_rejected(self, raw: str):
+        import click as click_module
+
+        from nmanga.cli.posterize import parse_metric_minimums
+
+        with pytest.raises(click_module.BadParameter):
+            parse_metric_minimums(raw)
+
+    def test_ssimulacra2_has_a_default_threshold(self):
+        from nmanga.cli.posterize import resolve_metric_minimums
+
+        minimums = resolve_metric_minimums(["ssimulacra2", "cvvdp"], minimums={})
+        assert minimums["ssimulacra2"] == pytest.approx(80.0)
+        assert minimums["cvvdp"] == pytest.approx(9.9)
+
+    def test_an_explicit_threshold_wins(self):
+        from nmanga.cli.posterize import resolve_metric_minimums
+
+        minimums = resolve_metric_minimums(["ssimulacra2", "cvvdp"], minimums={"cvvdp": 9.5, "ssimulacra2": 72.0})
+        assert minimums == {"ssimulacra2": 72.0, "cvvdp": 9.5}
+
+    def test_butteraugli_has_a_default_threshold(self):
+        from nmanga.cli.posterize import resolve_metric_minimums
+
+        assert resolve_metric_minimums(["butteraugli"], minimums={}) == {"butteraugli": 1.0}
+
+
 class TestPluginRegistration:
     """The two new commands have to be reachable, and the old ones untouched."""
 
@@ -561,6 +1048,114 @@ class TestPluginRegistration:
         runner = CliRunner()
         result = runner.invoke(main, ["posterize2", ".", "-o", ".", "--debug"])
         assert result.exit_code != 0
+
+    @pytest.mark.parametrize("flag", ["--use-ssimulacra2", "--ssim-min", "--bits-candidates", "--auto-bits"])
+    def test_posterize2_no_longer_takes_the_old_options(self, flag: str):
+        """`--bits` carries the candidates now, and the old gate's options are gone."""
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["posterize2", ".", "-o", ".", flag])
+        assert result.exit_code != 0
+        # The Pillow command keeps its own copy of the gate options.
+        if flag in ("--use-ssimulacra2", "--ssim-min"):
+            pillow = runner.invoke(main, ["posterize", "--help"])
+            assert flag in pillow.output
+
+    def test_posterize2_takes_one_or_several_depths(self):
+        """`--bits` is a single depth or a candidate set, and it defaults to one depth."""
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["posterize2", "--help"])
+        assert result.exit_code == 0
+        assert "--metrics" in result.output
+        assert "--metric-min" in result.output
+        assert "2-5" in result.output
+        assert "Default: 4" in result.output
+
+    def test_one_depth_is_scored_when_a_metric_is_asked_for(self, tmp_path: Path):
+        """
+        A single depth is a yes or no gate, not an instruction to skip the metric.
+
+        The page is scored against that one candidate and copied when it fails, which is the
+        same fallback every other candidate set takes.
+        """
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        runner = CliRunner()
+
+        # An impossible floor has to send every page to the source bytes.
+        strict = tmp_path / "strict"
+        result = runner.invoke(
+            main,
+            [
+                "posterize2",
+                str(pages),
+                "-o",
+                str(strict),
+                "-t",
+                "1",
+                "--bits",
+                "4",
+                "--metrics",
+                "ssimulacra2",
+                "--metric-min",
+                "ssimulacra2=100",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Copied 2 images without posterization." in result.output
+        for page in pages:
+            assert (strict / page.name).read_bytes() == page.read_bytes()
+
+        # A floor nothing can miss writes every page at that depth, like the fixed path.
+        loose = tmp_path / "loose"
+        result = runner.invoke(
+            main,
+            [
+                "posterize2",
+                str(pages),
+                "-o",
+                str(loose),
+                "-t",
+                "1",
+                "--bits",
+                "4",
+                "--metrics",
+                "ssimulacra2",
+                "--metric-min",
+                "ssimulacra2=0",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Posterized 2 images." in result.output
+        for page in pages:
+            assert (loose / page.name).read_bytes() != page.read_bytes()
+
+    def test_one_depth_without_a_metric_scores_nothing(self, tmp_path: Path):
+        """`--bits 4` on its own stays the fixed depth posterize it always was."""
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["posterize2", str(pages), "-o", str(tmp_path / "out"), "-t", "1", "--bits", "4"],
+        )
+        assert result.exit_code == 0
+        assert "Scoring candidate" not in result.output
+        assert "Copied" not in result.output
+        assert "Posterized 2 images to 4 bits." in result.output
 
     def test_autolevel3_has_prefetch_threads_and_cache(self):
         from click.testing import CliRunner

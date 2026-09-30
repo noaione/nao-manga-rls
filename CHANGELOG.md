@@ -348,6 +348,26 @@ Rewritten every thing as a module with `nmanga` namespace.
   The SSIMULACRA2 gate compares against the gray clip the posterize chain already decoded, and colour pages are
   copied as before
   - The action now carries the `cache_mb` and `prefetch` options the command has
+- `nmanga posterize2` - Metric guided posterization. `--bits` now takes one depth or several, and several turn
+  the command into a fan-out over the `vship` metrics
+  - `--bits 2-5`, `--bits 2,3,4` or `--bits 1-6` posterize every candidate depth for a chunk of pages, score
+    them in one `vship` call per candidate per metric, and keep the least degraded depth every thresholded
+    metric accepts
+  - A single depth with `--metrics` is the same rule with one candidate: the page is scored and copied when
+    it fails, so `--bits 4 --metrics ssimulacra2` is the old single depth gate
+  - A page no candidate passes is copied from the source, so a degraded page never reaches the output
+  - `--metrics` picks what scores the candidates (`ssimulacra2`, `butteraugli`, `cvvdp`), `--metric-min` sets a
+    threshold per metric, and `--bits-policy` chooses between "fewest bits that passes" and the order given
+  - Each metric's direction is fixed and asserted against a known anchor: identical input scores `100` for
+    `ssimulacra2`, `0` for `butteraugli`, and `10` for `cvvdp` with `standard_4k`, so the banner line reads
+    `cvvdp>=9.9` rather than `<=`
+  - One depth with no `--metrics` scores nothing, so `--bits 4` stays the fixed depth posterize it always was
+  - Each candidate hangs off one shared decode, so a volume costs one decode, one posterize pass per candidate,
+    and one metric dispatch per candidate per metric rather than one per page
+  - Pages of differing sizes are grouped per size, because `vship` takes one size per call
+  - `--chunk` (default 16) sizes how many pages are scored and written together, against the frame cache
+  - **Breaking:** `--use-ssimulacra2` and `--ssim-min` are gone. Their equivalent is `--bits <depth> --metrics
+    ssimulacra2`, which scores that one depth at the same `80` default and copies the pages that fail
 - Reworked CLI display with `rich-click` for better experience
 - Implemented threaded tagging for better performance
 - Use `rich` progress bar for better progress display

@@ -26,11 +26,12 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, Sequence, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from PIL import Image
 
@@ -52,6 +53,11 @@ if TYPE_CHECKING:
         peak_offset: int
         no_white: bool
         cache_mb: int
+
+
+# `metric -> bits -> one score per page`, the shape the selection reduces over. Defined at run
+# time rather than under `TYPE_CHECKING` because functions use it in their signatures.
+ScoreMap = dict[str, dict[int, "np.ndarray[Any]"]]
 
 
 def fill_frame_from_frame(n: int, f: "VideoFrame | list[VideoFrame]", *, frame: "VideoFrame") -> "VideoFrame":
@@ -195,6 +201,140 @@ def vs_ssimulacra2(reference: "VideoNode", distorted: "VideoNode") -> float:
     with result.get_frame(0) as f:
         ssim_score = cast(float, f.props["_SSIMULACRA2"])
     return ssim_score
+
+
+# The metrics `com.lumen.vship` exposes, the frame property each one reports, and how to read
+# its number. `higher_is_better` is the direction of the number, not of the quality:
+# `SSIMULACRA2` is a 0 to 100 score where 100 is identical, `BUTTERAUGLI` is a distance where 0
+# is identical.
+METRIC_NAMES: tuple[str, ...] = ("ssimulacra2", "butteraugli", "cvvdp")
+
+# The display `CVVDP` models. The plugin's own default is `standard_fhd`; a scanned page is not
+# a fixed display, so this is stated rather than inherited.
+CVVDP_MODEL = "standard_4k"
+
+
+def vs_metric_scores(node: "VideoNode", property_name: str) -> "np.ndarray[Any]":
+    """
+    Read one score per frame out of `node` in frame order.
+
+    The frames are pulled one at a time, so the clip holding the scores is what stays resident
+    and the result is the array the selection reduces over.
+    """
+    np = get_numpy()
+    scores = np.empty(len(node), dtype=np.float64)
+    for index in range(len(node)):
+        with node.get_frame(index) as frame:
+            scores[index] = cast(float, frame.props[property_name])
+    return scores
+
+
+def _read_ssimulacra2(node: "VideoNode") -> "np.ndarray[Any]":
+    return vs_metric_scores(node, "_SSIMULACRA2")
+
+
+def _read_butteraugli(node: "VideoNode") -> "np.ndarray[Any]":
+    return vs_metric_scores(node, "_BUTTERAUGLI_QNorm")
+
+
+def _read_cvvdp(node: "VideoNode") -> "np.ndarray[Any]":
+    return vs_metric_scores(node, "_CVVDP")
+
+
+@dataclass(frozen=True)
+class MetricKind:
+    """How to call one `vship` metric, read its score, and whether a larger number is better."""
+
+    name: str
+    call: Callable[["VideoNode", "VideoNode", "Core"], "VideoNode"]
+    read: Callable[["VideoNode"], "np.ndarray[Any]"]
+    higher_is_better: bool
+    default_minimum: float | None
+
+
+def _call_butteraugli(reference: "VideoNode", distorted: "VideoNode", core: "Core") -> "VideoNode":
+    # The quality norm, which is the one that scales with the amount of degradation rather than
+    # with the worst single pixel. `numStream=1` because several metric nodes are alive at once
+    # during a chunked run and each stream costs several frame buffers of VRAM.
+    return reference.vship.BUTTERAUGLI(distorted, numStream=1)
+
+
+def _call_cvvdp(reference: "VideoNode", distorted: "VideoNode", core: "Core") -> "VideoNode":
+    # CVVDP accumulates its score along the clip by default, so frame `i` would report the
+    # sequence from frame 0 to frame `i` rather than the page. `disableTemporal` is what turns
+    # it into a per frame sensitivity score, which is what independent manga pages can use.
+    return reference.vship.CVVDP(distorted, model_name=CVVDP_MODEL, disableTemporal=1)
+
+
+METRIC_KINDS: Mapping[str, MetricKind] = {
+    "ssimulacra2": MetricKind(
+        name="ssimulacra2",
+        call=lambda reference, distorted, core: reference.vship.SSIMULACRA2(distorted, numStream=1),
+        read=_read_ssimulacra2,
+        higher_is_better=True,
+        default_minimum=80.0,
+    ),
+    "butteraugli": MetricKind(
+        name="butteraugli",
+        call=_call_butteraugli,
+        read=_read_butteraugli,
+        higher_is_better=False,
+        default_minimum=1.0,
+    ),
+    # CVVDP is a 0 to 10 quality score and higher is better: a page scored against itself is
+    # exactly 10, and degrading it lowers the score. That anchor settles the direction, and it is
+    # the opposite of what the first probe of this metric suggested -- which is why `<=` was
+    # wired here once and a page then chose 1 bit through a floor of 9.9.
+    #
+    # 9.9 is the depth at which the score stops being meaningfully short of a perfect 10: on
+    # generated line art the ladder is monotone and 9.9 asks for five bits (9.81 at four, 9.95 at
+    # five). A real page's ladder can sit lower throughout, so a floor every candidate fails is
+    # not a constraint at all -- check `--metric-min cvvdp=<value>` against a volume before
+    # trusting the default on it.
+    "cvvdp": MetricKind(
+        name="cvvdp",
+        call=_call_cvvdp,
+        read=_read_cvvdp,
+        higher_is_better=True,
+        default_minimum=9.9,
+    ),
+}
+METRIC_HIGHER_IS_BETTER: Mapping[str, bool] = {name: kind.higher_is_better for name, kind in METRIC_KINDS.items()}
+# The floors a metric is allowed to fail a page with when the caller names no threshold.
+METRIC_DEFAULT_MINIMUM: Mapping[str, float] = {
+    "ssimulacra2": 80.0,
+    "butteraugli": 1.0,
+    "cvvdp": 9.9,
+}
+
+
+def is_known_metric(metric: str) -> bool:
+    """Whether `metric` is one of the metrics `com.lumen.vship` exposes."""
+    return metric in METRIC_KINDS
+
+
+def vs_metric_clip(
+    reference: "VideoNode",
+    distorted: "VideoNode",
+    metric: str,
+    *,
+    core: "Core | None" = None,
+) -> "VideoNode":
+    """
+    Score `distorted` against `reference` with `metric`, for every frame in one call.
+
+    The returned clip holds one frame per input frame, carrying the score as a frame property.
+    This is the whole point of the fan-out: a volume's scores arrive in one dispatch rather than
+    one dispatch per page.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    kind = METRIC_KINDS.get(metric)
+    if kind is None:
+        raise ValueError(f"Unknown metric: {metric}")
+    return kind.call(reference, distorted, core)
 
 
 def vs_find_missing_plugins(plugins: str | list[str]) -> list[str]:
@@ -491,3 +631,205 @@ def vs_frame_to_grays(frame: "VideoFrame", core: "Core | None" = None) -> "Video
         return out
 
     return core.std.ModifyFrame(blank, [blank], fill)
+
+
+def vs_gray_plane(grays: "VideoNode", core: "Core | None" = None) -> "VideoNode":
+    """
+    Take a float gray clip down to the single plane `vship` expects.
+
+    A one page gray clip from `imgseqs` is already one plane, so the common case costs nothing
+    and the clip is handed straight back. A clip whose format is undefined (a sequence mixing
+    a gray container with a colour one) is resolved to `GRAY` so the metric node has a plane
+    to read, which is the same thing `imgseqs` would have handed out for the gray pages.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    if grays.format.color_family == vs.GRAY and grays.format.num_planes == 1:
+        return grays
+
+    return core.std.ShufflePlanes(grays, planes=0, colorfamily=vs.GRAY)
+
+
+def vs_clip_to_grays(grays: "VideoNode", core: "Core | None" = None) -> "VideoNode":
+    """
+    Return a whole constant `GRAY8` clip in the float form `vship` accepts.
+
+    This is the clip equivalent of :func:`vs_frame_to_grays`: the same bytes, the same `1/255`
+    scaling into `0..1`, and the same per page size, but for every page in one node. That
+    equivalence is what makes a clip score comparable to the per page score the quality gate
+    already computes, so it is the one property worth pinning down with a test.
+
+    `range_s="full"` is not optional. `resize` without it treats the input as limited range and
+    rewrites the values, which produces a score in the thousands rather than a real one.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    plane = vs_gray_plane(grays, core=core)
+    return cast(Any, core).resize.Point(plane, format=vs.GRAYS, range_s="full")
+
+
+def vs_grays_frame_to_image(frame: "VideoFrame") -> Image.Image:
+    """
+    Return one page of a float gray clip as an 8 bit Pillow image.
+
+    The write path wants `GRAY8` bytes, and the candidate the metric scored is a float clip, so
+    the `1/255` scaling has to be undone here rather than by rebuilding the page's clip.
+    """
+    np = get_numpy()
+    scaled = np.asarray(frame[0])
+    return Image.fromarray(np.clip(np.rint(scaled * 255.0), 0, 255).astype(np.uint8))
+
+
+def vs_page_sizes(files: Sequence[PathLike], *, core: "Core | None" = None) -> list[tuple[int, int]]:
+    """
+    Return `(width, height)` for every page in `files`.
+
+    `vship` takes one size per call, so a volume whose pages are not all the same size has to
+    be grouped before any candidate exists. The sizes are read once here rather than discovered
+    inside the chunk loop, and each frame is released again so nothing is pinned.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    source = core.imgseqs.Read(files=[str(path) for path in files], mismatch=True, prefetch=0)
+    sizes: list[tuple[int, int]] = []
+    for index in range(len(files)):
+        with source.get_frame(index) as frame:
+            sizes.append((frame.width, frame.height))
+    return sizes
+
+
+@dataclass
+class PosterizeGroup:
+    """The candidate branches for one page size, and the reference they are scored against."""
+
+    size: tuple[int, int]
+    gray: "VideoNode"
+    reference: "VideoNode"
+    branches: dict[int, "VideoNode"]
+
+
+def vs_posterize_group(
+    files: Sequence[PathLike],
+    *,
+    bits_candidates: Sequence[int],
+    method: int,
+    prefetch: int = 0,
+    debug: bool = False,
+    cache_mb: int = 512,
+    core: "Core | None" = None,
+) -> PosterizeGroup:
+    """
+    Read `files` once and hang one `Posterize` branch per candidate bit depth off the gray clip.
+
+    Every branch shares `files`' single decode: the reference and each candidate are branches of
+    the same `imgseqs.Read`, so the posterize passes are the only extra work per candidate.
+
+    `files` has to hold pages of one size. `vship` takes a constant size, so a volume of mixed
+    sizes is split by the caller and each group is built on its own. `gray` is kept because it
+    is the posterize input and carries each page's size; the scored clips are the two float
+    forms, which is why the value written back is the branch's raw `GRAY8` frame.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    core.max_cache_size = cache_mb
+    source = core.imgseqs.Read(
+        files=[str(path) for path in files],
+        mismatch=True,
+        prefetch=prefetch,
+        debug=int(debug),
+    )
+    gray = vs_to_gray8(source, core=core)
+    reference = vs_clip_to_grays(gray, core=core)
+    branches = {
+        bits: vs_clip_to_grays(core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug)), core=core)
+        for bits in bits_candidates
+    }
+    return PosterizeGroup(size=(gray.width, gray.height), gray=gray, reference=reference, branches=branches)
+
+
+def vs_score_candidates(
+    group: PosterizeGroup,
+    *,
+    metrics: Sequence[str],
+    core: "Core | None" = None,
+) -> ScoreMap:
+    """
+    Score every candidate in `group` with every metric, one dispatch per candidate per metric.
+
+    Returns `metric -> bits -> one score per page`, with the page axis in the order the pages
+    were handed to :func:`vs_posterize_group`. A 200 page volume of 3 candidates and 2 metrics
+    costs 6 dispatches here rather than 200.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    scores: ScoreMap = {}
+    for metric in metrics:
+        kind = METRIC_KINDS[metric]
+        per_bits: dict[int, "np.ndarray[Any]"] = {}
+        for bits, branch in group.branches.items():
+            node = vs_metric_clip(group.reference, branch, metric, core=core)
+            per_bits[bits] = kind.read(node)
+        scores[metric] = per_bits
+    return scores
+
+
+def vs_select_posterize_bits(
+    scores: ScoreMap,
+    *,
+    candidates: Sequence[int],
+    minimums: Mapping[str, float],
+    order: Sequence[int] | None = None,
+) -> "np.ndarray[Any]":
+    """
+    Reduce the score arrays to one chosen bit depth per page.
+
+    `scores` is `metric -> bits -> pages` and the result is one entry per page. A page whose
+    entry is -1 has no candidate that every thresholded metric accepts: the caller writes the
+    source page instead, which is the fallback the single depth gate already takes.
+
+    Only metrics with an entry in `minimums` constrain the choice. A metric that was measured
+    without a settled threshold is reported but never picks a depth, so the outcome for a page
+    is `min(bits that pass)` over the metrics that do decide.
+
+    `order` is the caller's preference order and only breaks ties: of the candidates that pass,
+    the one that comes first in `order` wins. Every candidate is scored either way, so the
+    order can never hide a passing depth.
+    """
+    np = get_numpy()
+
+    candidate_list = list(candidates)
+    if not candidate_list:
+        raise ValueError("At least one candidate bit depth is required")
+
+    pages = len(next(iter(next(iter(scores.values())).values())))
+    order_list = list(order) if order is not None else candidate_list
+    ranking = {bits: position for position, bits in enumerate(order_list)}
+    # Preference first, then ascending bits, so a candidate the caller ranked and one they did
+    # not are still ordered against each other.
+    ranked = sorted(candidate_list, key=lambda bits: (ranking.get(bits, len(ranking)), bits))
+
+    passed = np.ones((len(candidate_list), pages), dtype=bool)
+    for metric, minimum in minimums.items():
+        per_bits = scores.get(metric)
+        if per_bits is None:
+            raise ValueError(f"No scores for the {metric} metric")
+        higher_is_better = METRIC_HIGHER_IS_BETTER[metric]
+        for row, bits in enumerate(candidate_list):
+            values = per_bits[bits]
+            passed[row] &= values >= minimum if higher_is_better else values <= minimum
+
+    chosen = np.full(pages, -1, dtype=np.int64)
+    # Least preferred first, so the final write on a passing page is the most preferred.
+    for bits in reversed(ranked):
+        chosen[passed[candidate_list.index(bits)]] = bits
+    return chosen
