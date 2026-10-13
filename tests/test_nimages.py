@@ -287,11 +287,40 @@ class TestGrayNormalisation:
             assert np.asarray(frame[0]).size > 0
 
     def test_odd_width_webp_is_trimmed_and_converted(self, tmp_path: Path):
-        """An odd width cannot be 4:2:0, so the conversion has to trim before resizing."""
+        """
+        An odd width cannot be 4:2:0, so the conversion has to trim before resizing, and the
+        sample it cut is restored from its neighbour rather than filled with black.
+        """
+        import numpy as np
+
         pages = [_tmp_odd_webp(tmp_path)]
         frame = self._gray_frame(pages, 0)
         assert frame.width == 65
         assert frame.format.name == "Gray8"
+
+        plane = np.asarray(frame[0])
+        assert np.array_equal(plane[:, -1], plane[:, -2])
+        assert np.array_equal(plane[-1, :], plane[-2, :])
+
+    def test_odd_webp_in_a_mixed_clip_is_trimmed(self, tmp_path: Path):
+        """
+        A clip mixing containers reports an undefined format, so the subsampling factor has to
+        come from the frame rather than the clip, or the odd webp reaches `resize` untrimmed.
+        """
+        pages = [_tmp_odd_webp(tmp_path), *_write_pages(tmp_path / "pages", 1)]
+        frame = self._gray_frame(pages, 0)
+        assert (frame.width, frame.height, frame.format.name) == (65, 33, "Gray8")
+
+    def test_colour_page_first_still_converts_a_later_odd_webp(self, tmp_path: Path):
+        """
+        A clip's frames are not all one format: a colour page first must not send the odd webp
+        behind it down the plain resize, which refuses its 4:2:0 size.
+        """
+        colour = tmp_path / "colour.png"
+        _gradient(width=65, height=33).convert("RGB").save(colour)
+
+        frame = self._gray_frame([colour, _tmp_odd_webp(tmp_path)], 1)
+        assert (frame.width, frame.height, frame.format.name) == (65, 33, "Gray8")
 
 
 def _tmp_odd_webp(tmp_path: Path) -> Path:
@@ -775,6 +804,32 @@ class TestPosterizeGroup:
             assert (branch.width, branch.height) == group.size
             with branch.get_frame(0) as frame:
                 assert frame.format.name == "GrayS"
+
+    def test_mixed_containers_of_one_size_convert(self, tmp_path: Path):
+        """
+        `vs_posterize_group` sits on `vs_to_gray8`, so it inherits the odd frame trim, and its
+        clips carry the size the undefined-size decode cannot report to `vship`."""
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_posterize_group, vs_score_candidates
+
+        odd_webp = _tmp_odd_webp(tmp_path)
+        odd_png = tmp_path / "odd.png"
+        _gradient(width=65, height=33).save(odd_png)
+
+        vs = get_vapoursynth()
+        group = vs_posterize_group([odd_webp, odd_png], bits_candidates=[2, 4], method=0, core=vs.core)
+
+        assert group.size == (65, 33)
+        with group.gray.get_frame(0) as frame:
+            assert (frame.width, frame.height, frame.format.name) == (65, 33, "Gray8")
+        # Every branch is built on the same clip, and the raw `GRAY8` frame is what is written.
+        with group.branches[4].get_frame(0) as frame:
+            assert frame.format.name == "GrayS"
+
+        scores = vs_score_candidates(group, metrics=["ssimulacra2"], core=vs.core)
+        assert np.all(scores["ssimulacra2"][4] > scores["ssimulacra2"][2])
 
     def test_scores_are_per_candidate_per_page(self, tmp_path: Path):
         from nmanga.lazy import get_vapoursynth

@@ -40,7 +40,7 @@ from .ogsov import DetectedColor
 
 if TYPE_CHECKING:
     import numpy as np
-    from vapoursynth import Core, MessageType, PresetVideoFormat, VideoFrame, VideoNode
+    from vapoursynth import Core, MessageType, PresetVideoFormat, VideoFormat, VideoFrame, VideoNode
 
     from .term import Console
 
@@ -159,16 +159,43 @@ def vs_prepare_image(img: str | PathLike | Image.Image) -> "VideoNode":
     return clip
 
 
+def _subsampling_trim(width: int, height: int, frame_format: "VideoFormat") -> tuple[int, int]:
+    """
+    How many columns and rows to drop so both edges divide evenly by the subsampling.
+
+    The factor is the format's own `1 << subsampling`, not a fixed two: 4:1:1 divides the
+    width by four, so an even width that is not a multiple of four is still refused.
+    """
+    return width % (1 << frame_format.subsampling_w), height % (1 << frame_format.subsampling_h)
+
+
+def _replicate_missing_edges(clip: "VideoNode", right: int, bottom: int, core: "Core") -> "VideoNode":
+    """
+    Grow `clip` by `right` columns and `bottom` rows, repeating its last column and row.
+
+    `std.AddBorders` fills the added area with a colour, which for a trimmed page is a black
+    line where the decoder could not hold the sample: the pixel that was cut is nearer to its
+    neighbour than to black. The clip's own size has to be known, which it is once the
+    subsampled frame has been cropped to edges the filters accept.
+    """
+    if right:
+        column = core.std.CropAbs(clip, width=1, height=clip.height, left=clip.width - 1)
+        clip = core.std.StackHorizontal([clip, column])
+    if bottom:
+        row = core.std.CropAbs(clip, width=clip.width, height=1, top=clip.height - 1)
+        clip = core.std.StackVertical([clip, row])
+    return clip
+
+
 def vs_fix_odd_size_chain(n: int, *, source: "VideoNode", plain_rgb: "VideoNode") -> "VideoNode":
     vs = get_vapoursynth()
     frame = source.get_frame(n)  # this frame's format and size
-    right = frame.width % 2 if frame.format.subsampling_w else 0
-    bottom = frame.height % 2 if frame.format.subsampling_h else 0
+    right, bottom = _subsampling_trim(frame.width, frame.height, frame.format)
     if not right and not bottom:
         return plain_rgb
     even = vs.core.std.CropAbs(source, width=frame.width - right, height=frame.height - bottom)
     rgb = vs.core.resize.Bicubic(even, format=vs.RGB24, matrix_in_s="470bg", range_in_s="limited")
-    return vs.core.std.AddBorders(rgb, right=right, bottom=bottom)
+    return _replicate_missing_edges(rgb, right, bottom, vs.core)
 
 
 def vs_prepare_image_bulk(images: Sequence[PathLike], *, debug: bool = False, prefetch: int = 6) -> "VideoNode":
@@ -347,17 +374,22 @@ def vs_find_missing_plugins(plugins: str | list[str]) -> list[str]:
     return list(plugins_set - identifiers)
 
 
-def _trim_and_convert(clip: "VideoNode", width: int, height: int, core: "Core") -> "VideoNode":
+def _trim_and_convert(
+    clip: "VideoNode", width: int, height: int, frame_format: "VideoFormat", core: "Core"
+) -> "VideoNode":
     """
-    Convert a YUV clip to a constant `GRAY8` through `RGB24`.
+    Convert a subsampled clip to a constant `GRAY8` through `RGB24`.
 
     An odd width or height cannot be 4:2:0, and every filter but the decoder refuses it,
     so an odd edge is trimmed before the conversion and padded back after it.
+
+    `frame_format` is the format of the frame at `width`/`height`, not `clip.format`: a
+    `mismatch` `imgseqs` clip reports an undefined format whose subsampling is always zero,
+    so reading the clip's format there trims nothing and hands the odd frame to `resize`.
     """
     vs = get_vapoursynth()
 
-    right = width % 2 if clip.format.subsampling_w else 0
-    bottom = height % 2 if clip.format.subsampling_h else 0
+    right, bottom = _subsampling_trim(width, height, frame_format)
     region = clip
     if right or bottom:
         region = core.std.CropAbs(clip, width=width - right, height=height - bottom)
@@ -367,7 +399,7 @@ def _trim_and_convert(clip: "VideoNode", width: int, height: int, core: "Core") 
     rgb = cast(Any, core).resize.Bicubic(region, format=vs.RGB24)
     gray = cast(Any, core).resize.Bicubic(rgb, format=vs.GRAY8, matrix_s="470bg", range_s="full")
     if right or bottom:
-        gray = core.std.AddBorders(gray, right=right, bottom=bottom)
+        gray = _replicate_missing_edges(gray, right, bottom, core)
     return gray
 
 
@@ -388,22 +420,19 @@ def vs_to_gray8(source: "VideoNode", core: "Core | None" = None) -> "VideoNode":
     if source.format.color_family == vs.RGB:
         return cast(Any, core).resize.Bicubic(source, format=vs.GRAY8, matrix_s="470bg", range_s="full")
     if source.format.color_family == vs.YUV:
-        return _trim_and_convert(source, source.width, source.height, core)
+        return _trim_and_convert(source, source.width, source.height, source.format, core)
 
     # The clip varies, so this node reports an undefined format and cannot say whether its
-    # frames are RGB. One probe answers it.
-    probe = source.get_frame(0)
-    if probe.format.color_family == vs.RGB:
-        return cast(Any, core).resize.Bicubic(source, format=vs.GRAY8, matrix_s="470bg", range_s="full")
-
-    # A sequence mixing both has to be converted one frame at a time.
+    # frames are RGB. One frame cannot answer that for the rest either: a colour page first
+    # would send a later webp down the plain resize, which refuses its odd 4:2:0 size.
+    # Every frame is asked what it is, and the plain resize is only ever returned for RGB.
     plain_gray = cast(Any, core).resize.Bicubic(source, format=vs.GRAY8, matrix_s="470bg", range_s="full")
 
     def convert(n: int = 0, **_):
         frame = source.get_frame(n)
         if frame.format.color_family == vs.RGB:
             return plain_gray
-        return _trim_and_convert(source, frame.width, frame.height, core)
+        return _trim_and_convert(source, frame.width, frame.height, frame.format, core)
 
     gray = core.std.FrameEval(source, convert)
     return cast(Any, core).resize.Bicubic(gray, format=vs.GRAY8)
@@ -652,7 +681,9 @@ def vs_gray_plane(grays: "VideoNode", core: "Core | None" = None) -> "VideoNode"
     return core.std.ShufflePlanes(grays, planes=0, colorfamily=vs.GRAY)
 
 
-def vs_clip_to_grays(grays: "VideoNode", core: "Core | None" = None) -> "VideoNode":
+def vs_clip_to_grays(
+    grays: "VideoNode", *, size: tuple[int, int] | None = None, core: "Core | None" = None
+) -> "VideoNode":
     """
     Return a whole constant `GRAY8` clip in the float form `vship` accepts.
 
@@ -663,13 +694,20 @@ def vs_clip_to_grays(grays: "VideoNode", core: "Core | None" = None) -> "VideoNo
 
     `range_s="full"` is not optional. `resize` without it treats the input as limited range and
     rewrites the values, which produces a score in the thousands rather than a real one.
+
+    `size` pins the output dimensions. A clip mixing containers reports a size of zero, which
+    `vship` rejects with an invalid argument, so a caller that knows the page size states it
+    and the clip's video info carries it.
     """
     vs = get_vapoursynth()
     if core is None:
         core = vs.core
 
     plane = vs_gray_plane(grays, core=core)
-    return cast(Any, core).resize.Point(plane, format=vs.GRAYS, range_s="full")
+    if size is None:
+        return cast(Any, core).resize.Point(plane, format=vs.GRAYS, range_s="full")
+    width, height = size
+    return cast(Any, core).resize.Point(plane, width=width, height=height, format=vs.GRAYS, range_s="full")
 
 
 def vs_grays_frame_to_image(frame: "VideoFrame") -> Image.Image:
@@ -732,8 +770,9 @@ def vs_posterize_group(
 
     `files` has to hold pages of one size. `vship` takes a constant size, so a volume of mixed
     sizes is split by the caller and each group is built on its own. `gray` is kept because it
-    is the posterize input and carries each page's size; the scored clips are the two float
-    forms, which is why the value written back is the branch's raw `GRAY8` frame.
+    is the posterize input, and the size is read off its first page: a clip mixing containers
+    reports no size of its own. The scored clips are the two float forms, which is why the
+    value written back is the branch's raw `GRAY8` frame.
     """
     vs = get_vapoursynth()
     if core is None:
@@ -747,12 +786,19 @@ def vs_posterize_group(
         debug=int(debug),
     )
     gray = vs_to_gray8(source, core=core)
-    reference = vs_clip_to_grays(gray, core=core)
+    # `gray.width` is zero when the group mixes containers, so the size is read from the page
+    # itself. The caller groups by size, so its first page speaks for the whole group, and the
+    # float clips are built at that size because `vship` cannot take an undefined one.
+    with gray.get_frame(0) as first:
+        size = (first.width, first.height)
+    reference = vs_clip_to_grays(gray, size=size, core=core)
     branches = {
-        bits: vs_clip_to_grays(core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug)), core=core)
+        bits: vs_clip_to_grays(
+            core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug)), size=size, core=core
+        )
         for bits in bits_candidates
     }
-    return PosterizeGroup(size=(gray.width, gray.height), gray=gray, reference=reference, branches=branches)
+    return PosterizeGroup(size=size, gray=gray, reference=reference, branches=branches)
 
 
 def vs_score_candidates(
