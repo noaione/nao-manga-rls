@@ -198,10 +198,17 @@ def vs_fix_odd_size_chain(n: int, *, source: "VideoNode", plain_rgb: "VideoNode"
     return _replicate_missing_edges(rgb, right, bottom, vs.core)
 
 
-def vs_prepare_image_bulk(images: Sequence[PathLike], *, debug: bool = False, prefetch: int = 6) -> "VideoNode":
+def vs_prepare_image_bulk_raw(images: Sequence[PathLike], *, debug: bool = False, prefetch: int = 6) -> "VideoNode":
     vs = get_vapoursynth()
     core = vs.core
     source = core.imgseqs.Read(files=[str(path) for path in images], mismatch=True, prefetch=prefetch, debug=debug)
+    return source
+
+
+def vs_prepare_image_bulk(images: Sequence[PathLike], *, debug: bool = False, prefetch: int = 6) -> "VideoNode":
+    vs = get_vapoursynth()
+    core = vs.core
+    source = vs_prepare_image_bulk_raw(images, debug=debug, prefetch=prefetch)
     plain_rgb = core.resize.Bicubic(source, format=vs.RGB24, matrix_in_s="470bg", range_in_s="limited")
     rgb = core.std.FrameEval(source, partial(vs_fix_odd_size_chain, source=source, plain_rgb=plain_rgb))
     rgb = core.resize.Bicubic(rgb, format=vs.RGB24)  # FrameEval cannot promise a format
@@ -211,8 +218,8 @@ def vs_prepare_image_bulk(images: Sequence[PathLike], *, debug: bool = False, pr
 def vs_analyze_ogsov_frame(frame: "VideoFrame") -> tuple[DetectedColor, Path]:
     props = frame.props
     img_path = Path(str(props["ImgSeqPath"]))
-    confidence = round(cast(float, props["OGSOVConfidence"]))
-    is_color = props["OGSOVIsColor"] == 1
+    confidence = round(cast(float, props["_MangaColorConfidence"]))
+    is_color = props["_MangaColor"] == 1
     is_gray_already = str(props["ImgSeqOriginalColorType"]).upper().startswith("L")
     reasoning = DetectedColor(
         is_color,

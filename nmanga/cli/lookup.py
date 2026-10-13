@@ -38,7 +38,7 @@ from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
 from ..ogsov import detect_image_color_ogsov
-from ..vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_find_missing_plugins, vs_prepare_image_bulk
+from ..vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_find_missing_plugins, vs_prepare_image_bulk_raw
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -228,7 +228,7 @@ def lookup_nongray_images(
     "-m",
     "--method",
     "lookup_method",
-    type=click.Choice(["orig", "fast", "vs", "vs-vulkan"]),
+    type=click.Choice(["orig", "fast", "vs-ogsox", "vs-ogsov"]),
     help="The method to use for OGSOV lookup, orig and fast is the same with different algo, vs-* is VapourSynth",
     default="fast",
 )
@@ -248,7 +248,7 @@ def lookup_color_images(
     path_or_archive: Path,
     dest_output: Path,
     color_model_path: Path,
-    lookup_method: Literal["orig", "fast", "vs", "vs-vulkan"],
+    lookup_method: Literal["orig", "fast", "vs-ogsov", "vs-ogsox"],
     force_gray: bool,
     recursive: bool,
     force: bool,
@@ -283,10 +283,10 @@ def lookup_color_images(
         console.warning("No valid folders found to lookup.")
         return
 
-    if lookup_method == "vs" or lookup_method == "vs-vulkan":
-        console.info("Using VapourSynth for color lookup...")
+    if lookup_method.startswith("vs-"):
+        console.info(f"Using VapourSynth ({lookup_method.replace('vs-', '')}) for color lookup...")
         vs_attach_logger(console)
-        missing_plugins = vs_find_missing_plugins(["xyz.n4o.ogsov", "xyz.n4o.imgseqs"])
+        missing_plugins = vs_find_missing_plugins(["xyz.n4o.mangacolor", "xyz.n4o.imgseqs"])
         if missing_plugins:
             console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
             raise click.Abort()
@@ -309,18 +309,18 @@ def lookup_color_images(
         task_moving = progress.add_task("Processing images...", finished_text="Processed images", total=len(all_images))
         found_img = 0
         grayscaled_img = 0
-        if lookup_method.startswith("vs"):
+        if lookup_method.startswith("vs-"):
             core = get_vapoursynth().core
-            clip = vs_prepare_image_bulk(
+            clip = vs_prepare_image_bulk_raw(
                 all_images,
                 debug=console.debugged,
                 prefetch=threads,
             )
 
-            if lookup_method == "vs":
-                analyzed = core.ogsov.Analyze(clip)
+            if lookup_method == "vs-ogsov":
+                analyzed = core.mangacolor.OGSOV(clip, debug=console.debugged)
             else:
-                analyzed = core.ogsov.AnalyzeVk(core.std.GPUUpload(clip))
+                analyzed = core.mangacolor.OGSOX(clip, debug=console.debugged)
 
             for n in range(analyzed.num_frames):
                 frame = analyzed.get_frame(n)
