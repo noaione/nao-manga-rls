@@ -35,6 +35,7 @@ from nmanga.cli.autolevel import Autolevel3Config, write_page
 
 NIMAGES_PLUGIN = "xyz.n4o.nimages"
 IMGSEQS_PLUGIN = "xyz.n4o.imgseqs"
+VSHIP_PLUGIN = "com.lumen.vship"
 
 
 def _has_plugin(plugin: str) -> bool:
@@ -50,8 +51,10 @@ def _has_plugin(plugin: str) -> bool:
 
 HAS_NIMAGES = _has_plugin(NIMAGES_PLUGIN)
 HAS_IMGSEQS = _has_plugin(IMGSEQS_PLUGIN)
+HAS_VSHIP = _has_plugin(VSHIP_PLUGIN)
 requires_nimages = pytest.mark.skipif(not HAS_NIMAGES, reason="the nimages VapourSynth plugin is not installed")
 requires_imagseqs = pytest.mark.skipif(not HAS_IMGSEQS, reason="the imgseqs VapourSynth plugin is not installed")
+requires_vship = pytest.mark.skipif(not HAS_VSHIP, reason="the vship VapourSynth plugin is not installed")
 
 
 def _gradient(width: int = 64, height: int = 48, shift: int = 0) -> Image.Image:
@@ -1133,6 +1136,11 @@ class TestPluginRegistration:
         assert "2-5" in result.output
         assert "Default: 4" in result.output
 
+    # The command aborts without these, and the abort is what the plugin-less CI saw as an
+    # exit code of 1, so the execution is gated exactly like the other plugin-backed tests.
+    @requires_nimages
+    @requires_imagseqs
+    @requires_vship
     def test_one_depth_is_scored_when_a_metric_is_asked_for(self, tmp_path: Path):
         """
         A single depth is a yes or no gate, not an instruction to skip the metric.
@@ -1195,6 +1203,9 @@ class TestPluginRegistration:
         for page in pages:
             assert (loose / page.name).read_bytes() != page.read_bytes()
 
+    # Scoring is off here, so the fixed depth path only needs the two decode plugins.
+    @requires_nimages
+    @requires_imagseqs
     def test_one_depth_without_a_metric_scores_nothing(self, tmp_path: Path):
         """`--bits 4` on its own stays the fixed depth posterize it always was."""
         from click.testing import CliRunner
