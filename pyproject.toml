@@ -76,6 +76,7 @@ denoiser = [
 vapoursynth = [
     "vapoursynth==81",
     "vapoursynth-imageseqs==0.3.0",
+    "vapoursynth-nimages==0.1.0",
     "vsrepo"
 ]
 epub-render = ["playwright==1.63.0"]
@@ -113,6 +114,7 @@ torch = [
     { index = "pytorch-cu132", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { index = "pypi", marker = "sys_platform == 'darwin'" }
 ]
+vapoursynth-nimages = { index = "serikat-pypi" }
 
 [[tool.uv.index]]
 name = "pytorch-cu132"
@@ -123,6 +125,10 @@ explicit = true
 name = "pypi"
 url = "https://pypi.org/simple/"
 explicit = true
+
+[[tool.uv.index]]
+name = "serikat-pypi"
+url = "https://pypi.serik.at/simple/"
 
 [tool.ruff]
 line-length = 120
