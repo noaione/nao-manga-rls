@@ -222,12 +222,17 @@ class TestApplyRenameOrder:
         assert snapshot(folder) == before
 
     def test_failure_on_the_first_move_is_rolled_back(self, folder: Path, monkeypatch: pytest.MonkeyPatch):
+        from nmanga import renamer
+
         before = make_pages(folder, [1, 2, 3, 4, 5])
         mapping = shift_mapping(folder, [1, 2, 3, 4, 5], 1)
 
         def always_flaky(self: Path, target: Path):
             raise PermissionError(13, "Access is denied")
 
+        # Linux renames through libc `renameat2`, which never reaches `Path.rename`, so the
+        # portable guard is forced to make the patched rename the move under test.
+        monkeypatch.setattr(renamer, "_NO_REPLACE", None)
         monkeypatch.setattr(Path, "rename", always_flaky)
 
         with pytest.raises(RenameFailedError) as caught:
@@ -258,6 +263,9 @@ class TestApplyRenameOrder:
         def exploding_rollback(applied):
             raise OSError(errno.EIO, "Input/output error")
 
+        # Linux renames through libc `renameat2`, which never reaches `Path.rename`, so the
+        # portable guard is forced to make the patched rename the move under test.
+        monkeypatch.setattr(renamer, "_NO_REPLACE", None)
         monkeypatch.setattr(Path, "rename", always_flaky)
         monkeypatch.setattr(renamer, "_rollback", exploding_rollback)
 
@@ -275,6 +283,8 @@ class TestApplyRenameOrder:
         assert "before any move" in str(error)
 
     def test_failure_midway_rolls_everything_back(self, folder: Path, monkeypatch: pytest.MonkeyPatch):
+        from nmanga import renamer
+
         before = make_pages(folder, [1, 2, 3, 4, 5])
         mapping = shift_mapping(folder, [1, 2, 3, 4, 5], 1)
 
@@ -287,6 +297,9 @@ class TestApplyRenameOrder:
                 raise PermissionError(13, "Access is denied")
             return real_rename(self, target)
 
+        # Linux renames through libc `renameat2`, which never reaches `Path.rename`, so the
+        # portable guard is forced to make the patched rename the move under test.
+        monkeypatch.setattr(renamer, "_NO_REPLACE", None)
         monkeypatch.setattr(Path, "rename", flaky_rename)
 
         with pytest.raises(RenameFailedError) as caught:
@@ -298,6 +311,8 @@ class TestApplyRenameOrder:
         assert snapshot(folder) == before
 
     def test_rollback_failure_reports_what_is_still_displaced(self, folder: Path, monkeypatch: pytest.MonkeyPatch):
+        from nmanga import renamer
+
         make_pages(folder, [1, 2, 3, 4, 5])
         mapping = shift_mapping(folder, [1, 2, 3, 4, 5], 1)
 
@@ -312,6 +327,9 @@ class TestApplyRenameOrder:
                 raise PermissionError(13, "Access is denied")
             return real_rename(self, target)
 
+        # Linux renames through libc `renameat2`, which never reaches `Path.rename`, so the
+        # portable guard is forced to make the patched rename the move under test.
+        monkeypatch.setattr(renamer, "_NO_REPLACE", None)
         monkeypatch.setattr(Path, "rename", flaky_rename)
 
         with pytest.raises(RenameFailedError) as caught:

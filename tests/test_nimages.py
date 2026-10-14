@@ -488,7 +488,7 @@ class TestPosterizeClip:
         )
 
         vs = get_vapoursynth()
-        chain = vs_posterize_clip([path], bits=bits, core=vs.core)
+        chain = vs_posterize_clip([path], bits=bits, method=0, core=vs.core)
         with chain.posterized.get_frame(0) as frame:
             actual = np.asarray(vs_frame_to_image(frame)).reshape(-1)
         assert np.array_equal(actual, expected)
@@ -502,7 +502,7 @@ class TestPosterizeClip:
 
         pages = _write_pages(tmp_path / "pages", 3, suffix=".png")
         vs = get_vapoursynth()
-        chain = vs_posterize_clip(pages, bits=4, core=vs.core)
+        chain = vs_posterize_clip(pages, bits=4, method=0, core=vs.core)
 
         for index, page in enumerate(pages):
             with chain.posterized.get_frame(index) as frame:
@@ -518,7 +518,7 @@ class TestPosterizeClip:
 
         pages = _write_pages(tmp_path / "pages", 1)
         vs = get_vapoursynth()
-        chain = vs_posterize_clip(pages, bits=4, core=vs.core)
+        chain = vs_posterize_clip(pages, bits=4, method=0, core=vs.core)
         assert chain.gray is not chain.posterized
         with chain.gray.get_frame(0) as frame:
             assert frame.format.name == "Gray8"
@@ -542,7 +542,7 @@ class TestFrameToGrays:
 
         pages = _write_pages(tmp_path / "pages", 1)
         vs = get_vapoursynth()
-        chain = vs_posterize_clip(pages, bits=4, core=vs.core)
+        chain = vs_posterize_clip(pages, bits=4, method=0, core=vs.core)
 
         with chain.gray.get_frame(0) as frame:
             source = np.asarray(frame[0]).copy()
@@ -1153,7 +1153,7 @@ class TestPluginRegistration:
             main,
             [
                 "posterize2",
-                str(pages),
+                str(tmp_path / "pages"),
                 "-o",
                 str(strict),
                 "-t",
@@ -1177,7 +1177,7 @@ class TestPluginRegistration:
             main,
             [
                 "posterize2",
-                str(pages),
+                str(tmp_path / "pages"),
                 "-o",
                 str(loose),
                 "-t",
@@ -1201,11 +1201,11 @@ class TestPluginRegistration:
 
         from nmanga.cmd import main
 
-        pages = _write_pages(tmp_path / "pages", 2)
+        _write_pages(tmp_path / "pages", 2)
         runner = CliRunner()
         result = runner.invoke(
             main,
-            ["posterize2", str(pages), "-o", str(tmp_path / "out"), "-t", "1", "--bits", "4"],
+            ["posterize2", str(tmp_path / "pages"), "-o", str(tmp_path / "out"), "-t", "1", "--bits", "4"],
         )
         assert result.exit_code == 0
         assert "Scoring candidate" not in result.output
