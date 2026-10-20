@@ -32,12 +32,13 @@ import site
 import sys
 from importlib import util as importutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
 if TYPE_CHECKING:
     import onnxruntime as ort
 
 __all__ = (
+    "get_einops_rearrange",
     "get_numpy",
     "get_onnxruntime",
     "get_scipy_ndimage",
@@ -46,7 +47,16 @@ __all__ = (
     "get_vapoursynth",
 )
 
+Tensor = TypeVar("Tensor")
 __preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
+
+
+class RearrangeCallable(Protocol):
+    @overload
+    def __call__(self, tensor: list[Tensor], pattern: str, **axes_lengths: Any) -> Tensor: ...
+    @overload
+    def __call__(self, tensor: Tensor, pattern: str, **axes_lengths: Any) -> Tensor: ...
+    def __call__(self, tensor: Tensor | list[Tensor], pattern: str, **axes_lengths: Any) -> Tensor: ...
 
 
 @functools.lru_cache(maxsize=1)
@@ -87,6 +97,16 @@ def get_scipy_ndimage():
         return ndimage
     except ImportError as exc:
         raise ImportError("scipy is required to do the following action. Please install scipy.") from exc
+
+
+@functools.lru_cache(maxsize=1)
+def get_einops_rearrange() -> RearrangeCallable:
+    try:
+        from einops import rearrange
+
+        return rearrange
+    except ImportError as exc:
+        raise ImportError("einops is required to do the following action. Please install einops.") from exc
 
 
 @functools.lru_cache(maxsize=1)

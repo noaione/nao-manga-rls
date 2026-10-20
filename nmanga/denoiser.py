@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Literal, cast
 from PIL import Image
 
 from .common import format_elapsed_time
-from .lazy import get_onnxruntime
+from .lazy import get_einops_rearrange, get_numpy, get_onnxruntime
 from .term import get_console
 from .winml import get_winml_ep_libraries
 
@@ -692,8 +692,8 @@ def denoise_single_image(
     background: Literal["white", "black"] = "black",
     use_fp32: bool = False,
 ) -> Image.Image:
-    import numpy as np  # type: ignore
-    from einops import rearrange  # type: ignore
+    np = get_numpy()
+    rearrange = get_einops_rearrange()
 
     # Calculate upscale scale from model input and output shapes
     scale_factor = getattr(model, "scale_factor", None)
