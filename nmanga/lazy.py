@@ -26,14 +26,27 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import ctypes
 import functools
+import site
+import sys
+from importlib import util as importutil
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import onnxruntime as ort
 
 __all__ = (
     "get_numpy",
+    "get_onnxruntime",
     "get_scipy_ndimage",
     "get_scipy_signal",
+    "get_torch",
     "get_vapoursynth",
 )
+
+__preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
 
 
 @functools.lru_cache(maxsize=1)
@@ -44,6 +57,16 @@ def get_numpy():
         return np
     except ImportError as exc:
         raise ImportError("numpy is required to do the following action. Please install numpy.") from exc
+
+
+@functools.lru_cache(maxsize=1)
+def get_torch():
+    try:
+        import torch
+
+        return torch
+    except ImportError as exc:
+        raise ImportError("torch is required to do the following action. Please install pytorch.") from exc
 
 
 @functools.lru_cache(maxsize=1)
@@ -74,3 +97,36 @@ def get_vapoursynth():
         return vs
     except ImportError as exc:
         raise ImportError("vapoursynth is required to do the following action. Please install vapoursynth.") from exc
+
+
+def get_onnxruntime() -> "type[ort]":  # type: ignore
+    global __preloaded_ort__
+
+    if __preloaded_ort__ is not None:
+        return __preloaded_ort__
+
+    for sp in site.getsitepackages():
+        ort_dll = Path(sp) / "onnxruntime" / "capi" / "onnxruntime.dll"
+        if ort_dll.exists() and sys.platform == "win32":
+            ctypes.WinDLL(str(ort_dll))
+            break
+
+    # Preload TensorRT if available
+    is_tensorrt_available = importutil.find_spec("tensorrt")
+    if is_tensorrt_available is not None:
+        import tensorrt  # type: ignore # ruff: ignore[unused-import]
+
+    import onnxruntime as ort  # type: ignore
+
+    is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
+
+    if sys.platform != "darwin":
+        ort.preload_dlls()
+
+    if is_trt_ep_available is not None:
+        import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
+
+        ort.register_execution_provider_library(trt_ep.get_ep_name(), trt_ep.get_library_path())  # type: ignore
+    __preloaded_ort__ = ort
+
+    return ort  # type: ignore

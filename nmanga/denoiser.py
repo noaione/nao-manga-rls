@@ -30,7 +30,6 @@ import importlib
 import json
 import logging
 import os
-import site
 import sys
 import time
 import warnings
@@ -44,6 +43,7 @@ from typing import TYPE_CHECKING, Literal, cast
 from PIL import Image
 
 from .common import format_elapsed_time
+from .lazy import get_onnxruntime
 from .term import get_console
 from .winml import get_winml_ep_libraries
 
@@ -68,7 +68,6 @@ __all__ = (
 logger = logging.getLogger(__name__)
 __winml_registered__ = False
 __nmanga_trt_extension_hooked__ = False
-__preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
 
 
 class MLDataType(str, Enum):
@@ -109,39 +108,6 @@ def get_data_dir() -> Path:
     return cache_dir
 
 
-def _get_onnxruntime() -> "type[ort]":  # type: ignore
-    global __preloaded_ort__
-
-    if __preloaded_ort__ is not None:
-        return __preloaded_ort__
-
-    for sp in site.getsitepackages():
-        ort_dll = Path(sp) / "onnxruntime" / "capi" / "onnxruntime.dll"
-        if ort_dll.exists() and sys.platform == "win32":
-            ctypes.WinDLL(str(ort_dll))
-            break
-
-    # Preload TensorRT if available
-    is_tensorrt_available = importutil.find_spec("tensorrt")
-    if is_tensorrt_available is not None:
-        import tensorrt  # type: ignore # ruff: ignore[unused-import]
-
-    import onnxruntime as ort  # type: ignore
-
-    is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
-
-    if sys.platform != "darwin":
-        ort.preload_dlls()
-
-    if is_trt_ep_available is not None:
-        import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
-
-        ort.register_execution_provider_library(trt_ep.get_ep_name(), trt_ep.get_library_path())  # type: ignore
-    __preloaded_ort__ = ort
-
-    return ort  # type: ignore
-
-
 def _preload_winml_and_register() -> None:
     global __winml_registered__
 
@@ -160,7 +126,7 @@ def _preload_winml_and_register() -> None:
     except metadata.PackageNotFoundError:
         pass
 
-    ort = _get_onnxruntime()
+    ort = get_onnxruntime()
 
     SKIP_ME = ["NvTensorRTRTXExecutionProvider"]
     winml_libraries = get_winml_ep_libraries()
@@ -177,8 +143,6 @@ def _preload_custom_extensions() -> None:
 
     if __nmanga_trt_extension_hooked__:
         return
-
-    import ctypes
 
     # Check from environment
     if "NMANGA_TRT_EXTENSIONS_DIR" in os.environ:
@@ -297,7 +261,7 @@ def prepare_model_runtime(
 ) -> "InferenceSessionWithScale":
     # _preload_custom_extensions()
 
-    ort = _get_onnxruntime()
+    ort = get_onnxruntime()
 
     if sys.platform == "darwin":
         CACHE_DIR = Path.home() / ".cache" / "nmanga-denoiser"
@@ -424,7 +388,7 @@ def _compile_nvrtx_model(
     ep_name: str,
     ep_config: dict[str, str],
 ) -> Path:
-    ort = _get_onnxruntime()
+    ort = get_onnxruntime()
 
     cnsl = get_console()
     model_comp = _get_nvrtx_compiled_model_path(model_path, data_dir, cache_key)
@@ -460,7 +424,7 @@ def _compile_nvrtx_model_for_ep(
     ep_device,
     ep_config: dict[str, str],
 ) -> Path:
-    ort = _get_onnxruntime()
+    ort = get_onnxruntime()
 
     cnsl = get_console()
     model_comp = _get_nvrtx_compiled_model_path(model_path, data_dir, cache_key)
@@ -501,7 +465,7 @@ def prepare_model_runtime_builders(
 ) -> "InferenceSessionWithScale":
     # _preload_custom_extensions()
 
-    ort = _get_onnxruntime()
+    ort = get_onnxruntime()
 
     verb_level = 0 if is_verbose else 3
     ort.set_default_logger_severity(verb_level)
