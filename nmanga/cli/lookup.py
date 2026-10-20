@@ -233,6 +233,13 @@ def lookup_nongray_images(
     default="fast",
 )
 @click.option(
+    "--gpu",
+    "vs_gpu",
+    is_flag=True,
+    default=False,
+    help="Use GPU for VapourSynth processing, only works with vs-* methods",
+)
+@click.option(
     "-gr",
     "--force-gray",
     "force_gray",
@@ -249,6 +256,7 @@ def lookup_color_images(
     dest_output: Path,
     color_model_path: Path,
     lookup_method: Literal["orig", "fast", "vs-ogsov", "vs-ogsox"],
+    vs_gpu: bool,
     force_gray: bool,
     recursive: bool,
     force: bool,
@@ -290,6 +298,8 @@ def lookup_color_images(
         if missing_plugins:
             console.warning(f"Missing vapoursynth plugins: {', '.join(missing_plugins)}")
             raise click.Abort()
+        if vs_gpu:
+            console.info("Using GPU for VapourSynth processing.")
 
     dest_output.mkdir(parents=True, exist_ok=True)
 
@@ -318,9 +328,9 @@ def lookup_color_images(
             )
 
             if lookup_method == "vs-ogsov":
-                analyzed = core.mangacolor.OGSOV(clip, debug=console.debugged)
+                analyzed = core.mangacolor.OGSOV(clip, debug=console.debugged, gpu=vs_gpu)
             else:
-                analyzed = core.mangacolor.OGSOX(clip, debug=console.debugged)
+                analyzed = core.mangacolor.OGSOX(clip, debug=console.debugged, gpu=vs_gpu)
 
             for n in range(analyzed.num_frames):
                 frame = analyzed.get_frame(n)
