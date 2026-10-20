@@ -33,7 +33,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from ...common import RegexCollection
-from ...ogsov import detect_image_color, detect_image_color_ogsov
+from ...ogsov import detect_image_color, detect_image_color_ml
 from ..dsl import Context
 from ..rules import RuleModel
 
@@ -267,9 +267,11 @@ class ActionColorMixin:
         # Use ML-based color detection when possible
         if orchestrator.metafields.color_model is not None:
             # Read bytes
-            color_model_path = Path(orchestrator.metafields.color_model).resolve()
+            kernel = orchestrator.metafields.color_model.get_kernel()
             img_bytes = path.read_bytes()
-            is_color = detect_image_color_ogsov(img_bytes, weights_file=color_model_path).is_color
+            is_color = detect_image_color_ml(
+                img_bytes, kernel=kernel, fast_method=orchestrator.metafields.color_model.fast
+            ).is_color
             if is_color:
                 context.push_detected_colors(p01)  # push for caching
             return p01, is_color

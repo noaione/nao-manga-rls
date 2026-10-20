@@ -24,17 +24,25 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import abc
 import shutil
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, FilePath, model_validator
+from pydantic_core import PydanticCustomError
+
+from ..ogsov import MangaColorInference, register_ogsov_instance, register_ogsox_instance
 
 if TYPE_CHECKING:
     from ..term import ConsoleInterface
 
 __all__ = (
+    "ColorDetectionConfig",
+    "ColorDetectionKind",
+    "ColorDetectionOGSOVConfig",
+    "ColorDetectionOGSOXConfig",
     "SSIMULACRA2CheckConfig",
     "SkipActionConfig",
     "SkipActionKind",
@@ -91,6 +99,119 @@ class SSIMULACRA2CheckConfig(BaseModel):
     """Enable/disable the SSIMULACRA2 check"""
     minimum: float = Field(80.0, title="Minimum SSIMULACRA2 Score", ge=0.0, le=100.0)
     """Minimum SSIMULACRA2 score to keep the image"""
+
+
+class ColorDetectionKind(str, Enum):
+    """
+    All supported action kinds.
+
+    This list is incomplete and might expand in the future.
+    """
+
+    OGSOV = "ogsov"
+    """
+    Color detection with OGSOV
+
+    Colourfulness histogram + five MLPs
+    """
+
+    OGSOX = "ogsox"
+    """
+    Color detection with OGSOX
+
+    512² tiling + five attention heads
+    """
+
+
+class BaseColorDetectionConfig(BaseModel, abc.ABC):
+    """
+    Base metafields config for color detection
+    """
+
+    fast: bool = Field(False, title="Fast Mode")
+    """Utilize fast-path calculation to speed-up processing"""
+
+    @abc.abstractmethod
+    def get_kernel(self) -> MangaColorInference:
+        """
+        Get the inference kernel
+        """
+
+        raise NotImplementedError
+
+
+class ColorDetectionOGSOVConfig(BaseColorDetectionConfig):
+    """
+    Extra metafields information for ogsov color detection kernel
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Color Detection - OGSOV kernel",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    kind: Literal[ColorDetectionKind.OGSOV] = Field(ColorDetectionKind.OGSOV, title="Color Detection Kind")
+    """The kind of the color model"""
+    weights_table: FilePath = Field(..., title="Weights Table Path")
+    """Path to the npz for the weights table"""
+
+    @model_validator(mode="after")
+    def ensure_lookup_table_provided(self) -> Self:
+        resolved_weights = Path(self.weights_table).resolve()
+        if not resolved_weights.is_file():
+            raise PydanticCustomError(
+                "weights_table_not_found", "Weights table file not found: {path}", {"path": resolved_weights}
+            )
+        return self
+
+    def get_kernel(self) -> MangaColorInference:
+        return register_ogsov_instance(self.weights_table)
+
+
+class ColorDetectionOGSOXConfig(BaseColorDetectionConfig):
+    """
+    Extra metafields information for ogsox color detection kernel
+    """
+
+    model_config = ConfigDict(
+        title="nmanga Orchestrator - Color Detection - OGSOX kernel",
+        strict=True,
+        extra="forbid",
+        validate_default=True,
+    )
+
+    kind: Literal[ColorDetectionKind.OGSOX] = Field(ColorDetectionKind.OGSOX, title="Color Detection Kind")
+    """The kind of the color model"""
+    lookup_table: FilePath = Field(..., title="Lookup Table Path")
+    """Path to the npz file for mask lookup table"""
+    classifier: FilePath = Field(..., title="Classifier Path")
+    """Path to the ONNX model for the classifier"""
+
+    @model_validator(mode="after")
+    def ensure_lookup_table_provided(self) -> Self:
+        resolved_lookup = Path(self.lookup_table).resolve()
+        if not resolved_lookup.is_file():
+            raise PydanticCustomError(
+                "lookup_table_not_found", "Lookup table file not found: {path}", {"path": resolved_lookup}
+            )
+        resolved_classifier = Path(self.classifier).resolve()
+        if not resolved_classifier.is_file():
+            raise PydanticCustomError(
+                "classifier_not_found", "Classifier file not found: {path}", {"path": resolved_classifier}
+            )
+        return self
+
+    def get_kernel(self) -> MangaColorInference:
+        return register_ogsox_instance(self.lookup_table, self.classifier)
+
+
+ColorDetectionConfig = Annotated[
+    ColorDetectionOGSOVConfig | ColorDetectionOGSOXConfig,
+    Field(discriminator="kind", description="The collection of all supported color detection fields."),
+]
+"""Color detection metafields"""
 
 
 def perform_skip_action(

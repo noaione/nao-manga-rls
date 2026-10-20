@@ -937,6 +937,11 @@
                     "title": "The processor to use for posterizing",
                     "type": "string"
                 },
+                "method": {
+                    "$ref": "#/$defs/PosterizePointMethod",
+                    "default": "lloyd",
+                    "title": "Posterizing method to be used"
+                },
                 "cache_mb": {
                     "default": 512,
                     "maximum": 8192,
@@ -1569,6 +1574,66 @@
             "title": "nmanga Orchestrator Chapter Configuration",
             "type": "object"
         },
+        "ColorDetectionOGSOVConfig": {
+            "additionalProperties": false,
+            "description": "Extra metafields information for ogsov color detection kernel",
+            "properties": {
+                "fast": {
+                    "default": false,
+                    "title": "Fast Mode",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "ogsov",
+                    "default": "ogsov",
+                    "title": "Color Detection Kind",
+                    "type": "string"
+                },
+                "weights_table": {
+                    "format": "file-path",
+                    "title": "Weights Table Path",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "weights_table"
+            ],
+            "title": "nmanga Orchestrator - Color Detection - OGSOV kernel",
+            "type": "object"
+        },
+        "ColorDetectionOGSOXConfig": {
+            "additionalProperties": false,
+            "description": "Extra metafields information for ogsox color detection kernel",
+            "properties": {
+                "fast": {
+                    "default": false,
+                    "title": "Fast Mode",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "const": "ogsox",
+                    "default": "ogsox",
+                    "title": "Color Detection Kind",
+                    "type": "string"
+                },
+                "lookup_table": {
+                    "format": "file-path",
+                    "title": "Lookup Table Path",
+                    "type": "string"
+                },
+                "classifier": {
+                    "format": "file-path",
+                    "title": "Classifier Path",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "lookup_table",
+                "classifier"
+            ],
+            "title": "nmanga Orchestrator - Color Detection - OGSOX kernel",
+            "type": "object"
+        },
         "ConditionModel": {
             "description": "Pydantic model for a simple condition.\n\nThis will be converted to a `Condition` DSL object.\n\nThe `value` field can either be a direct value (str, int, etc.)\nor a reference to another context variable using the format \"ctx:variable_name\".",
             "properties": {
@@ -1741,6 +1806,14 @@
             ],
             "title": "OrModel",
             "type": "object"
+        },
+        "PosterizePointMethod": {
+            "enum": [
+                "even",
+                "lloyd"
+            ],
+            "title": "PosterizePointMethod",
+            "type": "string"
         },
         "QualityMapping": {
             "description": "The mapping for image quality based on resolution thresholds, we use height in pixels.",
@@ -1956,15 +2029,29 @@
                 "color_model": {
                     "anyOf": [
                         {
-                            "format": "file-path",
-                            "type": "string"
+                            "description": "The collection of all supported color detection fields.",
+                            "discriminator": {
+                                "mapping": {
+                                    "ogsov": "#/$defs/ColorDetectionOGSOVConfig",
+                                    "ogsox": "#/$defs/ColorDetectionOGSOXConfig"
+                                },
+                                "propertyName": "kind"
+                            },
+                            "oneOf": [
+                                {
+                                    "$ref": "#/$defs/ColorDetectionOGSOVConfig"
+                                },
+                                {
+                                    "$ref": "#/$defs/ColorDetectionOGSOXConfig"
+                                }
+                            ]
                         },
                         {
                             "type": "null"
                         }
                     ],
                     "default": null,
-                    "title": "Model Path"
+                    "title": "Color Detection Model"
                 }
             },
             "title": "nmanga Orchestrator Series Metafields",

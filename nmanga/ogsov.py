@@ -4,16 +4,21 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from io import BytesIO
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING
+from threading import Lock
+from typing import TYPE_CHECKING, ClassVar, Protocol, cast
 
 from PIL import Image, ImageChops
 
+from .lazy import get_einops_rearrange, get_numpy, get_onnxruntime, get_torch
+
 if TYPE_CHECKING:
     from numpy import ndarray
+    from onnxruntime import InferenceSession
     from torch import Tensor
     from torch.nn import Sequential as TorchSequential
 
@@ -21,8 +26,10 @@ __all__ = (
     "OGSOV",
     "DetectedColor",
     "detect_image_color",
-    "detect_image_color_ogsov",
+    "detect_image_color_ml",
     "is_grayscale_palette",
+    "register_ogsov_instance",
+    "register_ogsox_instance",
 )
 
 
@@ -38,7 +45,13 @@ class DetectedColor:
     """:bool: whether the image should be converted to grayscale, can be used for further processing"""
 
 
-class OGSOV:
+class MangaColorInference(Protocol):
+    """The root protocol inference"""
+
+    def predict(self, bgr_image: "ndarray", *, fast_method: bool = False) -> tuple[bool, int]: ...
+
+
+class OGSOV(MangaColorInference):
     """Color detection model, credits to anon for the implementation"""
 
     def __init__(self, weights_file: PathLike) -> None:
@@ -48,8 +61,8 @@ class OGSOV:
         The model is currently private, so no public release yet.
         """
 
-        import numpy as np
-        import torch
+        np = get_numpy()
+        torch = get_torch()
         from scipy.stats import kurtosis, skew
 
         self.__np = np
@@ -333,7 +346,257 @@ class OGSOV:
         return is_input_color, predicted_confidence
 
 
-_preload_ogsov_instance: dict[str, OGSOV] = {}
+def _ogsox_session(fpath: PathLike) -> "InferenceSession":
+    ort = get_onnxruntime()
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    return ort.InferenceSession(fpath, options, providers=["CPUExecutionProvider"])
+
+
+class OGSOX(MangaColorInference):
+    TILE: ClassVar[int] = 512
+    MASK_CAP: ClassVar[int] = 1024  # the ONNX graph does min(sum(mask), 1024)/...
+
+    def __init__(self, lookup_table_fpath: PathLike, classifier_fpath: PathLike):
+        np = get_numpy()
+
+        self.__np = np
+        mask = np.load(lookup_table_fpath, allow_pickle=False)["mask_lookup"].astype(bool)
+        self.min_spread = self._min_spread(mask)
+        self.lookup_flat = np.ascontiguousarray(mask).reshape(-1)  # index = (b << 16) | (g << 8) | r
+        self.model_session = _ogsox_session(classifier_fpath)
+        self._buf: "ndarray | None" = None
+        self._buffer_lock = Lock()
+
+        # For older shit
+        self.lookup_array = mask
+
+    def _min_spread(self, mask3d: "ndarray") -> int:
+        """Smallest max-min channel spread among True entries of mask[b, g, r] (256 if none)."""
+        ar = self.__np.arange(256, dtype=self.__np.int16)
+        gr_max, gr_min = self.__np.maximum(ar[:, None], ar[None, :]), self.__np.minimum(ar[:, None], ar[None, :])
+        best = 256
+        for b in range(256):
+            sel = mask3d[b]
+            if sel.any():
+                best = min(best, int((self.__np.maximum(gr_max, b) - self.__np.minimum(gr_min, b))[sel].min()))
+        return best
+
+    def _starts(self, full: int) -> list[int]:
+        n = math.ceil(full / self.TILE)
+        return [0] if n == 1 else self.__np.round(self.__np.linspace(0, full - self.TILE, n)).astype(int).tolist()
+
+    def _tile_origins(self, h: int, w: int) -> list[tuple[int, int]]:
+        """Top-left (y, x) of every tile on the page padded up to at least 512x512 (padding is never materialised)."""
+        return [(y, x) for y in self._starts(max(h, self.TILE)) for x in self._starts(max(w, self.TILE))]
+
+    def _spread(self, bgr: "ndarray") -> "ndarray":
+        """uint8 (H, W): max(b,g,r) - min(b,g,r). 0 == exactly gray."""
+        b, g, r = bgr[..., 0], bgr[..., 1], bgr[..., 2]
+        return self.__np.maximum(self.__np.maximum(b, g), r) - self.__np.minimum(self.__np.minimum(b, g), r)
+
+    def _capped_hits(self, px_bgr: "ndarray") -> int:
+        """min(lookup hits among these (K,3) pixels, MASK_CAP), scanning 4096 at a time and stopping at the cap."""
+        count = 0
+        for i in range(0, len(px_bgr), 4096):
+            blk = px_bgr[i : i + 4096].astype(self.__np.int32)
+            count += int(self.__np.count_nonzero(self.lookup_flat[(blk[:, 0] << 16) | (blk[:, 1] << 8) | blk[:, 2]]))
+            if count >= self.MASK_CAP:
+                return self.MASK_CAP
+        return count
+
+    def _tile_mask_count(self, sub_bgr: "ndarray", sub_spread: "ndarray") -> int:
+        cand = sub_spread >= self.min_spread
+        if not cand.any():
+            return 0
+        return self._capped_hits(sub_bgr[cand])
+
+    def _batch_buffer(self, n: int) -> "ndarray":
+        if self._buf is None or self._buf.shape[0] < n:
+            self._buf = self.__np.zeros((n, 4, self.TILE, self.TILE), dtype=self.__np.float32)
+        return self._buf[:n]
+
+    def _build_batch(self, bgr: "ndarray") -> "ndarray":
+        h, w, _ = bgr.shape
+        origins = self._tile_origins(h, w)
+        chw = self.__np.ascontiguousarray(bgr.transpose(2, 0, 1), dtype=self.__np.float32)  # one pass over the page
+        spread = self._spread(bgr)
+        batch = self._batch_buffer(len(origins))
+        for i, (y, x) in enumerate(origins):
+            vh, vw = min(self.TILE, h - y), min(self.TILE, w - x)
+            t = batch[i]
+            if vh < self.TILE or vw < self.TILE:
+                t[:3] = 0  # padded tile: stale data outside the valid region must be zero
+            t[:3, :vh, :vw] = chw[:, y : y + vh, x : x + vw]
+            t[3] = 0
+            count = self._tile_mask_count(bgr[y : y + vh, x : x + vw], spread[y : y + vh, x : x + vw])
+            if count:
+                t[3].reshape(-1)[:count] = 1.0  # only the SUM of this channel matters to the model
+        return batch
+
+    def score_fast(self, bgr_array: "ndarray") -> float:
+        with self._buffer_lock:
+            batch = self._build_batch(bgr_array)
+            output = self.model_session.run(
+                ["final_output"],
+                {"input_features": batch},
+            )
+            first_output = cast("ndarray", output[0])
+            return float(first_output.item())
+
+    def _preprocess_mask_lookup(self, bgr_array: "ndarray") -> "ndarray":
+        # 0. Store original dimensions
+        h, w, _ = bgr_array.shape
+
+        # 1. Flat the image out
+        fi = bgr_array.reshape(-1, 3)
+
+        # 3. Map to indices and reshape
+        mask_images: "ndarray" = self.lookup_array[fi[:, 0], fi[:, 1], fi[:, 2]]
+        mask_images: "ndarray" = mask_images.reshape(h, w).astype(bool)
+
+        # return the binary mask
+        return mask_images
+
+    def _tile_image_even_overlap_improved(self, image: "ndarray"):
+        """
+        Parameters:
+        - image: np.ndarray (H, W, C) or (H, W)
+
+        Returns:
+        - tiles: list of np.ndarray
+        - coordinates: list of tuples (x1, y1, x2, y2)
+        """
+
+        # original size
+        img_h, img_w = image.shape[:2]
+        tile_h = 512
+        tile_w = 512
+
+        # 1. Pad upfront if ANY dimension is smaller than the target tile size
+        pad_h = max(0, tile_h - img_h)
+        pad_w = max(0, tile_w - img_w)
+
+        if pad_h > 0 or pad_w > 0:
+            if len(image.shape) == 3:
+                image = self.__np.pad(
+                    image,
+                    ((0, pad_h), (0, pad_w), (0, 0)),
+                    mode="constant",
+                    constant_values=0,
+                )
+            else:
+                image = self.__np.pad(image, ((0, pad_h), (0, pad_w)), mode="constant", constant_values=0)
+
+            # Update dimensions after padding so tiling logic works correctly
+            img_h, img_w = image.shape[:2]
+
+        # 2. Calculate evenly spaced starting coordinates for Y (rows)
+        num_tiles_h = math.ceil(img_h / tile_h)
+        if num_tiles_h == 1:
+            y_starts = [0]
+        else:
+            y_starts = self.__np.round(self.__np.linspace(0, img_h - tile_h, num_tiles_h)).astype(int)
+
+        # 3. Calculate evenly spaced starting coordinates for X (columns)
+        num_tiles_w = math.ceil(img_w / tile_w)
+        if num_tiles_w == 1:
+            x_starts = [0]
+        else:
+            x_starts = self.__np.round(self.__np.linspace(0, img_w - tile_w, num_tiles_w)).astype(int)
+
+        tiles = []
+        coordinates = []
+
+        # 4. Slice out the patches using the evenly distributed coordinates
+        for y in y_starts:
+            for x in x_starts:
+                y1, y2 = y, y + tile_h
+                x1, x2 = x, x + tile_w
+
+                tile = image[y1:y2, x1:x2]
+
+                tiles.append(tile)
+                coordinates.append((int(x1), int(y1), int(x2), int(y2)))
+
+        return tiles, coordinates
+
+    def predict(self, bgr_image: "ndarray", *, fast_method: bool = False) -> tuple[bool, int]:
+        if fast_method:
+            predicted_value = self.score_fast(bgr_image)
+        else:
+            rearrange = get_einops_rearrange()
+
+            # 1.1 Binary Lookup
+            lookup_mask = self._preprocess_mask_lookup(bgr_image)
+            # 1.2 ensure its float32
+            bgrc_array: "ndarray" = self.__np.dstack((bgr_image, lookup_mask))
+            bgrc_array: "ndarray" = bgrc_array.astype(self.__np.float32)
+            # 1.3 Tile the images to a fix size
+            image_tiles_list, _ = self._tile_image_even_overlap_improved(bgrc_array)
+
+            # 1.4 stack them to array and ensure formatting
+            batched_image_array = self.__np.array(image_tiles_list)  # [N H W C]
+            batched_image_array = rearrange(batched_image_array, "n h w c -> n c h w")
+
+            # make the prediction
+            combined_predictions: list["ndarray"] = self.model_session.run(
+                output_names=["final_output"],
+                input_feed={"input_features": batched_image_array},
+            )  # type: ignore
+
+            # get the predicted values
+            predicted_value: float = float(combined_predictions[0].item())
+
+        is_color = predicted_value >= 0.0
+        confidance = abs(predicted_value) / 5.0
+        return is_color, int(confidance * 100)
+
+
+__preload_ogsov_instance__: dict[str, OGSOV] = {}
+__preload_ogsox_instance__: dict[str, OGSOX] = {}
+
+
+def register_ogsov_instance(weights_file: PathLike) -> OGSOV:
+    global __preload_ogsov_instance__
+
+    # load the model if not loaded
+    if isinstance(weights_file, Path):
+        weight_str = str(weights_file.resolve())
+    else:
+        weight_str = str(weights_file)
+
+    instance = __preload_ogsov_instance__.get(weight_str)
+    if instance is None:
+        instance = OGSOV(weights_file)
+        __preload_ogsov_instance__[weight_str] = instance
+    return instance
+
+
+def register_ogsox_instance(lookup_table_fpath: PathLike, classifier_fpath: PathLike) -> OGSOX:
+    global __preload_ogsox_instance__
+
+    # load the model if not loaded
+    if isinstance(lookup_table_fpath, Path):
+        lookup_str = str(lookup_table_fpath.resolve())
+    else:
+        lookup_str = str(lookup_table_fpath)
+
+    if isinstance(classifier_fpath, Path):
+        classifier_str = str(classifier_fpath.resolve())
+    else:
+        classifier_str = str(classifier_fpath)
+
+    # hash the path
+    combined_path = lookup_str.strip() + classifier_str.strip()
+    instance = __preload_ogsox_instance__.get(combined_path)
+    if instance is None:
+        instance = OGSOX(lookup_table_fpath, classifier_fpath)
+        __preload_ogsox_instance__[combined_path] = instance
+    return instance
 
 
 def is_grayscale_palette(palette: list[int]) -> bool:
@@ -370,25 +633,12 @@ def detect_image_color(img: Image.Image) -> DetectedColor:
     return DetectedColor(True, 0, None, False)
 
 
-def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike, fast_method: bool = False) -> DetectedColor:
+def detect_image_color_ml(img_bytes: bytes, *, kernel: MangaColorInference, fast_method: bool = False) -> DetectedColor:
     """
     ML-version of color detection, more accurate but slower than the basic one.
     """
 
     import numpy as np
-
-    global _preload_ogsov_instance
-
-    # load the model if not loaded
-    if isinstance(weights_file, Path):
-        weight_str = str(weights_file.resolve())
-    else:
-        weight_str = str(weights_file)
-
-    instance = _preload_ogsov_instance.get(weight_str)
-    if instance is None:
-        instance = OGSOV(weights_file)
-        _preload_ogsov_instance[weight_str] = instance
 
     image = Image.open(BytesIO(img_bytes))
     if (detected := detect_image_color(image)) and not detected.is_color:
@@ -399,6 +649,6 @@ def detect_image_color_ogsov(img_bytes: bytes, *, weights_file: PathLike, fast_m
     bgr_array = rgb_array[:, :, ::-1]
 
     # predict the colorfulness
-    is_color, confidence = instance.predict(bgr_array, fast_method=fast_method)
+    is_color, confidence = kernel.predict(bgr_array, fast_method=fast_method)
     image.close()
     return DetectedColor(is_color, confidence, "ML-based detection", is_color)

@@ -33,7 +33,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, FilePath, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
@@ -42,7 +42,7 @@ from ..common import ChapterRange
 from ..constants import MANGA_PUBLICATION_TYPES, MangaPublication
 from ..renamer import QualityMapping
 from .actions import *
-from .common import SkipActionConfig
+from .common import ColorDetectionConfig, SkipActionConfig
 
 __all__ = (
     "ChapterConfig",
@@ -157,8 +157,8 @@ class SeriesMetafields(BaseModel):
 
     quality_maps: QualityMapping | None = Field(None, title="Quality Mapping Override")
     """Quality mapping override for the series"""
-    color_model: FilePath | None = Field(None, title="Model Path")
-    """The path to the model to use for identifying color images (ML-based color detection)"""
+    color_model: ColorDetectionConfig | None = Field(None, title="Color Detection Model")
+    """Configuration for color detection model based on ML stuff"""
 
 
 def default_root_meta() -> SeriesMetafields:
@@ -416,13 +416,6 @@ class OrchestratorConfig(BaseModel):
                 raise PydanticCustomError(
                     "missing_color_model",
                     "Color model must be provided in series metafields when using auto colors and related actions",
-                )
-            resolved_path = Path(self.metafields.color_model).resolve()
-            if not resolved_path.is_file():
-                raise PydanticCustomError(
-                    "invalid_color_model_path",
-                    "Color model path does not exist or is not a file: {path}",
-                    {"path": self.metafields.color_model},
                 )
         return self
 

@@ -37,7 +37,7 @@ from PIL import Image
 from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
-from ..ogsov import detect_image_color_ogsov
+from ..ogsov import detect_image_color_ml, register_ogsov_instance, register_ogsox_instance
 from ..vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_find_missing_plugins, vs_prepare_image_bulk_raw
 from . import options
 from ._deco import time_program
@@ -217,19 +217,28 @@ def lookup_nongray_images(
 @options.path_or_archive(disable_archive=True)
 @options.dest_output(optional=False)
 @click.option(
-    "-cm",
+    "-clm",
     "--color-model",
     "color_model_path",
     type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
-    help="The path to the color model file to use for our lookup.",
+    help="The path to the color model or weights or lookup file to use for our lookup.",
     required=True,
+)
+@click.option(
+    "-csm",
+    "--classifier-model",
+    "classifier_model_path",
+    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
+    help="The path to the classifier model file to use for our lookup, only used in ogsox mode",
+    required=False,
+    default=None,
 )
 @click.option(
     "-m",
     "--method",
     "lookup_method",
-    type=click.Choice(["orig", "fast", "vs-ogsox", "vs-ogsov"]),
-    help="The method to use for OGSOV lookup, orig and fast is the same with different algo, vs-* is VapourSynth",
+    type=click.Choice(["ogsov", "ogsox", "vs-ogsox", "vs-ogsov"]),
+    help="The method to use for lookup, orig and fast is the same with different algo, vs-* is VapourSynth",
     default="fast",
 )
 @click.option(
@@ -238,6 +247,14 @@ def lookup_nongray_images(
     is_flag=True,
     default=False,
     help="Use GPU for VapourSynth processing, only works with vs-* methods",
+)
+@click.option(
+    "-fm",
+    "--opt-fast",
+    "py_fast_method",
+    is_flag=True,
+    default=False,
+    help="Use fast method for python processing, only works with ogsov and ogsox methods",
 )
 @click.option(
     "-gr",
@@ -255,8 +272,10 @@ def lookup_color_images(
     path_or_archive: Path,
     dest_output: Path,
     color_model_path: Path,
-    lookup_method: Literal["orig", "fast", "vs-ogsov", "vs-ogsox"],
+    classifier_model_path: Path | None,
+    lookup_method: Literal["ogsov", "ogsox", "vs-ogsov", "vs-ogsox"],
     vs_gpu: bool,
+    py_fast_method: bool,
     force_gray: bool,
     recursive: bool,
     force: bool,
@@ -300,6 +319,18 @@ def lookup_color_images(
             raise click.Abort()
         if vs_gpu:
             console.info("Using GPU for VapourSynth processing.")
+
+    if lookup_method == "ogsox":
+        if classifier_model_path is None:
+            raise click.BadParameter(
+                "Classifier model path is required for ogsox method.",
+                param_hint="classifier_model_path",
+            )
+        if not classifier_model_path.exists():
+            raise click.BadParameter(
+                f"Classifier model path {classifier_model_path} does not exist.",
+                param_hint="classifier_model_path",
+            )
 
     dest_output.mkdir(parents=True, exist_ok=True)
 
@@ -356,11 +387,13 @@ def lookup_color_images(
             del clip
             del analyzed
         else:
+            if lookup_method == "ogsox" and classifier_model_path is not None:
+                instance = register_ogsox_instance(color_model_path, classifier_model_path)
+            else:
+                instance = register_ogsov_instance(color_model_path)
             for img_path in all_images:
                 img_bytes = img_path.read_bytes()
-                detected = detect_image_color_ogsov(
-                    img_bytes, weights_file=color_model_path, fast_method=lookup_method == "fast"
-                )
+                detected = detect_image_color_ml(img_bytes, kernel=instance, fast_method=py_fast_method)
                 del img_bytes
 
                 if detected.is_color:
