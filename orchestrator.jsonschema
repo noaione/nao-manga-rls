@@ -1115,6 +1115,36 @@
                     "$ref": "#/$defs/ResizeKernel",
                     "title": "Rescale Kernel"
                 },
+                "param_a": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Parameter A"
+                },
+                "param_b": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Parameter B"
+                },
                 "threads": {
                     "minimum": 1,
                     "title": "Processing Threads",

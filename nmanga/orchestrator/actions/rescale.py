@@ -25,6 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import abc
+from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
@@ -143,12 +144,19 @@ The rescale target configuration.
 """
 
 
+@dataclass
+class SimpleRescaleParam:
+    kernel: ResizeKernel
+    a: float | int | None = None
+    b: float | int | None = None
+
+
 def _runner_rescale_threaded(
     log_q: term.MessageOrInterface,
     img_path: Path,
     output_dir: Path,
     rescale: RescaleTarget,
-    kernel: ResizeKernel,
+    param: SimpleRescaleParam,
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
     cnsl = term.with_thread_queue(log_q)
@@ -166,7 +174,9 @@ def _runner_rescale_threaded(
     rescaled_img = rescale_image(
         img,
         target=res_target,
-        kernel=kernel,
+        kernel=param.kernel,
+        param_a=param.a,
+        param_b=param.b,
     )
 
     rescaled_img.save(dest_path, format="PNG")
@@ -176,7 +186,7 @@ def _runner_rescale_threaded(
 
 
 def _runner_rescale_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, RescaleTarget, ResizeKernel, SkipActionKind | None],
+    args: tuple[term.MessageQueue, Path, Path, RescaleTarget, SimpleRescaleParam, SkipActionKind | None],
 ) -> ThreadedResult:
     return _runner_rescale_threaded(*args)
 
@@ -201,6 +211,10 @@ class ActionRescale(BaseAction):
     """The rescale target configuration"""
     kernel: ResizeKernel = Field(..., title="Rescale Kernel")
     """The rescale kernel to use"""
+    param_a: float | int | None = Field(None, title="Parameter A")
+    """Optional parameter A for certain kernels (e.g., Lanczos support)."""
+    param_b: float | int | None = Field(None, title="Parameter B")
+    """Optional parameter B for certain kernels (e.g., Lanczos blur factor)."""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
@@ -257,6 +271,7 @@ class ActionRescale(BaseAction):
                 rescaler = metafield.rescale
 
         results: list[ThreadedResult] = []
+        parameter = SimpleRescaleParam(self.kernel, self.param_a, self.param_b)
         progress = context.terminal.make_progress()
         task = progress.add_task("Rescaling images...", finished_text="Rescaled images", total=total_images)
         context.terminal.info(f"Using {self.threads} CPU threads for processing.")
@@ -264,7 +279,7 @@ class ActionRescale(BaseAction):
             for result in pool.imap_unordered(
                 _runner_rescale_threaded_star,
                 [
-                    (log_q, image, output_dir, rescaler, self.kernel, is_skip_action)
+                    (log_q, image, output_dir, rescaler, parameter, is_skip_action)
                     for image, is_skip_action in images_complete
                 ],
             ):
