@@ -15,3 +15,5 @@ pytest.xml
 .DS_Store
 .tmptest
 .tmp*
+tmp*
+pytest*

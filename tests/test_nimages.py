@@ -73,6 +73,22 @@ def _gradient(width: int = 64, height: int = 48, shift: int = 0) -> Image.Image:
     return image
 
 
+def _colour_gradient(width: int = 64, height: int = 48) -> Image.Image:
+    """An RGB page with hard edges whose channel offsets stay clear of both ends."""
+    image = Image.new("RGB", (width, height))
+    pixels = image.load()
+    for y in range(height):
+        for x in range(width):
+            if x < width // 4:
+                base = 70
+            elif x >= (width * 3) // 4:
+                base = 170
+            else:
+                base = 70 + ((x * 3 + y * 2) % 100)
+            pixels[x, y] = (base + 10, base, base + 20)  # type: ignore
+    return image
+
+
 def _write_pages(directory: Path, count: int = 3, *, suffix: str = ".png") -> list[Path]:
     directory.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -525,6 +541,142 @@ class TestPosterizeClip:
         assert chain.gray is not chain.posterized
         with chain.gray.get_frame(0) as frame:
             assert frame.format.name == "Gray8"
+
+
+@requires_nimages
+@requires_imagseqs
+class TestDeblurClip:
+    """
+    `Deblur` is the one filter that must not be normalised to gray.
+
+    It reads RGB24, moves the luma and carries the change onto the three planes as an equal
+    offset, so a chain that converts first silently discards the colour the filter preserves.
+    """
+
+    def test_colour_page_keeps_its_planes(self, tmp_path: Path):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_rgb_image
+
+        page = tmp_path / "colour.png"
+        source = _colour_gradient()
+        source.save(page)
+
+        vs = get_vapoursynth()
+        chain = vs_deblur_clip(
+            [page],
+            method=1,
+            radius=0.8,
+            # A gentle blend, so the equal offset the plugin adds stays inside every channel's
+            # gamut and the comparison is about the offset rather than about clipping.
+            strength=0.3,
+            iterations=6,
+            threshold=2.0,
+            overshoot=0.0,
+            core=vs.core,
+        )
+        with chain.deblurred.get_frame(0) as frame:
+            assert frame.format.name == "RGB24"
+            image = vs_frame_to_rgb_image(frame)
+
+        assert image.mode == "RGB"
+        actual = np.asarray(image).astype(np.int16)
+        expected = np.asarray(source).astype(np.int16)
+        assert actual.shape == expected.shape
+
+        # An equal offset on R, G and B leaves every channel difference untouched. The page
+        # is chosen away from both ends so the gamut clamp never engages.
+        for first, second in ((0, 1), (1, 2), (0, 2)):
+            assert np.array_equal(
+                actual[..., first] - actual[..., second], expected[..., first] - expected[..., second]
+            )
+
+        # And the sharpening actually happened, rather than the frame being carried through.
+        assert not np.array_equal(actual, expected)
+
+    def test_gray_page_stays_a_single_plane(self, tmp_path: Path):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_rgb_image
+
+        (page,) = _write_pages(tmp_path / "pages", 1)
+        vs = get_vapoursynth()
+        chain = vs_deblur_clip(
+            [page],
+            method=1,
+            radius=0.8,
+            strength=None,
+            iterations=6,
+            threshold=2.0,
+            overshoot=0.0,
+            core=vs.core,
+        )
+        with chain.deblurred.get_frame(0) as frame:
+            assert frame.format.num_planes == 1
+            image = vs_frame_to_rgb_image(frame)
+
+        assert image.mode == "L"
+
+    def test_unset_strength_uses_the_per_method_default(self, tmp_path: Path):
+        """`strength=None` has to reach the plugin as an absent argument, not as a number."""
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_rgb_image
+
+        (page,) = _write_pages(tmp_path / "pages", 1)
+        vs = get_vapoursynth()
+
+        def pull(strength: float | None) -> "np.ndarray":
+            chain = vs_deblur_clip(
+                [page],
+                method=1,
+                radius=0.8,
+                strength=strength,
+                iterations=6,
+                threshold=2.0,
+                overshoot=0.0,
+                core=vs.core,
+            )
+            with chain.deblurred.get_frame(0) as frame:
+                return np.asarray(vs_frame_to_rgb_image(frame)).copy()
+
+        # 0.85 is the unsharp mask's documented default, so leaving it off has to match it.
+        assert np.array_equal(pull(None), pull(0.85))
+        assert not np.array_equal(pull(None), pull(0.2))
+
+    def test_frame_to_rgb_image_is_not_plane_zero(self, tmp_path: Path):
+        """
+        `vs_frame_to_image` reads plane 0, which on RGB24 is the red channel.
+
+        Writing that out gives a gray page that looks plausible on a mostly gray source, which
+        is why the colour command uses its own reader.
+        """
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image, vs_frame_to_rgb_image
+
+        page = tmp_path / "colour.png"
+        _colour_gradient().save(page)
+        vs = get_vapoursynth()
+        chain = vs_deblur_clip(
+            [page],
+            method=1,
+            radius=0.8,
+            strength=None,
+            iterations=6,
+            threshold=2.0,
+            overshoot=0.0,
+            core=vs.core,
+        )
+        with chain.deblurred.get_frame(0) as frame:
+            red_only = vs_frame_to_image(frame)
+            stacked = vs_frame_to_rgb_image(frame)
+
+        assert red_only.mode == "L"
+        assert stacked.mode == "RGB"
+        assert np.array_equal(np.asarray(red_only), np.asarray(stacked)[..., 0])
 
 
 @requires_nimages
@@ -1264,6 +1416,52 @@ class TestPluginRegistration:
         runner = CliRunner()
         result = runner.invoke(main, ["autolevel3", ".", "-o", ".", "--prefetch", "-1"])
         assert result.exit_code != 0
+
+    def test_deblur2_is_on_the_imops_group(self):
+        from nmanga.cmd import main
+
+        commands = set(main.commands["imops"].commands)  # pyright: ignore[reportAttributeAccessIssue]
+        assert "deblur2" in commands
+        # The Pillow command it sits beside has to stay reachable.
+        assert "deblur" in commands
+
+    def test_deblur2_has_prefetch_threads_cache_and_force(self):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["imops", "deblur2", "--help"])
+        assert result.exit_code == 0
+        for flag in ("--method", "--radius", "--strength", "--iterations", "--threshold", "--overshoot"):
+            assert flag in result.output
+        assert "--prefetch" in result.output
+        assert "--threads" in result.output
+        assert "--cache" in result.output
+        assert "--force" in result.output
+        # The plugin resolves the per method default, so the option is not defaulted here.
+        assert "Default: 0.65" not in result.output
+
+    @requires_nimages
+    @requires_imagseqs
+    def test_deblur2_writes_a_png_per_page(self, tmp_path: Path):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["imops", "deblur2", str(tmp_path / "pages"), "-o", str(tmp_path / "out"), "-t", "1", "--method", "edge"],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Deblurred 2 images." in result.output
+        for page in pages:
+            written = tmp_path / "out" / f"{page.stem}.png"
+            assert written.exists()
+            with Image.open(written) as opened:
+                assert opened.format == "PNG"
 
 
 class TestBoundedWritePool:

@@ -603,6 +603,25 @@ def vs_frame_to_image(frame: "VideoFrame", plane: int = 0) -> Image.Image:
     return Image.fromarray(np.asarray(frame[plane]).copy())
 
 
+def vs_frame_to_rgb_image(frame: "VideoFrame") -> Image.Image:
+    """
+    Return an `RGB24` frame's three planes as one Pillow `RGB` image.
+
+    :func:`vs_frame_to_image` reads plane 0, which on an `RGB24` frame is the **red** plane, so
+    using it for a colour page writes a grayscale image of the red channel and looks almost right
+    on a mostly gray page. `np.stack` copies, so the frame can be released at the end of the
+    caller's `with` block.
+
+    A single plane frame is returned as an `L` image rather than tripled up, which is what a
+    gray container decodes to and what `deblur` already wrote for a page like that.
+    """
+    np = get_numpy()
+    if frame.format.num_planes == 1:
+        return Image.fromarray(np.asarray(frame[0]).copy())
+    planes = [np.asarray(frame[plane]) for plane in range(3)]
+    return Image.fromarray(np.stack(planes, axis=-1), "RGB")
+
+
 @dataclass
 class PosterizeChain:
     """The nodes `vs_posterize_clip` built, keeping `gray` for the quality gate."""
@@ -642,6 +661,69 @@ def vs_posterize_clip(
     gray = vs_to_gray8(source, core=core)
     posterized = core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug))
     return PosterizeChain(source=source, gray=gray, posterized=posterized)
+
+
+@dataclass
+class DeblurChain:
+    """The nodes `vs_deblur_clip` built, kept at the source's own colour."""
+
+    source: "VideoNode"
+    deblurred: "VideoNode"
+
+
+def vs_deblur_clip(
+    files: Sequence[PathLike],
+    *,
+    method: int,
+    radius: float,
+    strength: float | None,
+    iterations: int,
+    threshold: float,
+    overshoot: float,
+    prefetch: int = 0,
+    debug: bool = False,
+    cache_mb: int = 512,
+    core: "Core | None" = None,
+) -> DeblurChain:
+    """
+    Read `files` and sharpen them in place, keeping the clip at the source's own colour.
+
+    This is the one chain here that does not normalise to gray. `Deblur` moves the luma alone and
+    carries the change onto R, G and B as an equal offset, which is what `deblur_deconv` does;
+    converting first would discard the colour the filter exists to preserve.
+
+    `strength` is left off the argument list when it is `None`, because the plugin resolves the
+    per method default (0.65 for the deconvolution, 0.85 for the unsharp mask) and a VapourSynth
+    argument list cannot carry `None`.
+
+    `prefetch` is how many pages `imgseqs` decodes ahead of the frame being asked for, and
+    `debug` turns on the plugin's log lines.
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+
+    core.max_cache_size = cache_mb
+    source = core.imgseqs.Read(
+        files=[str(path) for path in files],
+        mismatch=True,
+        prefetch=prefetch,
+        debug=int(debug),
+    )
+
+    args: dict[str, Any] = {
+        "method": method,
+        "radius": radius,
+        "iterations": iterations,
+        "threshold": threshold,
+        "overshoot": overshoot,
+        "debug": int(debug),
+    }
+    if strength is not None:
+        args["strength"] = strength
+
+    deblurred = core.nimages.Deblur(source, **args)
+    return DeblurChain(source=source, deblurred=deblurred)
 
 
 def vs_frame_to_grays(frame: "VideoFrame", core: "Core | None" = None) -> "VideoNode":
