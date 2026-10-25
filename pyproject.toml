@@ -76,7 +76,7 @@ denoiser = [
 vapoursynth = [
     "vapoursynth==81",
     "vapoursynth-imageseqs==0.3.0",
-    "vapoursynth-nimages==0.1.0",
+    "vapoursynth-nimages==0.2.1",
     "vsrepo"
 ]
 epub-render = ["playwright==1.63.0"]

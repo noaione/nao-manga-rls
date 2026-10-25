@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13, <3.15"
 resolution-markers = [
     "(python_full_version >= '3.14' and sys_platform == 'linux') or (python_full_version >= '3.14' and sys_platform == 'win32')",
@@ -925,7 +925,7 @@ requires-dist = [
     { name = "unrar2-cffi", specifier = "==0.5.0" },
     { name = "vapoursynth", marker = "extra == 'vapoursynth'", specifier = "==81" },
     { name = "vapoursynth-imageseqs", marker = "extra == 'vapoursynth'", specifier = "==0.3.0" },
-    { name = "vapoursynth-nimages", marker = "extra == 'vapoursynth'", specifier = "==0.1.0", index = "https://pypi.serik.at/simple/" },
+    { name = "vapoursynth-nimages", marker = "extra == 'vapoursynth'", specifier = "==0.2.1", index = "https://pypi.serik.at/simple/" },
     { name = "vsrepo", marker = "extra == 'vapoursynth'" },
     { name = "wand", specifier = "==0.7.2" },
     { name = "winrt-runtime", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
@@ -2121,13 +2121,13 @@ wheels = [
 
 [[package]]
 name = "vapoursynth-nimages"
-version = "0.1.0"
+version = "0.2.1"
 source = { registry = "https://pypi.serik.at/simple/" }
-sdist = { url = "https://pypi.serik.at/files/3ac2b50c5c0167676c31b696c58784e84af5f1595e9f62e8e312ec2cc4f582cf/vapoursynth_nimages-0.1.0.tar.gz", hash = "sha256:3ac2b50c5c0167676c31b696c58784e84af5f1595e9f62e8e312ec2cc4f582cf", size = 79315 }
+sdist = { url = "https://pypi.serik.at/files/ea6caaa0ea2aab29d5fb3bebea54c25573d049a931b3fed917859cc72f2cddd6/vapoursynth_nimages-0.2.1.tar.gz", hash = "sha256:ea6caaa0ea2aab29d5fb3bebea54c25573d049a931b3fed917859cc72f2cddd6", size = 112785 }
 wheels = [
-    { url = "https://pypi.serik.at/files/ed8beb4234cbb212112fd222520afdb8674bb57142a6d05c63399a3b1182a376/vapoursynth_nimages-0.1.0-py3-none-macosx_26_0_arm64.whl", hash = "sha256:ed8beb4234cbb212112fd222520afdb8674bb57142a6d05c63399a3b1182a376", size = 236218 },
-    { url = "https://pypi.serik.at/files/ae759daf7f230e54a9fb95f7bef05ee8a00c5ac84553d41c7535ea2803717b2f/vapoursynth_nimages-0.1.0-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:ae759daf7f230e54a9fb95f7bef05ee8a00c5ac84553d41c7535ea2803717b2f", size = 530114 },
-    { url = "https://pypi.serik.at/files/209d6ea325639c5446c6e46d63efda41aed83a4ec0f36cf9ef57aa7bc47e2cfe/vapoursynth_nimages-0.1.0-py3-none-win_amd64.whl", hash = "sha256:209d6ea325639c5446c6e46d63efda41aed83a4ec0f36cf9ef57aa7bc47e2cfe", size = 286048 },
+    { url = "https://pypi.serik.at/files/78de9545f2e168a3d852ede7caa2904a2368bad1e5918040f5ad9280843d4e65/vapoursynth_nimages-0.2.1-py3-none-macosx_26_0_arm64.whl", hash = "sha256:78de9545f2e168a3d852ede7caa2904a2368bad1e5918040f5ad9280843d4e65", size = 268195 },
+    { url = "https://pypi.serik.at/files/4b60bb53d2b96a4442bf8d6123172d4e732a6f21a6881e0c995aaa3dfcb04562/vapoursynth_nimages-0.2.1-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:4b60bb53d2b96a4442bf8d6123172d4e732a6f21a6881e0c995aaa3dfcb04562", size = 612125 },
+    { url = "https://pypi.serik.at/files/55b5e0cc2f41a0da5fe95bff0fd5ebb19479ab8f99815bad6fb180e8b8bced8d/vapoursynth_nimages-0.2.1-py3-none-win_amd64.whl", hash = "sha256:55b5e0cc2f41a0da5fe95bff0fd5ebb19479ab8f99815bad6fb180e8b8bced8d", size = 363142 },
 ]
 
 [[package]]
