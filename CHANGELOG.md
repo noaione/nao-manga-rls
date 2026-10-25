@@ -385,8 +385,40 @@ Rewritten every thing as a module with `nmanga` namespace.
   - Preview which chapter owns each page, and get warned about uncovered, overlapping, or missing pages,
     with the page numbers listed
   - Carry a volume per chapter, so an omnibus can be split into `v01-02` chapters
+- `nmanga autolevel3`, `nmanga posterize2`, `nmanga deblur2` - The PNG encode and the publish now belong to
+  `imgseqs.PNGWrite` instead of Pillow on worker threads
+  - One writer node covers a whole clip and names each still from the page's own source, so the three
+    commands write the destination directly: no staging directory and no rename anywhere
+  - `--threads` is now the number of open PNG write requests. End to end this is 1.1x to 1.3x over the
+    six worker Pillow route at `-t 6` on 1404x2000 and 3672x5274 volumes, with decoded pixels identical
+    and files within 1% of the old size
+  - `nmanga deblur2` no longer fails on a 16-bit source: the writer stores a 16-bit PNG instead of the old
+    Pillow path raising `Cannot handle this data type`
+  - The writer publishes truthful PNG metadata (an `sBIT` for a widened 9-15 bit frame, a `cICP` when the
+    source states primaries and transfer), so a whole file hash can change even when the pixels do not
+- `nmanga autolevel3` - One output mode replaces `--keep-colorspace` and `--force-gray`
+  - `--color/--gray`, colour by default: a page keeps its own container's colour, a YUV page is converted
+    to RGB by the writer with the frame's own matrix and range, and `--gray` writes one plane per page, a
+    skipped page included
+  - The analyzer reads the source pages themselves: `nimages` computes an `RGB24` page's luma (Pillow's
+    `convert("L")` exactly) and takes plane 0 of a gray or YUV page, so no normalisation pass runs first
+  - A skipped page is copied byte for byte when it is already in the output mode and re-encoded from the
+    un-levelled analysed page when it is not
+  - `--prefetch` (default 16, `0` disables) sizes the decoder lookahead, `--cache` bounds the VapourSynth
+    frame cache, and `-v` reports the plugin's resolved arguments, per frame timings, every page's levels
+    and its peak-found flags
+- `nmanga autolevel3` and `nmanga posterize2` - `--gpu` runs the analysis and the leveling on the device
+  - Off by default: with a host decoder and a host writer the chain pays an upload and a download per page
+  - Needs `vapoursynth-nimages` 0.2.1 or newer and a Vulkan 1.4 device, and fails with the plugin's own
+    message instead of falling back to the host
+- `nmanga posterize2` - Output is written from the chosen `Posterize` output instead of a float round
+  trip, and a volume whose pages resolve to one destination (such as `page.jpg` beside `page.png`) is
+  refused before the first write
+  - `-v` reports the plugin's resolved arguments, per frame timings and the per page scores
 
 **Changes**
+- `nmanga autolevel3` - **Breaking:** `--keep-colorspace`, `--force-gray` and `-f/--format` are gone. Output
+  is PNG only, and the default flips from gray to colour: pass `--gray` for the old default behaviour
 - Improve manual split filename matcher
 - `nmanga manualsplit` now accepts a folder of images, not just an archive
 - `nmanga manualsplit` supports a volume per chapter range (including omnibus ranges such as `1-2`)
@@ -430,27 +462,3 @@ Rewritten every thing as a module with `nmanga` namespace.
   keeping the previous source
 - `nmanga-gui` - Spell out the skipped pages of a hand picked chapter range (for example `001, 005-007`)
   instead of collapsing them into one start-to-end label
-- `nmanga autolevel3` - (Experimental) automatic color leveling backed by the `nimages` VapourSynth plugin
-  - One clip is built per directory, and the pages are pulled in order while `--threads` pages are encoded
-    and written at once. The PNG encode is roughly 80% of the per page cost and Pillow releases the GIL for
-    it, so this is where the parallelism pays: 129 1404x2000 jpeg pages go from ~15 to ~68 pages per second
-    at `-t 8`, with byte identical output
-  - `--prefetch` (default 16, `0` disables) sizes the decoder lookahead; `--cache` bounds the VapourSynth
-    frame cache
-  - Same per page decisions as `autolevel2` (`--keep-colorspace`, `--force-gray`, `--no-white`,
-    `--peak-offset`, `-f/--format`, `-r/--recursive`), minus `--legacy` and `--use-magick` which have no
-    plugin equivalent
-  - Pass `-v` for the plugin's resolved arguments, per frame stage timings, and the black/white level and
-    peak-found flags of every page
-  - Unlike `autolevel2 --format jpg`, which raises a `KeyError` because Pillow has no `JPG` writer, this
-    command writes a real JPEG
-- `nmanga posterize2` - (Experimental) posterize to a fixed bit depth backed by the `nimages` VapourSynth plugin
-  - Same `--bits`, `--use-ssimulacra2`, `--ssim-min`, `--prefetch`, `--threads` and `-r/--recursive` options
-    as `autolevel3`; `--threads` drives the same write pool, so 129 pages go from ~21 to ~77 per second at
-    `-t 6` without the gate
-  - The gate itself is a single GPU filter and stays on the main thread
-  - The SSIMULACRA2 gate compares the posterized page against the gray clip the posterize chain already
-    decoded, so the second pull costs no extra decode
-  - Pass `-v` for the plugin's resolved arguments and per frame stage timings
-  - Output is byte identical to `posterize` on lossless input; on lossy input the two decoders differ by one
-    code value on a small share of pixels, so a byte comparison is only valid on png

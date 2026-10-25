@@ -27,11 +27,13 @@ SOFTWARE.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from PIL import Image
 
-from nmanga.cli.autolevel import Autolevel3Config, write_page
+if TYPE_CHECKING:
+    from nmanga.cli.autolevel import Autolevel3Config
 
 NIMAGES_PLUGIN = "xyz.n4o.nimages"
 IMGSEQS_PLUGIN = "xyz.n4o.imgseqs"
@@ -99,155 +101,58 @@ def _write_pages(directory: Path, count: int = 3, *, suffix: str = ".png") -> li
     return written
 
 
-def _config(**overrides) -> Autolevel3Config:
+def _config(**overrides) -> "Autolevel3Config":
+    """The `autolevel3` config a chain test builds.
+
+    The fields are the rewritten config's: the output mode replaced the old
+    `force_gray` / `keep_colorspace` pair, and `gpu` reaches both plugin nodes.
+    """
+    from nmanga.cli.autolevel import Autolevel3Config, OutputMode
+
     values: dict = {
         "upper_limit": 60,
         "peak_offset": 0,
         "peak_min_pct": 0.25,
         "peak_prom_pct": None,
-        "force_gray": False,
-        "keep_colorspace": False,
-        "image_fmt": "png",
         "no_white": False,
+        "cache_mb": 512,
+        "gpu": False,
+        "output_mode": OutputMode.COLOR,
     }
     values.update(overrides)
     return Autolevel3Config(**values)
 
 
-class TestWritePage:
-    """The per page tail shared with `autolevel2`."""
+class TestAutolevelDecisions:
+    """The two pure helpers the per page decision and the level read are made of."""
 
-    def test_levels_a_page_it_writes(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
+    def test_unusable_levels_reproduce_the_autolevel2_rule(self):
+        from nmanga.cli.autolevel import _levels_are_unusable
 
-        result = write_page(img_path, destination, _gradient(), 12, 244, _config())
-        assert result.name == "PROCESSED"
-        written = destination / img_path.name
-        assert written.exists()
+        config = _config()
+        # Both levels bad, or a black on zero: copies.
+        assert _levels_are_unusable(0, 255, config) is True
+        # A black on zero with a white that still changes the page: processed.
+        assert _levels_are_unusable(0, 244, config) is False
+        # A real black peak at the top of the white range: processed.
+        assert _levels_are_unusable(12, 255, config) is False
+        # A black above the upper limit: copies.
+        assert _levels_are_unusable(61, 255, config) is True
+        assert _levels_are_unusable(60, 255, config) is False
+        # `--no-white` makes a black on zero decisive and leaves white alone.
+        assert _levels_are_unusable(0, 255, _config(no_white=True)) is True
+        assert _levels_are_unusable(12, 255, _config(no_white=True)) is False
 
-    def test_jpg_output_uses_quality_98(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
+    def test_page_levels_reads_both_levels_and_both_flags(self):
+        from nmanga.cli.autolevel import _page_levels
 
-        result = write_page(img_path, destination, _gradient(), 12, 244, _config(image_fmt="jpg"))
-        assert result.name == "PROCESSED"
-        written = destination / img_path.with_suffix(".jpg").name
-        assert written.exists()
-
-    def test_black_level_zero_copies_without_processing(self, tmp_path: Path):
-        """
-        `autolevel2` copies when `black_level <= 0`, whatever the white level is.
-
-        The plugin separates "no black peak was found" from "a peak genuinely sits on bin 0"
-        in `NImagesBlackPeakFound`, and `not black_found` is the check `autolevel2` meant to
-        write. Using it here would process pages `autolevel2` copies, which would make the two
-        commands produce different output for the same input, so this command reproduces the
-        existing choice; `--debug` reports both found flags per page.
-        """
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        result = write_page(img_path, destination, _gradient(), 0, 255, _config())
-        assert result.name == "COPIED"
-        assert (destination / img_path.name).read_bytes() == img_path.read_bytes()
-
-    def test_black_zero_with_white_255_copies(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        result = write_page(img_path, destination, _gradient(), 0, 255, _config())
-        assert result.name == "COPIED"
-
-    def test_black_zero_with_a_white_below_255_is_processed(self, tmp_path: Path):
-        """
-        A white below 255 with a black of 0 still changes the page.
-
-        The curve then maps `0..white` over the whole range, so this is not the identity and
-        the page is written. This is where the plugin path and the Pillow path can diverge:
-        `autolevel2` copies it because its `black_level <= 0` check fires first.
-        """
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        assert write_page(img_path, destination, _gradient(), 0, 244, _config()).name == "PROCESSED"
-        assert (destination / img_path.name).exists()
-
-    def test_a_real_black_peak_is_processed(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        assert write_page(img_path, destination, _gradient(), 12, 255, _config()).name == "PROCESSED"
-
-    def test_no_white_only_skips_on_black(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        # A white of 255 is fine with `--no-white`, the page is still leveled.
-        result = write_page(img_path, destination, _gradient(), 12, 255, _config(no_white=True))
-        assert result.name == "PROCESSED"
-
-        (other,) = _write_pages(source / "second", 1)
-        assert write_page(other, destination, _gradient(), 0, 255, _config(no_white=True)).name == "COPIED"
-
-    def test_white_255_skips_when_white_is_adjusted(self, tmp_path: Path):
-        """Both levels bad is what copies when `--no-white` is off; black 0 alone is enough too."""
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        assert write_page(img_path, destination, _gradient(), 0, 255, _config()).name == "COPIED"
-
-    def test_force_gray_writes_a_grayscale_png(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-
-        result = write_page(img_path, destination, _gradient(), 0, 255, _config(force_gray=True))
-        assert result.name == "GRAYSCALED"
-        written = destination / img_path.with_suffix(".png").name
-        with Image.open(written) as written_image:
-            assert written_image.mode == "L"
-
-    def test_existing_output_is_skipped(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-        existing = destination / img_path.name
-        existing.write_bytes(b"already here")
-
-        result = write_page(img_path, destination, _gradient(), 12, 244, _config())
-        assert result.name == "COPIED"
-        assert existing.read_bytes() == b"already here"
-
-    def test_existing_output_is_skipped_when_copying(self, tmp_path: Path):
-        source = tmp_path / "source"
-        destination = tmp_path / "out"
-        destination.mkdir()
-        (img_path,) = _write_pages(source, 1)
-        existing = destination / img_path.name
-        existing.write_bytes(b"already here")
-
-        result = write_page(img_path, destination, _gradient(), 0, 244, _config())
-        assert result.name == "COPIED"
-        assert existing.read_bytes() == b"already here"
+        frame = _FakeFrame({
+            "NImagesBlackLevel": 12,
+            "NImagesWhiteLevel": 244,
+            "NImagesBlackPeakFound": 1,
+            "NImagesWhitePeakFound": 0,
+        })
+        assert _page_levels(frame) == (12, 244, True, False)
 
 
 @requires_nimages
@@ -305,10 +210,13 @@ class TestGrayNormalisation:
                 assert frame.height == opened.height
             assert np.asarray(frame[0]).size > 0
 
-    def test_odd_width_webp_is_trimmed_and_converted(self, tmp_path: Path):
+    def test_odd_width_lossless_webp_converts_through_the_rgb_path(self, tmp_path: Path):
         """
-        An odd width cannot be 4:2:0, so the conversion has to trim before resizing, and the
-        sample it cut is restored from its neighbour rather than filled with black.
+        A lossy webp is 4:2:0 and the plugin cannot declare an odd one, so the odd edge
+        this project can actually be handed is a lossless (RGB) webp.
+
+        That page needs no subsampling trim: it converts through the plain RGB path and
+        the width survives.
         """
         import numpy as np
 
@@ -317,34 +225,75 @@ class TestGrayNormalisation:
         assert frame.width == 65
         assert frame.format.name == "Gray8"
 
-        plane = np.asarray(frame[0])
-        assert np.array_equal(plane[:, -1], plane[:, -2])
-        assert np.array_equal(plane[-1, :], plane[-2, :])
+        with Image.open(pages[0]) as opened:
+            expected = np.asarray(opened.convert("L")).astype(int)
+        actual = np.asarray(frame[0]).astype(int)
+        assert actual.shape == expected.shape
+        assert np.abs(actual - expected).max() <= 1
 
-    def test_odd_webp_in_a_mixed_clip_is_trimmed(self, tmp_path: Path):
+    def test_a_lone_odd_lossy_webp_is_refused_at_read(self, tmp_path: Path):
         """
-        A clip mixing containers reports an undefined format, so the subsampling factor has to
-        come from the frame rather than the clip, or the odd webp reaches `resize` untrimmed.
-        """
-        pages = [_tmp_odd_webp(tmp_path), *_write_pages(tmp_path / "pages", 1)]
-        frame = self._gray_frame(pages, 0)
-        assert (frame.width, frame.height, frame.format.name) == (65, 33, "Gray8")
+        The plugin documents this boundary: an odd 4:2:0 frame cannot exist in VapourSynth.
 
-    def test_colour_page_first_still_converts_a_later_odd_webp(self, tmp_path: Path):
+        `Read` refuses the clip before any frame is requested, which is the non-crashing
+        form of the failure a mixed clip used to abort on. `_trim_and_convert`'s odd-YUV
+        branch is therefore unreachable by construction.
         """
-        A clip's frames are not all one format: a colour page first must not send the odd webp
+        import vapoursynth
+
+        from nmanga.lazy import get_vapoursynth
+
+        odd = tmp_path / "odd-lossy.webp"
+        _gradient(width=65, height=33).save(odd, quality=90)
+        vs = get_vapoursynth()
+        with pytest.raises(vapoursynth.Error, match="VSVideoInfo"):
+            vs.core.imgseqs.Read(files=[str(odd)], mismatch=True, prefetch=0)
+
+    def test_odd_size_pages_in_a_mixed_clip_probe_each_frame(self, tmp_path: Path):
+        """
+        A clip mixing containers reports an undefined format, so the choice is per frame.
+
+        The odd lossless (RGB) page and the even lossy (YUV) page each convert at their
+        own size, which is what the per-frame probe in `vs_to_gray8` exists for.
+        """
+        import numpy as np
+
+        odd_rgb = _tmp_odd_webp(tmp_path)
+        yuv = tmp_path / "even.webp"
+        _gradient(width=66, height=34).save(yuv, quality=90)
+        pages = [odd_rgb, yuv]
+
+        first = self._gray_frame(pages, 0)
+        assert (first.width, first.height, first.format.name) == (65, 33, "Gray8")
+        with Image.open(odd_rgb) as opened:
+            expected = np.asarray(opened.convert("L")).astype(int)
+        assert np.abs(np.asarray(first[0]).astype(int) - expected).max() <= 1
+
+        second = self._gray_frame(pages, 1)
+        assert (second.width, second.height, second.format.name) == (66, 34, "Gray8")
+
+    def test_colour_page_first_still_converts_a_later_webp(self, tmp_path: Path):
+        """
+        A clip's frames are not all one format: a colour page first must not send the webp
         behind it down the plain resize, which refuses its 4:2:0 size.
         """
         colour = tmp_path / "colour.png"
-        _gradient(width=65, height=33).convert("RGB").save(colour)
+        _gradient(width=64, height=48).convert("RGB").save(colour)
 
-        frame = self._gray_frame([colour, _tmp_odd_webp(tmp_path)], 1)
-        assert (frame.width, frame.height, frame.format.name) == (65, 33, "Gray8")
+        later = tmp_path / "later.webp"
+        _gradient(width=66, height=34).save(later, quality=90)
+        frame = self._gray_frame([colour, later], 1)
+        assert (frame.width, frame.height, frame.format.name) == (66, 34, "Gray8")
 
 
 def _tmp_odd_webp(tmp_path: Path) -> Path:
+    """An odd-width lossless webp.
+
+    A lossy webp is 4:2:0 and `imgseqs` cannot declare an odd frame in that format, so the
+    odd page a graph can be handed is the RGB one a lossless webp decodes to.
+    """
     path = tmp_path / "odd.webp"
-    _gradient(width=65, height=33).save(path, quality=90)
+    _gradient(width=65, height=33).save(path, lossless=True)
     return path
 
 
@@ -418,68 +367,127 @@ class TestAutolevelClip:
         assert np.array_equal(np.asarray(image), raw)
         image.close()
 
-    def test_keep_colorspace_levels_every_plane(self, tmp_path: Path):
-        """The `ModifyFrame` carry has to keep the frame in RGB and change all three planes."""
+    def test_gray_mode_uses_one_plane_and_keeps_the_levels(self, tmp_path: Path):
+        """`--gray` picks the analysis clip; the levels it finds do not change with the mode."""
+        from nmanga.cli.autolevel import OutputMode
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_autolevel_clip
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        colour_path = tmp_path / "pages" / "colour.png"
+        Image.merge("RGB", (_gradient(), _gradient(shift=5), _gradient(shift=11))).save(colour_path)
+        pages.append(colour_path)
+
+        vs = get_vapoursynth()
+        colour_chain = vs_autolevel_clip(pages, options=_config(), core=vs.core)
+        gray_chain = vs_autolevel_clip(pages, options=_config(output_mode=OutputMode.GRAY), gray=True, core=vs.core)
+
+        for index, page in enumerate(pages):
+            with colour_chain.leveled.get_frame(index) as frame:
+                colour_format = frame.format.name
+                colour_levels = (
+                    int(frame.props["NImagesBlackLevel"]),
+                    int(frame.props["NImagesWhiteLevel"]),
+                )
+            with gray_chain.leveled.get_frame(index) as frame:
+                gray_format = frame.format.name
+                gray_levels = (
+                    int(frame.props["NImagesBlackLevel"]),
+                    int(frame.props["NImagesWhiteLevel"]),
+                )
+
+            assert gray_format == "Gray8"
+            assert gray_levels == colour_levels
+            # A gray page is already one plane, so the colour mode keeps it; only the RGB
+            # page changes family when `--gray` is asked for.
+            assert colour_format == ("RGB24" if page == colour_path else "Gray8")
+
+    def test_a_colour_page_keeps_its_container_family_and_round_trips(self, tmp_path: Path):
+        """
+        The write stage stores the frame the analysis found, in its own container family.
+
+        A gray page stays one plane, an RGB page stays RGB, and a YUV page is converted
+        to RGB24 first; the PNG the writer publishes decodes back to the same samples.
+        """
         import numpy as np
 
         from nmanga.lazy import get_vapoursynth
-        from nmanga.vapour import vs_carry_levels
+        from nmanga.vapour import vs_autolevel_clip, vs_frame_to_image, vs_png_writer
 
-        vs = get_vapoursynth()
-        colour = Image.merge(
-            "RGB",
-            (
-                _gradient(),
-                _gradient(shift=5),
-                _gradient(shift=11),
-            ),
+        pages = tmp_path / "pages"
+        (gray_path,) = _write_pages(pages, 1)
+        rgb_path = pages / "rgb.png"
+        _colour_gradient().save(rgb_path)
+        webp_path = pages / "even.webp"
+        # An even size, so this webp is a plain YUV to RGB conversion; the odd width case
+        # belongs to the command level mixed directory test.
+        _gradient(width=66, height=34).save(webp_path, quality=90)
+
+        expected = (
+            (gray_path, "Gray8", "L", "L"),
+            (rgb_path, "RGB24", "RGB", "RGB"),
+            (webp_path, "RGB24", "RGB", "RGB"),
         )
-        path = tmp_path / "colour.png"
-        colour.save(path)
+        vs = get_vapoursynth()
+        for page, family, image_mode, written_mode in expected:
+            chain = vs_autolevel_clip([page], options=_config(), core=vs.core)
+            output = tmp_path / f"out-{page.stem}"
+            writer = vs_png_writer(chain.leveled, output, core=vs.core)
 
-        source = vs.core.imgseqs.Read(files=[str(path)], mismatch=True, prefetch=0)
-        rgb = vs.core.resize.Bicubic(source, format=vs.RGB24)
-        gray = vs.core.resize.Bicubic(rgb, format=vs.GRAY8, matrix_s="470bg", range_s="full")
-        stats = vs.core.nimages.PeakStats(gray, upper_limit=60, peak_percentage=0.25)
-        carried = vs_carry_levels(rgb, stats, core=vs.core)
-        assert carried.format.color_family == vs.RGB
+            with chain.leveled.get_frame(0) as frame:
+                assert frame.format.name == family
+                image = vs_frame_to_image(frame)
+                expected_pixels = np.asarray(image).copy()
+            assert image.mode == image_mode
 
-        leveled = vs.core.nimages.Levels(carried, use_props=True, auto_gamma=True)
-        with rgb.get_frame(0) as before, leveled.get_frame(0) as after:
-            for plane in range(3):
-                original = np.asarray(before[plane])
-                changed = np.asarray(after[plane])
-                assert not np.array_equal(original, changed)
+            with writer.get_frame(0):
+                pass
+            (written,) = list(output.iterdir())
+            assert written.name == f"{page.stem}.png"
+            with Image.open(written) as opened:
+                assert opened.mode == written_mode
+                assert np.array_equal(np.asarray(opened), expected_pixels)
 
-    def test_carry_accepts_a_bare_frame(self, tmp_path: Path):
-        """
-        The caller holds a page pulled out of the chain, which is a frame and not a clip.
-
-        `ModifyFrame` needs a clip, so `vs_carry_levels` has to wrap the frame itself. This is
-        the shape `autolevel3 --keep-colorspace` uses: one page at a time, out of order.
-        """
+    def test_imgseqpath_survives_every_migrated_branch(self, tmp_path: Path):
+        """`output_dir` names a still from this property, so each branch has to keep it."""
         from nmanga.lazy import get_vapoursynth
-        from nmanga.vapour import vs_carry_levels
+        from nmanga.vapour import (
+            vs_deblur_clip,
+            vs_posterize_clip,
+        )
+
+        pages = tmp_path / "pages"
+        (gray_path,) = _write_pages(pages, 1)
+        colour_path = pages / "colour.png"
+        _colour_gradient().save(colour_path)
+        webp_path = pages / "even.webp"
+        _gradient(width=66, height=34).save(webp_path, quality=90)
+        files = [gray_path, colour_path, webp_path]
 
         vs = get_vapoursynth()
-        colour = Image.merge("RGB", (_gradient(), _gradient(shift=5), _gradient(shift=11)))
-        path = tmp_path / "colour.png"
-        colour.save(path)
+        source = vs.core.imgseqs.Read(files=[str(page) for page in files], mismatch=True, prefetch=0)
+        posterize = vs_posterize_clip(files, bits=4, method=0, core=vs.core)
+        deblur = vs_deblur_clip(
+            files,
+            method=1,
+            radius=0.8,
+            strength=None,
+            iterations=6,
+            threshold=2.0,
+            overshoot=0.0,
+            core=vs.core,
+        )
+        analysis = source
 
-        source = vs.core.imgseqs.Read(files=[str(path)], mismatch=True, prefetch=0)
-        rgb = vs.core.resize.Bicubic(source, format=vs.RGB24)
-        gray = vs.core.resize.Bicubic(rgb, format=vs.GRAY8, matrix_s="470bg", range_s="full")
-        stats = vs.core.nimages.PeakStats(gray, upper_limit=60, peak_percentage=0.25)
-
-        with rgb.get_frame(0) as frame:
-            carried = vs_carry_levels(frame, stats, core=vs.core)
-            assert carried.format.color_family == vs.RGB
-            assert carried.num_frames == 1
-            assert carried.width == frame.width
-            assert carried.height == frame.height
-            with carried.get_frame(0) as result:
-                assert int(result.props["NImagesBlackLevel"]) >= 0  # type: ignore
-                assert int(result.props["NImagesWhiteLevel"]) <= 255  # type: ignore
+        branches = (
+            ("analysis", analysis),
+            ("Posterize", posterize.posterized),
+            ("Deblur", deblur.deblurred),
+        )
+        for label, clip in branches:
+            for index, page in enumerate(files):
+                with clip.get_frame(index) as frame:
+                    assert frame.props["ImgSeqPath"] == str(page), label
 
 
 @requires_nimages
@@ -557,7 +565,7 @@ class TestDeblurClip:
         import numpy as np
 
         from nmanga.lazy import get_vapoursynth
-        from nmanga.vapour import vs_deblur_clip, vs_frame_to_rgb_image
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image
 
         page = tmp_path / "colour.png"
         source = _colour_gradient()
@@ -578,7 +586,7 @@ class TestDeblurClip:
         )
         with chain.deblurred.get_frame(0) as frame:
             assert frame.format.name == "RGB24"
-            image = vs_frame_to_rgb_image(frame)
+            image = vs_frame_to_image(frame)
 
         assert image.mode == "RGB"
         actual = np.asarray(image).astype(np.int16)
@@ -597,7 +605,7 @@ class TestDeblurClip:
 
     def test_gray_page_stays_a_single_plane(self, tmp_path: Path):
         from nmanga.lazy import get_vapoursynth
-        from nmanga.vapour import vs_deblur_clip, vs_frame_to_rgb_image
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image
 
         (page,) = _write_pages(tmp_path / "pages", 1)
         vs = get_vapoursynth()
@@ -613,7 +621,7 @@ class TestDeblurClip:
         )
         with chain.deblurred.get_frame(0) as frame:
             assert frame.format.num_planes == 1
-            image = vs_frame_to_rgb_image(frame)
+            image = vs_frame_to_image(frame)
 
         assert image.mode == "L"
 
@@ -622,7 +630,7 @@ class TestDeblurClip:
         import numpy as np
 
         from nmanga.lazy import get_vapoursynth
-        from nmanga.vapour import vs_deblur_clip, vs_frame_to_rgb_image
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image
 
         (page,) = _write_pages(tmp_path / "pages", 1)
         vs = get_vapoursynth()
@@ -639,23 +647,23 @@ class TestDeblurClip:
                 core=vs.core,
             )
             with chain.deblurred.get_frame(0) as frame:
-                return np.asarray(vs_frame_to_rgb_image(frame)).copy()
+                return np.asarray(vs_frame_to_image(frame)).copy()
 
         # 0.85 is the unsharp mask's documented default, so leaving it off has to match it.
         assert np.array_equal(pull(None), pull(0.85))
         assert not np.array_equal(pull(None), pull(0.2))
 
-    def test_frame_to_rgb_image_is_not_plane_zero(self, tmp_path: Path):
+    def test_frame_to_image_stacks_all_three_planes(self, tmp_path: Path):
         """
-        `vs_frame_to_image` reads plane 0, which on RGB24 is the red channel.
+        The deleted `vs_frame_to_rgb_image` was the only reader that stacked the planes.
 
-        Writing that out gives a gray page that looks plausible on a mostly gray source, which
-        is why the colour command uses its own reader.
+        `vs_frame_to_image` does it now, so the colour write path cannot silently write
+        plane 0 as a gray page: the three channels are three different planes.
         """
         import numpy as np
 
         from nmanga.lazy import get_vapoursynth
-        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image, vs_frame_to_rgb_image
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image
 
         page = tmp_path / "colour.png"
         _colour_gradient().save(page)
@@ -671,12 +679,14 @@ class TestDeblurClip:
             core=vs.core,
         )
         with chain.deblurred.get_frame(0) as frame:
-            red_only = vs_frame_to_image(frame)
-            stacked = vs_frame_to_rgb_image(frame)
+            image = vs_frame_to_image(frame)
+            planes = [np.asarray(frame[plane]).copy() for plane in range(3)]
 
-        assert red_only.mode == "L"
-        assert stacked.mode == "RGB"
-        assert np.array_equal(np.asarray(red_only), np.asarray(stacked)[..., 0])
+        assert image.mode == "RGB"
+        actual = np.asarray(image)
+        for plane, expected in enumerate(planes):
+            assert np.array_equal(actual[..., plane], expected)
+        assert not np.array_equal(actual[..., 0], actual[..., 1])
 
 
 @requires_nimages
@@ -960,10 +970,30 @@ class TestPosterizeGroup:
             with branch.get_frame(0) as frame:
                 assert frame.format.name == "GrayS"
 
+    def test_the_raw_branches_are_the_eight_bit_posterize_outputs(self, tmp_path: Path):
+        """The writer stores `group.raw`, so the bytes it publishes are the plugin's own."""
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_posterize_group
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        vs = get_vapoursynth()
+        group = vs_posterize_group(pages, bits_candidates=[2, 4], method=0, core=vs.core)
+
+        assert set(group.raw) == {2, 4}
+        for node in group.raw.values():
+            assert node.num_frames == len(pages)
+            for index, page in enumerate(pages):
+                with node.get_frame(index) as frame:
+                    assert frame.format.name == "Gray8"
+                    assert frame.props["ImgSeqPath"] == str(page)
+
     def test_mixed_containers_of_one_size_convert(self, tmp_path: Path):
         """
-        `vs_posterize_group` sits on `vs_to_gray8`, so it inherits the odd frame trim, and its
-        clips carry the size the undefined-size decode cannot report to `vship`."""
+        `vs_posterize_group` sits on `vs_to_gray8`, and its clips carry the size the
+        undefined-size decode cannot report to `vship`.
+
+        Both pages are 65x33 so `vship` gets one size: the png and the lossless webp are
+        both `RGB24`, which is the odd-width page this plugin can actually hand out."""
         import numpy as np
 
         from nmanga.lazy import get_vapoursynth
@@ -1464,6 +1494,256 @@ class TestPluginRegistration:
                 assert opened.format == "PNG"
 
 
+class _FakeFrame:
+    """The context manager `PageWrite.result()` receives from one request."""
+
+    def __init__(self, props: dict | None = None):
+        self.props = props or {}
+
+    def __enter__(self) -> "_FakeFrame":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class _FakeRequest:
+    """One `get_frame_async` result: optionally fails, optionally hands back props."""
+
+    def __init__(self, error: Exception | None = None, props: dict | None = None):
+        self._error = error
+        self._props = props
+
+    def result(self) -> _FakeFrame:
+        if self._error is not None:
+            raise self._error
+        return _FakeFrame(self._props)
+
+
+class _FakeWriter:
+    """Records every requested index and hands back the prepared requests in order."""
+
+    def __init__(self, *requests: _FakeRequest):
+        self._requests = list(requests)
+        self.requested: list[int] = []
+
+    def get_frame_async(self, index: int) -> _FakeRequest:
+        self.requested.append(index)
+        return self._requests.pop(0)
+
+
+class TestPngWriteWindow:
+    """The bounded replacement for `BoundedWritePool`, without a plugin or an encode."""
+
+    def test_hands_back_the_oldest_page_once_full(self):
+        from nmanga.vapour import PngWriteWindow
+
+        writer = _FakeWriter(_FakeRequest(), _FakeRequest(), _FakeRequest(), _FakeRequest())
+        with PngWriteWindow(3) as window:
+            assert window.submit(writer, 0, "first") is None
+            assert window.submit(writer, 1, "second") is None
+            # The third request fills the window, so the first page comes back to be waited on.
+            oldest = window.submit(writer, 2, "third")
+            assert oldest is not None
+            assert oldest.index == 0
+            assert oldest.result() == "first"
+            assert writer.requested == [0, 1, 2]
+            assert [page.result() for page in window.pending()] == ["second", "third"]
+
+    def test_hands_pages_back_in_order(self):
+        """The bound is only a memory bound if the oldest page is the one returned."""
+        from nmanga.vapour import PngWriteWindow
+
+        writer = _FakeWriter(_FakeRequest(), _FakeRequest(), _FakeRequest())
+        with PngWriteWindow(2) as window:
+            assert window.submit(writer, 10, 10) is None
+            second = window.submit(writer, 11, 11)
+            assert second is not None
+            assert second.index == 10
+            assert second.result() == 10
+            third = window.submit(writer, 12, 12)
+            assert third is not None and third.index == 11
+            assert third.result() == 11
+            assert [page.result() for page in window.pending()] == [12]
+
+    def test_result_returns_the_outcome_and_leaves_the_destination(self, tmp_path):
+        """`output_dir` already published the file; `result()` must not touch it again."""
+        from nmanga.vapour import PngWriteWindow
+
+        destination = tmp_path / "page.png"
+        destination.write_bytes(b"written by the writer")
+        writer = _FakeWriter(_FakeRequest())
+
+        with PngWriteWindow(1) as window:
+            page = window.submit(writer, 0, "PROCESSED")
+            assert page is not None
+            assert page.result() == "PROCESSED"
+
+        assert destination.read_bytes() == b"written by the writer"
+
+    def test_result_raises_the_writers_error(self):
+        from nmanga.vapour import PngWriteWindow
+
+        writer = _FakeWriter(_FakeRequest(error=ValueError("write failed")))
+        with pytest.raises(ValueError, match="write failed"):
+            with PngWriteWindow(1) as window:
+                page = window.submit(writer, 0, "nope")
+                assert page is not None
+                page.result()
+
+    def test_a_clean_exit_with_a_request_still_open_raises(self):
+        from nmanga.vapour import PngWriteWindow
+
+        writer = _FakeWriter(_FakeRequest())
+        window = PngWriteWindow(2)
+        with pytest.raises(RuntimeError, match="still open"):
+            with window:
+                window.submit(writer, 0, "open")
+        assert [page.index for page in window.pending()] == [0]
+
+    def test_an_error_exit_discards_the_open_requests(self):
+        """The request is waited on without being reported, and the original error wins."""
+        from nmanga.vapour import PngWriteWindow
+
+        writer = _FakeWriter(_FakeRequest(error=ValueError("encode failed")))
+        with pytest.raises(ValueError, match="boom"):
+            with PngWriteWindow(2) as window:
+                window.submit(writer, 0, "never")
+                raise ValueError("boom")
+
+    def test_depth_is_at_least_one(self):
+        from nmanga.vapour import PngWriteWindow
+
+        writer = _FakeWriter(_FakeRequest())
+        window = PngWriteWindow(0)
+        assert window.depth == 1
+        assert window.submit(writer, 0, "first") is not None
+
+
+@requires_imagseqs
+class TestPngWriter:
+    """`output_dir` names each still from its `ImgSeqPath`; the plugin owns the publish."""
+
+    def _read(self, pages: list[Path]):
+        from nmanga.lazy import get_vapoursynth
+
+        vs = get_vapoursynth()
+        return vs, vs.core.imgseqs.Read(files=[str(page) for page in pages], mismatch=True, prefetch=0)
+
+    def test_a_still_is_named_from_its_source_stem(self, tmp_path: Path):
+        import numpy as np
+
+        from nmanga.vapour import vs_png_writer
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        _vs, source = self._read(pages)
+        output = tmp_path / "out"
+        writer = vs_png_writer(source, output)
+        assert writer.num_frames == len(pages)
+
+        for index, page in enumerate(pages):
+            with source.get_frame(index) as source_frame:
+                width, height = source_frame.width, source_frame.height
+                planes = [np.asarray(source_frame[plane]).copy() for plane in range(source_frame.format.num_planes)]
+            with writer.get_frame(index) as written:
+                # The output frame is the input frame plus the write; it keeps its planes.
+                assert written.width == width
+                assert written.height == height
+                assert written.props["ImgSeqPath"] == str(page)
+                assert int(written.props["ImgSeqPNGWritePerformed"]) == 1
+                assert written.props["ImgSeqPNGWriteSaved"]
+
+            destination = output / f"{page.stem}.png"
+            assert destination.exists()
+            with Image.open(destination) as opened:
+                if len(planes) == 1:
+                    assert opened.mode == "L"
+                    actual = np.asarray(opened)
+                else:
+                    assert opened.mode == "RGB"
+                    actual = np.asarray(opened)
+            assert np.array_equal(actual, planes[0] if len(planes) == 1 else np.stack(planes, axis=-1))
+
+    def test_the_output_directory_is_created_when_the_node_is_built(self, tmp_path: Path):
+        from nmanga.vapour import vs_png_writer
+
+        pages = _write_pages(tmp_path / "pages", 1)
+        _vs, source = self._read(pages)
+        output = tmp_path / "does-not-exist-yet"
+        assert not output.exists()
+
+        vs_png_writer(source, output)
+        # The directory exists, but no PNG is written until a frame is requested.
+        assert output.is_dir()
+        assert list(output.iterdir()) == []
+
+    def test_overwrite_false_refuses_an_existing_destination(self, tmp_path: Path):
+        from nmanga.vapour import vs_png_writer
+
+        pages = _write_pages(tmp_path / "pages", 1)
+        _vs, source = self._read(pages)
+        output = tmp_path / "out"
+        output.mkdir()
+        destination = output / f"{pages[0].stem}.png"
+        destination.write_bytes(b"keep me")
+
+        refusing = vs_png_writer(source, output, overwrite=False)
+        with pytest.raises(Exception, match="already exists"):
+            with refusing.get_frame(0):
+                pass
+        assert destination.read_bytes() == b"keep me"
+
+        # `overwrite` is the permission, so the same node replaces it when given.
+        replacing = vs_png_writer(source, output, overwrite=True)
+        with replacing.get_frame(0):
+            pass
+        assert destination.read_bytes() != b"keep me"
+        with Image.open(destination) as opened:
+            assert opened.format == "PNG"
+
+    def test_a_frame_without_imgseqpath_is_refused(self, tmp_path: Path):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_png_writer
+
+        vs = get_vapoursynth()
+        blank = vs.core.std.BlankClip(width=8, height=8, format=vs.GRAY8, length=1)
+        writer = vs_png_writer(blank, tmp_path / "out")
+        with pytest.raises(Exception, match="ImgSeqPath"):
+            with writer.get_frame(0):
+                pass
+
+    def test_two_frames_with_one_destination_are_refused(self, tmp_path: Path):
+        """One writer never lets a second page silently replace the first."""
+        from nmanga.vapour import vs_png_writer
+
+        first = _write_pages(tmp_path / "one", 1)[0]
+        second = _write_pages(tmp_path / "two", 1)[0]
+        assert first.name == second.name
+        _vs, source = self._read([first, second])
+        writer = vs_png_writer(source, tmp_path / "out")
+
+        with writer.get_frame(0):
+            pass
+        with pytest.raises(Exception, match="same destination"):
+            with writer.get_frame(1):
+                pass
+
+    def test_the_window_settles_a_real_writer_request(self, tmp_path: Path):
+        from nmanga.vapour import PngWriteWindow, vs_png_writer
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        _vs, source = self._read(pages)
+        output = tmp_path / "out"
+        writer = vs_png_writer(source, output)
+
+        with PngWriteWindow(1) as window:
+            page = window.submit(writer, 0, "PROCESSED")
+            assert page is not None
+            assert page.result() == "PROCESSED"
+
+        assert (output / f"{pages[0].stem}.png").exists()
+
+
 class TestBoundedWritePool:
     """The write pool that keeps the encode off the frame loop."""
 
@@ -1521,3 +1801,618 @@ class TestBoundedWritePool:
         # Zero workers would mean no write ever completes, so it is clamped to one.
         with BoundedWritePool(0) as pool:
             assert pool.submit(int, 7) is not None
+
+
+def _staging_leftovers(root: Path) -> list[Path]:
+    """A `PngWriteStaging` directory was named like this; no route may leave one now."""
+    return sorted(path for path in root.rglob(".nmanga-pngwrite-*") if path.is_dir())
+
+
+def _flat_pages(directory: Path, count: int = 1, *, value: int = 128, mode: str = "L") -> list[Path]:
+    """Flat pages: no black peak and a white of 255, so `autolevel3` skips them."""
+    directory.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for index in range(count):
+        path = directory / f"flat_{index:03d}.png"
+        Image.new(mode, (64, 48), value if mode == "L" else (value, value, value)).save(path)
+        written.append(path)
+    return written
+
+
+def _colour_level_page(directory: Path) -> Path:
+    """A colour page whose luma is `_gradient`'s, so it has usable levels and stays RGB."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "colour.png"
+    Image.merge("RGB", (_gradient(), _gradient(shift=5), _gradient(shift=11))).save(path)
+    return path
+
+
+def _vulkan_device_available() -> bool:
+    """Whether `nimages` can build and run a `gpu=1` node, which needs Vulkan 1.4."""
+    try:
+        from nmanga.lazy import get_vapoursynth
+
+        vs = get_vapoursynth()
+        clip = vs.core.std.BlankClip(width=16, height=16, format=vs.GRAY8, length=1)
+        node = vs.core.nimages.PeakStats(clip, upper_limit=60, peak_percentage=0.25, gpu=1)
+        with node.get_frame(0):
+            pass
+    except Exception:
+        return False
+    return True
+
+
+HAS_VULKAN = _vulkan_device_available()
+requires_vulkan = pytest.mark.skipif(not HAS_VULKAN, reason="no usable Vulkan 1.4 device")
+
+
+class TestDuplicateStemReporting:
+    """`{stem}.png` is the destination for several routes, so the volume is checked once first."""
+
+    def test_unique_stems_are_not_reported(self, tmp_path: Path):
+        from nmanga.vapour import vs_duplicate_png_stems
+
+        pages = _write_pages(tmp_path / "pages", 3)
+        assert vs_duplicate_png_stems(pages) == {}
+
+    def test_a_jpg_beside_a_png_is_one_destination(self, tmp_path: Path):
+        from nmanga.vapour import vs_duplicate_png_stems
+
+        directory = tmp_path / "pages"
+        directory.mkdir()
+        jpg = directory / "page.jpg"
+        png = directory / "page.png"
+        other = directory / "other.png"
+        _gradient().save(jpg)
+        _gradient().save(png)
+        _gradient().save(other)
+
+        duplicates = vs_duplicate_png_stems([jpg, png, other])
+        assert set(duplicates) == {"page"}
+        assert set(duplicates["page"]) == {jpg, png}
+
+    def test_posterize2_uses_the_same_decision(self, tmp_path: Path):
+        from nmanga.cli.posterize import _duplicate_destination_stems
+
+        directory = tmp_path / "pages"
+        directory.mkdir()
+        jpg = directory / "page.jpg"
+        png = directory / "page.png"
+        _gradient().save(jpg)
+        _gradient().save(png)
+        assert _duplicate_destination_stems([jpg, png]) == {"page": [jpg, png]}
+
+    @requires_nimages
+    @requires_imagseqs
+    def test_posterize2_refuses_before_the_first_write(self, tmp_path: Path):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        directory = tmp_path / "pages"
+        directory.mkdir()
+        _gradient().save(directory / "page.jpg")
+        _gradient().save(directory / "page.png")
+        output = tmp_path / "out"
+
+        result = CliRunner().invoke(
+            main,
+            ["posterize2", str(directory), "-o", str(output), "-t", "1", "--bits", "4"],
+        )
+        assert result.exit_code != 0
+        assert "share one output name" in result.output
+        assert "would all write page.png" in result.output
+        # Refused before anything was built or written.
+        assert not output.exists() or list(output.iterdir()) == []
+
+
+@requires_nimages
+@requires_imagseqs
+class TestDeblur2Acceptance:
+    """`deblur2` writes straight to `output_dir`; there is no staging and no Pillow encode."""
+
+    def _run(self, source: Path, output: Path, *extra: str):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        return CliRunner().invoke(
+            main,
+            ["imops", "deblur2", str(source), "-o", str(output), "-t", "1", "--method", "edge", *extra],
+        )
+
+    def _expected(self, page: Path):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_deblur_clip, vs_frame_to_image
+
+        vs = get_vapoursynth()
+        chain = vs_deblur_clip(
+            [page],
+            method=1,
+            radius=0.8,
+            strength=0.85,
+            iterations=6,
+            threshold=2.0,
+            overshoot=0.0,
+            core=vs.core,
+        )
+        with chain.deblurred.get_frame(0) as frame:
+            return np.asarray(vs_frame_to_image(frame)).copy()
+
+    def test_writes_pixel_for_pixel_without_staging(self, tmp_path: Path):
+        import numpy as np
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output)
+        assert result.exit_code == 0, result.output
+        assert "Deblurred 2 images." in result.output
+
+        assert sorted(path.name for path in output.iterdir()) == sorted(f"{page.stem}.png" for page in pages)
+        assert _staging_leftovers(tmp_path) == []
+
+        for page in pages:
+            expected = self._expected(page)
+            with Image.open(output / f"{page.stem}.png") as opened:
+                assert opened.format == "PNG"
+                assert np.array_equal(np.asarray(opened), expected)
+
+    def test_skip_without_force_and_replace_with_force(self, tmp_path: Path):
+        pages = _write_pages(tmp_path / "pages", 2)
+        output = tmp_path / "out"
+        assert self._run(tmp_path / "pages", output).exit_code == 0
+
+        destination = output / f"{pages[0].stem}.png"
+        destination.write_bytes(b"keep me")
+        skipped = self._run(tmp_path / "pages", output)
+        assert skipped.exit_code == 0, skipped.output
+        assert "Skipping existing file" in skipped.output
+        assert destination.read_bytes() == b"keep me"
+
+        forced = self._run(tmp_path / "pages", output, "--force")
+        assert forced.exit_code == 0, forced.output
+        assert destination.read_bytes() != b"keep me"
+        with Image.open(destination) as opened:
+            assert opened.format == "PNG"
+
+    def test_a_16_bit_source_writes_a_16_bit_png(self, tmp_path: Path):
+        import numpy as np
+
+        pages = tmp_path / "pages"
+        pages.mkdir()
+        source = pages / "page_000.png"
+        array = np.arange(64 * 48, dtype=np.uint16).reshape(48, 64) * 7
+        Image.fromarray(array).save(source)
+
+        output = tmp_path / "out"
+        result = self._run(pages, output)
+        assert result.exit_code == 0, result.output
+
+        # The old `vs_frame_to_rgb_image` path raised on a 16-bit frame; the writer stores it.
+        with Image.open(output / "page_000.png") as opened:
+            assert opened.mode == "I;16"
+            decoded = np.asarray(opened)
+        assert decoded.dtype == np.uint16
+        assert decoded.shape == array.shape
+        assert decoded.max() > 255
+
+
+@requires_nimages
+@requires_imagseqs
+class TestPosterize2Acceptance:
+    """Processed pages land directly in `output_dir`; copied pages keep their source bytes."""
+
+    def _run(self, source: Path, output: Path, *extra: str):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        return CliRunner().invoke(
+            main,
+            ["posterize2", str(source), "-o", str(output), "-t", "1", "--bits", "4", "-m", "even", *extra],
+        )
+
+    def test_a_processed_page_lands_directly_and_matches_the_plugin(self, tmp_path: Path):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_frame_to_image, vs_posterize_clip
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output)
+        assert result.exit_code == 0, result.output
+        assert "Posterized 2 images to 4 bits." in result.output
+
+        assert sorted(path.name for path in output.iterdir()) == sorted(f"{page.stem}.png" for page in pages)
+        assert _staging_leftovers(tmp_path) == []
+
+        vs = get_vapoursynth()
+        for page in pages:
+            chain = vs_posterize_clip([page], bits=4, method=0, core=vs.core)
+            with chain.posterized.get_frame(0) as frame:
+                expected = np.asarray(vs_frame_to_image(frame)).copy()
+            with Image.open(output / f"{page.stem}.png") as opened:
+                assert np.array_equal(np.asarray(opened), expected)
+
+    def test_a_copied_page_keeps_its_suffix_and_bytes(self, tmp_path: Path):
+        directory = tmp_path / "pages"
+        directory.mkdir()
+        jpg = directory / "page_000.jpg"
+        png = directory / "page_001.png"
+        _gradient().save(jpg)
+        _gradient(shift=9).save(png)
+        output = tmp_path / "out"
+
+        result = self._run(
+            directory,
+            output,
+            "--metrics",
+            "ssimulacra2",
+            "--metric-min",
+            "ssimulacra2=100",
+        )
+        assert result.exit_code == 0, result.output
+        assert "Copied 2 images without posterization." in result.output
+        assert (output / "page_000.jpg").read_bytes() == jpg.read_bytes()
+        assert (output / "page_001.png").read_bytes() == png.read_bytes()
+
+    def test_a_selected_page_overwrites_an_existing_png(self, tmp_path: Path):
+        import numpy as np
+
+        pages = _write_pages(tmp_path / "pages", 1)
+        output = tmp_path / "out"
+        output.mkdir()
+        destination = output / f"{pages[0].stem}.png"
+        destination.write_bytes(b"the old Pillow save would have replaced this")
+
+        result = self._run(tmp_path / "pages", output)
+        assert result.exit_code == 0, result.output
+        assert destination.read_bytes() != b"the old Pillow save would have replaced this"
+        with Image.open(destination) as opened:
+            assert opened.format == "PNG"
+            assert np.asarray(opened).ndim == 2
+
+    @requires_vship
+    def test_the_fan_out_writes_processed_pages_directly(self, tmp_path: Path):
+        import numpy as np
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        output = tmp_path / "out"
+        result = CliRunner().invoke(
+            main,
+            [
+                "posterize2",
+                str(tmp_path / "pages"),
+                "-o",
+                str(output),
+                "-t",
+                "1",
+                "--bits",
+                "2-4",
+                "--metrics",
+                "ssimulacra2",
+                "--metric-min",
+                "ssimulacra2=0",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Posterized 2 images" in result.output
+        assert sorted(path.name for path in output.iterdir()) == sorted(f"{page.stem}.png" for page in pages)
+        assert _staging_leftovers(tmp_path) == []
+        for page in pages:
+            with Image.open(output / f"{page.stem}.png") as opened:
+                decoded = np.asarray(opened)
+            with Image.open(page) as source:
+                assert not np.array_equal(decoded, np.asarray(source.convert("L")))
+                assert len(np.unique(decoded)) <= 16
+
+
+@requires_nimages
+@requires_imagseqs
+class TestAutolevel3Acceptance:
+    """The PNG route decides first and writes straight to the destination; no staging."""
+
+    def _run(self, source: Path, output: Path, *extra: str):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        return CliRunner().invoke(
+            main,
+            ["autolevel3", str(source), "-o", str(output), "-t", "1", *extra],
+        )
+
+    def _expected(self, page: Path):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_autolevel_clip, vs_frame_to_image
+
+        vs = get_vapoursynth()
+        chain = vs_autolevel_clip([page], options=_config(), core=vs.core)
+        with chain.leveled.get_frame(0) as frame:
+            return np.asarray(vs_frame_to_image(frame)).copy()
+
+    def test_a_levelled_page_is_written_directly_without_staging(self, tmp_path: Path):
+        import numpy as np
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output)
+        assert result.exit_code == 0, result.output
+        assert "Autoleveled 2 images." in result.output
+        assert sorted(path.name for path in output.iterdir()) == sorted(f"{page.stem}.png" for page in pages)
+        assert _staging_leftovers(tmp_path) == []
+
+        for page in pages:
+            with Image.open(output / f"{page.stem}.png") as opened:
+                assert np.array_equal(np.asarray(opened), self._expected(page))
+
+    def test_a_skipped_page_is_copied_byte_for_byte_in_colour_mode(self, tmp_path: Path):
+        (page,) = _flat_pages(tmp_path / "pages", 1)
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output)
+        assert result.exit_code == 0, result.output
+        assert "Copied 1 images without autolevel." in result.output
+        assert (output / page.name).read_bytes() == page.read_bytes()
+
+    def test_gray_mode_re_encodes_a_skipped_colour_page(self, tmp_path: Path):
+        (page,) = _flat_pages(tmp_path / "pages", 1, mode="RGB")
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output, "--gray")
+        assert result.exit_code == 0, result.output
+        assert "Grayscaled 1 images." in result.output
+        written = output / page.with_suffix(".png").name
+        with Image.open(written) as opened:
+            assert opened.mode == "L"
+        assert written.read_bytes() != page.read_bytes()
+
+    def test_gray_mode_copies_an_already_gray_skipped_page(self, tmp_path: Path):
+        (page,) = _flat_pages(tmp_path / "pages", 1)
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output, "--gray")
+        assert result.exit_code == 0, result.output
+        assert "Copied 1 images without autolevel." in result.output
+        assert (output / page.name).read_bytes() == page.read_bytes()
+
+    def test_colour_mode_keeps_a_levelled_colour_page_in_rgb(self, tmp_path: Path):
+        page = _colour_level_page(tmp_path / "pages")
+        output = tmp_path / "out"
+        result = self._run(tmp_path / "pages", output)
+        assert result.exit_code == 0, result.output
+        assert "Autoleveled 1 images." in result.output
+        with Image.open(output / page.name) as opened:
+            assert opened.mode == "RGB"
+
+    def test_an_existing_destination_is_not_replaced(self, tmp_path: Path):
+        pages = _write_pages(tmp_path / "pages", 1)
+        output = tmp_path / "out"
+        assert self._run(tmp_path / "pages", output).exit_code == 0
+
+        existing = output / f"{pages[0].stem}.png"
+        existing.write_bytes(b"keep me")
+        rerun = self._run(tmp_path / "pages", output)
+        assert rerun.exit_code == 0, rerun.output
+        assert "Skipping existing file" in rerun.output
+        assert existing.read_bytes() == b"keep me"
+
+    def test_a_mixed_png_and_webp_directory_at_an_odd_width(self, tmp_path: Path):
+        directory = tmp_path / "pages"
+        directory.mkdir()
+        _gradient(width=65, height=33).save(directory / "odd.png")
+        _gradient(width=66, height=34).save(directory / "even.webp", quality=90)
+        output = tmp_path / "out"
+
+        # `--gray` sends the YUV webp through the analysis clip and writes both as one
+        # plane, so the odd png and the even webp exercise the per-frame probe.
+        result = self._run(directory, output, "--gray")
+        assert result.exit_code == 0, result.output
+        assert sorted(path.name for path in output.iterdir()) == ["even.png", "odd.png"]
+        with Image.open(output / "odd.png") as odd:
+            assert (odd.mode, odd.size) == ("L", (65, 33))
+        with Image.open(output / "even.png") as even:
+            assert (even.mode, even.size) == ("L", (66, 34))
+
+
+class TestPngSaveGuard:
+    """A PNG page that still goes through Pillow fails loudly here."""
+
+    def _forbid_pillow_save(self, monkeypatch):
+        def fail(*args, **kwargs):
+            raise AssertionError("a PNG page went through PIL.Image.Image.save")
+
+        monkeypatch.setattr(Image.Image, "save", fail)
+
+    @requires_nimages
+    @requires_imagseqs
+    def test_deblur2_never_calls_pillow_save(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        self._forbid_pillow_save(monkeypatch)
+        result = CliRunner().invoke(
+            main,
+            ["imops", "deblur2", str(tmp_path / "pages"), "-o", str(tmp_path / "out"), "-t", "1"],
+        )
+        assert result.exit_code == 0, result.output + repr(result.exception)
+        assert len(list((tmp_path / "out").iterdir())) == len(pages)
+
+    @requires_nimages
+    @requires_imagseqs
+    def test_posterize2_fixed_depth_never_calls_pillow_save(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        _write_pages(tmp_path / "pages", 2)
+        self._forbid_pillow_save(monkeypatch)
+        result = CliRunner().invoke(
+            main,
+            ["posterize2", str(tmp_path / "pages"), "-o", str(tmp_path / "out"), "-t", "1", "--bits", "4"],
+        )
+        assert result.exit_code == 0, result.output + repr(result.exception)
+
+    @requires_nimages
+    @requires_imagseqs
+    @requires_vship
+    def test_posterize2_fan_out_never_calls_pillow_save(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        _write_pages(tmp_path / "pages", 2)
+        self._forbid_pillow_save(monkeypatch)
+        result = CliRunner().invoke(
+            main,
+            [
+                "posterize2",
+                str(tmp_path / "pages"),
+                "-o",
+                str(tmp_path / "out"),
+                "-t",
+                "1",
+                "--bits",
+                "2-4",
+                "--metrics",
+                "ssimulacra2",
+                "--metric-min",
+                "ssimulacra2=0",
+            ],
+        )
+        assert result.exit_code == 0, result.output + repr(result.exception)
+
+    @requires_nimages
+    @requires_imagseqs
+    def test_autolevel3_png_never_calls_pillow_save(self, tmp_path: Path, monkeypatch):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        _write_pages(tmp_path / "pages", 2)
+        self._forbid_pillow_save(monkeypatch)
+        for index, mode in enumerate(((), ("--gray",))):
+            output = tmp_path / f"out-{index}"
+            result = CliRunner().invoke(
+                main,
+                ["autolevel3", str(tmp_path / "pages"), "-o", str(output), "-t", "1", *mode],
+            )
+            assert result.exit_code == 0, result.output + repr(result.exception)
+            assert len(list(output.iterdir())) == 2
+
+
+class TestCommandSurface:
+    """The flags and deleted helpers the migration is supposed to leave behind."""
+
+    def test_autolevel3_replaced_force_gray_and_keep_colorspace(self):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        runner = CliRunner()
+        help_text = runner.invoke(main, ["autolevel3", "--help"]).output
+        assert "--color" in help_text
+        assert "--gray" in help_text
+        assert "--gpu" in help_text
+        assert "Vulkan" in help_text
+        assert "--force-gray" not in help_text
+        assert "--keep-colorspace" not in help_text
+        for flag in ("--force-gray", "--keep-colorspace"):
+            result = runner.invoke(main, ["autolevel3", ".", "-o", ".", flag])
+            assert result.exit_code != 0
+
+    def test_posterize2_exposes_gpu(self):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        help_text = CliRunner().invoke(main, ["posterize2", "--help"]).output
+        assert "--gpu" in help_text
+        assert "Vulkan" in help_text
+
+    def test_the_pillow_png_write_helpers_are_gone(self):
+        import nmanga.cli.image_operations as image_operations
+        import nmanga.cli.posterize as posterize
+
+        assert not hasattr(image_operations, "_save_deblur_png")
+        for name in ("_save_png", "_submit_fallback", "_submit_selection"):
+            assert not hasattr(posterize, name)
+
+    def test_the_old_colour_helpers_are_gone_from_vapour(self):
+        import nmanga.vapour as vapour
+
+        assert not hasattr(vapour, "level_color_page")
+        assert not hasattr(vapour, "vs_frame_to_rgb_image")
+        assert hasattr(vapour, "vs_grays_frame_to_image")
+
+
+class TestGpuFlag:
+    """`--gpu` must fail with the plugin's own message, never fall back to the host."""
+
+    @requires_nimages
+    @requires_imagseqs
+    @pytest.mark.skipif(HAS_VULKAN, reason="this machine has a usable Vulkan device")
+    def test_autolevel3_gpu_without_a_device_reports_the_plugin_message(self, tmp_path: Path):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        _write_pages(tmp_path / "pages", 1)
+        result = CliRunner().invoke(
+            main,
+            ["autolevel3", str(tmp_path / "pages"), "-o", str(tmp_path / "out"), "-t", "1", "--gpu"],
+        )
+        assert result.exit_code != 0
+        assert "no usable Vulkan device" in result.output + repr(result.exception)
+
+    @requires_nimages
+    @requires_imagseqs
+    @pytest.mark.skipif(HAS_VULKAN, reason="this machine has a usable Vulkan device")
+    def test_posterize2_gpu_without_a_device_reports_the_plugin_message(self, tmp_path: Path):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        _write_pages(tmp_path / "pages", 1)
+        result = CliRunner().invoke(
+            main,
+            ["posterize2", str(tmp_path / "pages"), "-o", str(tmp_path / "out"), "-t", "1", "--gpu"],
+        )
+        assert result.exit_code != 0
+        assert "no usable Vulkan device" in result.output + repr(result.exception)
+
+    @requires_nimages
+    @requires_imagseqs
+    @requires_vulkan
+    def test_autolevel3_gpu_matches_the_host_route(self, tmp_path: Path):
+        import numpy as np
+
+        pages = _write_pages(tmp_path / "pages", 2)
+        host = tmp_path / "host"
+        device = tmp_path / "device"
+        assert self._run_autolevel3(tmp_path / "pages", host).exit_code == 0
+        assert self._run_autolevel3(tmp_path / "pages", device, "--gpu").exit_code == 0
+        for page in pages:
+            name = f"{page.stem}.png"
+            with Image.open(host / name) as host_image:
+                expected = np.asarray(host_image)
+            with Image.open(device / name) as device_image:
+                assert np.array_equal(np.asarray(device_image), expected)
+
+    @staticmethod
+    def _run_autolevel3(source: Path, output: Path, *extra: str):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        return CliRunner().invoke(
+            main,
+            ["autolevel3", str(source), "-o", str(output), "-t", "1", *extra],
+        )

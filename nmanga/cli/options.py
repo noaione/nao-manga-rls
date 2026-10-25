@@ -572,7 +572,10 @@ threads = click.option(
     type=POSITIVE_INT,
     default=CPU_THREADS,
     show_default=True,
-    help="The number of threads to use for processing",
+    help=(
+        "How many pages to process at once: worker threads for the Pillow paths, open PNG "
+        "write requests for the VapourSynth ones"
+    ),
     panel="Performance Options",
 )
 threads_alt = click.option(
@@ -582,7 +585,10 @@ threads_alt = click.option(
     type=POSITIVE_INT,
     default=CPU_THREADS,
     show_default=True,
-    help="The number of threads to use for processing",
+    help=(
+        "How many pages to process at once: worker threads for the Pillow paths, open PNG "
+        "write requests for the VapourSynth ones"
+    ),
     panel="Performance Options",
 )
 prefetch = click.option(

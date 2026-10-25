@@ -478,6 +478,15 @@ class NMangaCommandHandler(click.RichCommand):
         try:
             # Try to see if command is being run with deprecated options
             return super().invoke(ctx)
+        except click.ClickException:
+            # A user-facing refusal is a usage error, not an internal failure. Stop whatever
+            # the console is showing (the status line, a progress bar, the hidden cursor) and
+            # let click print the message and set click's own exit code, which is 2 for a
+            # `BadParameter` and 1 for a plain `ClickException`.
+            console.stop_status()
+            console.stop_current_progress(skip_total=True)
+            console.console.show_cursor()
+            raise
         except Exception as ex:
             # Invoke error handler
             console.stop_status()  # So it doesn't consume the indicator in iTerm (and maybe more)

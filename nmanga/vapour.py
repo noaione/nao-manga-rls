@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from functools import partial
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, cast
 
 from PIL import Image
 
@@ -387,8 +387,14 @@ def _trim_and_convert(
     """
     Convert a subsampled clip to a constant `GRAY8` through `RGB24`.
 
-    An odd width or height cannot be 4:2:0, and every filter but the decoder refuses it,
-    so an odd edge is trimmed before the conversion and padded back after it.
+    An odd width or height cannot be 4:2:0, and every filter but the decoder refuses it, so an
+    odd edge is trimmed before the conversion and padded back after it.
+
+    `imgseqs` 0.3 cannot hand an odd subsampled frame out at all: it refuses the size when
+    `Read` builds its video info, and a mixed clip aborts at frame creation. The trim is
+    therefore a guard for a decoder that can hand one out, not a path a webp takes today;
+    the per-frame probe in :func:`vs_to_gray8` still has to ask each frame because a mixed
+    clip's format is undefined.
 
     `frame_format` is the format of the frame at `width`/`height`, not `clip.format`: a
     `mismatch` `imgseqs` clip reports an undefined format whose subsampling is always zero,
@@ -450,7 +456,7 @@ class AutolevelChain:
     """The nodes `vs_autolevel_clip` built, kept so a caller can pull frames from them."""
 
     source: "VideoNode"
-    gray: "VideoNode"
+    analysis: "VideoNode"
     stats: "VideoNode"
     leveled: "VideoNode"
 
@@ -459,16 +465,34 @@ def vs_autolevel_clip(
     files: Sequence[PathLike],
     *,
     options: "AutolevelOptions",
+    gray: bool = False,
+    gpu: bool = False,
     prefetch: int = 0,
     debug: bool = False,
     core: "Core | None" = None,
 ) -> AutolevelChain:
     """
-    Read `files` and build the `PeakStats` to `Levels` chain over their gray form.
+    Read `files` and build the `PeakStats` to `Levels` chain over their analysis form.
 
-    `gray` is the analysed clip and `leveled` is the same pages levelled with the levels
-    found on them. Pull the frame you want from `leveled` and read the level properties off
-    it, rather than pulling from `stats` and then `leveled`, which analyses every page twice.
+    `analysis` is what `PeakStats` reads, and it is the source's own frames unless `gray` is
+    set: `nimages` takes any colour family on a clip whose format varies per frame, reads an
+    `RGB24` page through the reference's fixed-point luma (Pillow's `convert("L")` exactly),
+    and counts plane 0 of a gray or YUV page. No normalisation is needed before the counter.
+    `gray=True` is the `--gray` output mode, where the levelled clip itself has to be one plane
+    per page and the pages are therefore converted first.
+
+    `leveled` is the page the write stage stores: the analysed page with the curve applied, in
+    each frame's own colour family. A colour page is levelled on its own planes and a gray page
+    stays gray, which is the whole of the old `--keep-colorspace` behaviour, by construction;
+    `PNGWrite` then stores an `RGB24` still as RGB and converts a YUV still to RGB with the
+    frame's matrix and range. Pull the frame you want from `leveled` and read the level
+    properties off it, rather than pulling from `stats` and then `leveled`, which analyses
+    every page twice.
+
+    `gpu` passes `gpu=1` to the counter and the map, and then downloads the levelled frame
+    because every consumer of it takes host frames. It needs `vapoursynth-nimages` 0.2.1 or
+    `vapoursynth-nimages` 0.2.1 or newer and a Vulkan 1.4 device; the plugin refuses at
+    node creation otherwise rather than quietly running the host path.
 
     `prefetch` is how many pages `imgseqs` decodes ahead of the frame being asked for, and
     `debug` turns on the plugin's log lines.
@@ -484,136 +508,47 @@ def vs_autolevel_clip(
         prefetch=prefetch,
         debug=int(debug),
     )
-    gray = vs_to_gray8(source, core=core)
 
     stats_args: dict[str, Any] = {
         "upper_limit": options.upper_limit,
         "peak_percentage": options.peak_min_pct,
         "skip_white": 1 if options.no_white else 0,
         "debug": int(debug),
+        "gpu": int(gpu),
     }
     # `None` is not a value a VapourSynth argument list can carry, so the argument has to
     # be left off entirely to leave prominence disabled.
     if options.peak_prom_pct is not None:
         stats_args["peak_prominence"] = options.peak_prom_pct
+    analysis = vs_to_gray8(source, core=core) if gray else source
 
-    stats = core.nimages.PeakStats(gray, **stats_args)
+    stats = core.nimages.PeakStats(analysis, **stats_args)
     leveled = core.nimages.Levels(
         stats,
         use_props=True,
         peak_offset=options.peak_offset,
         auto_gamma=True,
         debug=int(debug),
+        gpu=int(gpu),
     )
-    return AutolevelChain(source=source, gray=gray, stats=stats, leveled=leveled)
+    if gpu:
+        # One download at the end of the device chain: every consumer of `leveled` is host.
+        leveled = core.std.GPUDownload(leveled)
+    return AutolevelChain(source=source, analysis=analysis, stats=stats, leveled=leveled)
 
 
-def vs_carry_levels(rgb: "VideoNode | VideoFrame", stats: "VideoNode", core: "Core | None" = None) -> "VideoNode":
+def vs_frame_to_image(frame: "VideoFrame") -> Image.Image:
     """
-    Copy the level properties from the analysed gray clip onto `rgb`.
+    Return one frame as a Pillow image.
 
-    `Levels(use_props=True)` reads the levels from the frame properties of *its* input, so
-    levelling a colour page with the levels detected on its luma needs the two properties on
-    the colour clip. Feed the result to `Levels(..., use_props=True)` to rewrite every plane
-    with the same curve.
+    A single plane frame becomes an `L` image and a three plane frame has its planes
+    stacked back into `RGB`, so the caller has no family branch of its own. The frame has
+    to be an `RGB24` one by the time it gets here, which is the caller's job: stacking a YUV
+    frame would label its luma and chroma planes as red, green and blue.
 
-    `rgb` may be a clip or a single frame. A frame is wrapped into a one frame clip of the
-    same size and format, which is what a caller holding a page pulled out of the chain has;
-    `ModifyFrame` needs a clip, not a frame.
-    """
-    vs = get_vapoursynth()
-    if core is None:
-        core = vs.core
-
-    if isinstance(rgb, vs.VideoFrame):
-        frame = rgb
-        blank = core.std.BlankClip(
-            width=frame.width,
-            height=frame.height,
-            format=frame.format.id,
-            length=1,
-        )
-        rgb = core.std.ModifyFrame(blank, [blank], partial(fill_frame_from_frame, frame=frame))
-
-    def carry(n: int, f: "list[VideoFrame]"):
-        # The second parameter has to be called `f`: VapourSynth passes the frames as a
-        # keyword argument.
-        out = f[0].copy()
-        measured = f[1].props
-        out.props["NImagesBlackLevel"] = measured["NImagesBlackLevel"]
-        out.props["NImagesWhiteLevel"] = measured["NImagesWhiteLevel"]
-        return out
-
-    return core.std.ModifyFrame(rgb, [rgb, stats], carry)
-
-
-def level_color_page(
-    chain: AutolevelChain,
-    index: int,
-    config: "AutolevelOptions",
-    *,
-    debug: bool = False,
-    core: "Core | None" = None,
-) -> Image.Image:
-    """
-    Level one page's own colour planes with the levels found on its luma.
-
-    `PeakStats` only ever sees the gray normalisation of a page, so levelling the colour page
-    with the same curve means moving the two detected level properties onto the colour frame
-    and letting `Levels(use_props=True)` rewrite every plane. `Levels` reads the properties
-    from the frame of *its* input, so the colour frame has to be the one :func:`vs_carry_levels`
-    produced; handing it `chain.stats` would read the gray page's own levels and level with a
-    curve derived from a different page.
-
-    Only `peak_offset` is read from `config`, so anything satisfying :class:`AutolevelOptions`
-    works.
-    """
-
-    vs = get_vapoursynth()
-    if core is None:
-        core = vs.core
-
-    with chain.source.get_frame(index) as source_frame:
-        # `vs_carry_levels` takes a clip; a bare frame is wrapped into a one frame clip of its
-        # own size and format, so the properties land on a single frame with index 0.
-        carried = vs_carry_levels(source_frame, chain.stats, core=core)
-        with core.nimages.Levels(
-            carried,
-            use_props=True,
-            auto_gamma=True,
-            peak_offset=config.peak_offset,
-            debug=int(debug),
-        ).get_frame(0) as result:
-            planes = [vs_frame_to_image(result, plane) for plane in range(result.format.num_planes)]
-
-    if len(planes) == 1:
-        return planes[0]
-    return Image.merge("RGB", planes[:3])
-
-
-def vs_frame_to_image(frame: "VideoFrame", plane: int = 0) -> Image.Image:
-    """
-    Return plane `plane` of `frame` as a Pillow image.
-
-    `np.asarray` gives a `(height, width)` `uint8` view for every accepted format, so the
-    mode is `L` for a gray frame and the caller picks the plane for a colour one. The copy
-    matters: the array aliases the frame and the frame is released when the `with` block ends.
-    """
-    np = get_numpy()
-    return Image.fromarray(np.asarray(frame[plane]).copy())
-
-
-def vs_frame_to_rgb_image(frame: "VideoFrame") -> Image.Image:
-    """
-    Return an `RGB24` frame's three planes as one Pillow `RGB` image.
-
-    :func:`vs_frame_to_image` reads plane 0, which on an `RGB24` frame is the **red** plane, so
-    using it for a colour page writes a grayscale image of the red channel and looks almost right
-    on a mostly gray page. `np.stack` copies, so the frame can be released at the end of the
-    caller's `with` block.
-
-    A single plane frame is returned as an `L` image rather than tripled up, which is what a
-    gray container decodes to and what `deblur` already wrote for a page like that.
+    `np.stack` copies, so the frame can be released at the end of the caller's `with`
+    block. The one plane path aliases the frame with `np.asarray` and copies for the same
+    reason.
     """
     np = get_numpy()
     if frame.format.num_planes == 1:
@@ -639,6 +574,7 @@ def vs_posterize_clip(
     prefetch: int = 0,
     debug: bool = False,
     cache_mb: int = 512,
+    gpu: bool = False,
     core: "Core | None" = None,
 ) -> PosterizeChain:
     """
@@ -659,7 +595,11 @@ def vs_posterize_clip(
         debug=int(debug),
     )
     gray = vs_to_gray8(source, core=core)
-    posterized = core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug))
+    posterized = core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug), gpu=int(gpu))
+    if gpu:
+        # The fixed depth path writes with `PNGWrite`, and the orchestrator gate reads the
+        # frame with `vship`; both take host frames.
+        posterized = core.std.GPUDownload(posterized)
     return PosterizeChain(source=source, gray=gray, posterized=posterized)
 
 
@@ -833,12 +773,19 @@ def vs_page_sizes(files: Sequence[PathLike], *, core: "Core | None" = None) -> l
 
 @dataclass
 class PosterizeGroup:
-    """The candidate branches for one page size, and the reference they are scored against."""
+    """
+    The candidate branches for one page size, and the reference they are scored against.
+
+    `branches` are the float gray forms `vship` scores; `raw` are the eight bit `Posterize`
+    outputs behind them, which is the frame the write stage stores. Keeping both means the
+    selected page is written from the plugin's own bytes instead of a float round trip.
+    """
 
     size: tuple[int, int]
     gray: "VideoNode"
     reference: "VideoNode"
     branches: dict[int, "VideoNode"]
+    raw: dict[int, "VideoNode"]
 
 
 def vs_posterize_group(
@@ -849,6 +796,7 @@ def vs_posterize_group(
     prefetch: int = 0,
     debug: bool = False,
     cache_mb: int = 512,
+    gpu: bool = False,
     core: "Core | None" = None,
 ) -> PosterizeGroup:
     """
@@ -881,13 +829,16 @@ def vs_posterize_group(
     with gray.get_frame(0) as first:
         size = (first.width, first.height)
     reference = vs_clip_to_grays(gray, size=size, core=core)
-    branches = {
-        bits: vs_clip_to_grays(
-            core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug)), size=size, core=core
-        )
+    raw = {
+        bits: core.nimages.Posterize(gray, bits=bits, method=method, debug=int(debug), gpu=int(gpu))
         for bits in bits_candidates
     }
-    return PosterizeGroup(size=size, gray=gray, reference=reference, branches=branches)
+    if gpu:
+        # One download per candidate per page: the metric and the writer both read the host
+        # frame, and the writer refuses a device one.
+        raw = {bits: core.std.GPUDownload(node) for bits, node in raw.items()}
+    branches = {bits: vs_clip_to_grays(node, size=size, core=core) for bits, node in raw.items()}
+    return PosterizeGroup(size=size, gray=gray, reference=reference, branches=branches, raw=raw)
 
 
 def vs_score_candidates(
@@ -968,3 +919,137 @@ def vs_select_posterize_bits(
     for bits in reversed(ranked):
         chosen[passed[candidate_list.index(bits)]] = bits
     return chosen
+
+
+T = TypeVar("T")
+
+
+def vs_png_writer(
+    clip: "VideoNode",
+    output_dir: Path,
+    *,
+    compression: int = 6,
+    overwrite: bool = True,
+    depth: int | None = None,
+    debug: bool = False,
+    core: "Core | None" = None,
+) -> "VideoNode":
+    """
+    One `PNGWrite` node over `clip`, naming each still from its `ImgSeqPath`.
+
+    The node has the same frame count as `clip`; its output frame `n` is the input frame `n`
+    plus the write. Build it once over the chain's final clip, never once per page: a
+    per page writer forbids the plugin's `Parallel` completion and puts the encode back on a
+    Python thread.
+
+    `output_dir` is the destination, not a name template: a still is written as
+    `<stem>.png` from the frame's own `ImgSeqPath`, so the destination is known before the
+    request and no rename follows. The directory is created when the node is built, and no
+    PNG is written until a frame is requested. Points it at the real output directory and
+    the encode and the publish both leave Python.
+
+    `overwrite` is a permission, not a skip: `False` refuses an existing destination and
+    raises, so a caller that skips does the existence check before submitting instead of
+    asking the writer to leave the file alone.
+
+    `depth` is left to the plugin when it is `None` (eight bits for an eight bit frame and
+    sixteen for anything wider).
+    """
+    vs = get_vapoursynth()
+    if core is None:
+        core = vs.core
+    options = {"depth": depth} if depth is not None else {}
+    return core.imgseqs.PNGWrite(
+        clip,
+        output_dir=str(output_dir),
+        compression=compression,
+        overwrite=overwrite,
+        debug=int(debug),
+        **options,  # pyright: ignore[reportArgumentType]
+    )
+
+
+@dataclass
+class PageWrite(Generic[T]):
+    """One open `PNGWrite` request and the result to report once it has landed."""
+
+    index: int
+    outcome: T
+    future: Any
+
+    def result(self) -> T:
+        # Opening the future is what surfaces the writer's path-qualified error; the frame it
+        # returns is not needed, so it is closed immediately. `PNGWrite` has already resolved
+        # the destination from the frame and published it by the time this returns.
+        with self.future.result():
+            pass
+        return self.outcome
+
+    def discard(self) -> None:
+        """Wait for an open request without reporting it; the file may still have landed."""
+        try:
+            with self.future.result():
+                pass
+        except Exception:  # ruff: ignore[try-except-pass]
+            # The original exception is about to win, and a request cannot be cancelled; this
+            # wait only exists so no request outlives the window.
+            pass
+
+
+class PngWriteWindow:
+    """The bounded replacement for `BoundedWritePool` on a `PNGWrite` node."""
+
+    def __init__(self, depth: int):
+        self.depth = max(depth, 1)
+        self._pending: list[PageWrite[Any]] = []
+
+    def submit(self, writer: "VideoNode", index: int, outcome: T) -> PageWrite[T] | None:
+        """Request one page; hand back the oldest when the window is full."""
+        page: PageWrite[T] = PageWrite(
+            index=index,
+            outcome=outcome,
+            future=writer.get_frame_async(index),
+        )
+        self._pending.append(page)
+        if len(self._pending) >= self.depth:
+            return self._pending.pop(0)
+        return None
+
+    def pending(self) -> list[PageWrite[Any]]:
+        """Take the open requests, oldest first, leaving the window empty."""
+        pending, self._pending = self._pending, []
+        return pending
+
+    def __enter__(self) -> "PngWriteWindow":
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None:
+            # A request cannot be cancelled. Wait for the outstanding ones without reporting
+            # them, so the original exception is what reaches the user and no native call
+            # outlives the window.
+            for page in self._pending:
+                page.discard()
+            self._pending.clear()
+        elif self._pending:
+            # A clean exit must have drained the window; a leftover is a bug, and reporting it
+            # here would advance the progress bar after the loop that owns it.
+            raise RuntimeError("PngWriteWindow exited with requests still open")
+        return False
+
+
+def vs_duplicate_png_stems(files: Sequence[PathLike]) -> dict[str, list[Path]]:
+    """
+    Return the source stems that would resolve to one `{stem}.png` destination.
+
+    `output_dir` names a still from its source's stem, and the writer only refuses two frames
+    that land on one file from inside its own instance, after half the volume may already be
+    written. Two pages like `page.jpg` and `page.png` in one folder are the realistic case, and
+    one writer per bit depth (the `posterize2` fan-out) could not see across instances even if it
+    did, so the check is made once for the whole volume before anything is built.
+    """
+    by_stem: dict[str, list[Path]] = {}
+    for path in files:
+        page = Path(path)
+        by_stem.setdefault(page.stem, []).append(page)
+    return {stem: pages for stem, pages in by_stem.items() if len(pages) > 1}

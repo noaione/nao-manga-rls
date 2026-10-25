@@ -41,12 +41,13 @@ from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
-from ...common import BoundedWritePool, lowest_or, threaded_worker
+from ...common import lowest_or, threaded_worker
 from ...lazy import get_vapoursynth
 from ...vapour import (
+    PngWriteWindow,
     vs_attach_logger,
     vs_frame_to_grays,
-    vs_frame_to_image,
+    vs_png_writer,
     vs_posterize_clip,
     vs_prepare_image,
     vs_ssimulacra2,
@@ -178,17 +179,10 @@ def _runner_posterize_threaded_star(
     return _runner_posterize_threaded(*args)
 
 
-# The VapourSynth page writes: both return whether the page was written, and the caller maps
-# that to a `ThreadedResult`. They are module level so the write pool can call them directly.
-def _posterize_write_png(image: Image.Image, dest_path: Path) -> bool:
-    """Encode and write one finished page. Runs on the write pool."""
-    image.save(dest_path, format="PNG")
-    image.close()
-    return True
-
-
+# The VapourSynth copy fallback returns whether the destination was replaced, and the caller maps
+# that to a `ThreadedResult`. The encode itself is `PNGWrite`'s work, not a Python thread's.
 def _posterize_copy_page(img_path: Path, dest_path: Path, cnsl: "ConsoleInterface") -> bool:
-    """Copy the source page over the output. Runs on the write pool."""
+    """Copy the source page over the output. Runs on the main thread; a copy is not an encode."""
     if dest_path.exists():
         cnsl.warning(f"Skipping existing file: {dest_path}")
         return False
@@ -368,8 +362,8 @@ class ActionPosterize(BaseAction, ActionColorMixin):
 
         One clip is built for the whole volume and the pages are pulled from it in order, so
         the decoder readahead stays useful. The gate decision is made on this thread, from the
-        gate's own clips; only the save or the copy goes to the write pool, which is the
-        expensive half.
+        gate's own clips; the encode is one `PNGWrite` node fed through a bounded window of
+        `threads` open requests, and the copy fallback stays here because it is not an encode.
 
         The frames are pulled on this thread, so this cannot go through `threaded_worker`: a
         VapourSynth clip holds native state and cannot be handed to a worker process.
@@ -425,12 +419,13 @@ class ActionPosterize(BaseAction, ActionColorMixin):
                 core=vs.core,
             )
 
-            with BoundedWritePool(self.threads) as pool:
+            writer = vs_png_writer(chain.posterized, output_dir, overwrite=True, debug=context.terminal.debugged)
+
+            with PngWriteWindow(self.threads) as window:
                 for index, img_path in enumerate(to_process):
                     dest_path = output_dir / f"{img_path.stem}.png"
+                    copy_instead = False
                     with chain.posterized.get_frame(index) as frame:
-                        image = vs_frame_to_image(frame)
-                        copy_instead = False
                         if gate is not None and gate.enabled:
                             # The reference is the gray clip the posterize chain already
                             # decoded, which VapourSynth serves from its frame cache, so the
@@ -445,19 +440,24 @@ class ActionPosterize(BaseAction, ActionColorMixin):
                             copy_instead = score < gate.minimum
 
                     if copy_instead:
-                        image.close()
-                        oldest = pool.submit(
-                            _posterize_copy_page, img_path, dest_path.with_suffix(img_path.suffix), context.terminal
+                        # A copy is not an encode, so it stays on this thread instead of opening
+                        # a write request for a page that is thrown away.
+                        copied = _posterize_copy_page(
+                            img_path, dest_path.with_suffix(img_path.suffix), context.terminal
                         )
-                    else:
-                        oldest = pool.submit(_posterize_write_png, image, dest_path)
+                        results.append(_posterize_result(copied))
+                        progress.update(task, advance=1)
+                        continue
 
-                    if oldest is not None:
-                        results.append(_posterize_result(oldest.result()))
+                    # The writer asks `chain.posterized` for frame `index` again, which the gate
+                    # just decoded, so the encode is served from the frame cache.
+                    page = window.submit(writer, index, ThreadedResult.PROCESSED)
+                    if page is not None:
+                        results.append(page.result())
                         progress.update(task, advance=1)
 
-                for future in pool.pending():
-                    results.append(_posterize_result(future.result()))
+                for page in window.pending():
+                    results.append(page.result())
                     progress.update(task, advance=1)
 
         context.terminal.stop_progress(progress, f"Posterized {total_images} images in {context.current_dir}")

@@ -45,18 +45,19 @@ from ..autolevel import (
     posterize_image_by_bits,
     posterize_image_by_shades,
 )
-from ..common import BoundedWritePool, lowest_or, threaded_worker
+from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
 from ..vapour import (
     METRIC_DEFAULT_MINIMUM,
     METRIC_HIGHER_IS_BETTER,
     METRIC_NAMES,
+    PngWriteWindow,
     is_known_metric,
     vs_attach_logger,
+    vs_duplicate_png_stems,
     vs_find_missing_plugins,
-    vs_frame_to_image,
-    vs_grays_frame_to_image,
     vs_page_sizes,
+    vs_png_writer,
     vs_posterize_clip,
     vs_posterize_group,
     vs_prepare_image,
@@ -218,39 +219,13 @@ def resolve_candidates(bits: str) -> tuple[list[int], bool]:
     return candidates, not is_plain_list
 
 
-def _save_png(image: Image.Image, dest_path: Path) -> PosterizedResult:
-    """Encode and write one finished page. Runs on the write pool."""
-    image.save(dest_path, format="PNG")
-    image.close()
-    return PosterizedResult.PROCESSED
-
-
 def _copy_page(img_path: Path, dest_path: Path) -> PosterizedResult:
-    """Copy the source page over the output. Runs on the write pool."""
+    """Copy the source page over the output. Runs on the main thread; a copy is not an encode."""
     if dest_path.exists():
         console.warning(f"Skipping existing file: {dest_path}")
         return PosterizedResult.COPIED
     shutil.copy2(img_path, dest_path)
     return PosterizedResult.COPIED
-
-
-def _submit_fallback(
-    pool: BoundedWritePool,
-    img_path: Path,
-    dest_path: Path,
-    image: Image.Image | None,
-):
-    """
-    Write a page whose score failed, or whose depth was not picked, by copying the source.
-
-    The copy keeps the source bytes and costs no encode, and it lands under the source suffix
-    rather than the `.png` name the processed pages use, which is the fallback both commands
-    already took. `image` is the frame that was never written, or `None` when no candidate frame
-    was pulled at all.
-    """
-    if image is not None:
-        image.close()
-    return pool.submit(_copy_page, img_path, dest_path.with_suffix(img_path.suffix))
 
 
 def _posterize_simple_wrapper(
@@ -444,35 +419,6 @@ def _drain(results: list[PosterizedResult], future, progress, task):
         progress.update(task, advance=1)
 
 
-def _submit_selection(
-    pool: BoundedWritePool,
-    group,
-    scores,
-    *,
-    selected,
-    offset: int,
-    img_path: Path,
-    dest_path: Path,
-    debug: bool,
-):
-    """
-    Write the selected candidate for one page, or copy the source when nothing passed.
-
-    The winner is pulled from the same branch the metric just read, while the chunk's frames are
-    still resident, so the write costs no second decode.
-    """
-    bits = int(selected[offset])
-    if debug:
-        console.log(f"{img_path.name}: {_format_scores(scores, offset, bits)}")
-    if bits < 0:
-        # No candidate passed every thresholded metric, so the source page is written and no
-        # degraded page ever reaches the output.
-        return _submit_fallback(pool, img_path, dest_path, None)
-    with group.branches[bits].get_frame(offset) as frame:
-        image = vs_grays_frame_to_image(frame)
-    return pool.submit(_save_png, image, dest_path)
-
-
 def _format_scores(scores, offset: int, chosen: int) -> str:
     """One page's scores per metric per candidate, for `-v`."""
     parts = []
@@ -516,6 +462,19 @@ def _resolve_order(
     return None
 
 
+def _duplicate_destination_stems(all_files: Sequence[Path]) -> dict[str, list[Path]]:
+    """
+    Return the source stems that would share one `{stem}.png` destination.
+
+    A processed page is always named `{stem}.png`, and the fan-out builds one writer per candidate
+    bit depth, so a writer's own per-instance destination map cannot see a collision across two of
+    them. Checking the whole volume first turns that into a refusal before the first write instead
+    of a VapourSynth error halfway through the run. The comparison itself lives in
+    :func:`nmanga.vapour.vs_duplicate_png_stems`, beside the writers it protects.
+    """
+    return vs_duplicate_png_stems(all_files)
+
+
 def _posterize2_fixed_depth(
     all_files: Sequence[Path],
     real_output: Path,
@@ -526,6 +485,7 @@ def _posterize2_fixed_depth(
     cache_mb: int,
     threads: int,
     debug: bool,
+    gpu: bool,
     progress,
     task,
 ) -> list[PosterizedResult]:
@@ -533,7 +493,13 @@ def _posterize2_fixed_depth(
     Posterize every page to one depth, with nothing scored.
 
     A single candidate has nothing to choose between, so no metric is called and every page is
-    written at `num_bits`. This is the command's original path and stays byte identical to it.
+    written at `num_bits`. This is the command's original path, and the pixels it writes are
+    unchanged; only the encoder that produces the file is different.
+
+    Every page is written, so the write stage is one `PNGWrite` node iterated with
+    `frames(prefetch=threads)`: the bound is open encode requests rather than Python threads, and
+    each frame is closed before the next request so the prefetch window never pins more than
+    `threads` pages.
     """
     vs = get_vapoursynth()
     chain = vs_posterize_clip(
@@ -543,19 +509,16 @@ def _posterize2_fixed_depth(
         prefetch=prefetch,
         debug=debug,
         cache_mb=cache_mb,
+        gpu=gpu,
         core=vs.core,
     )
 
     results: list[PosterizedResult] = []
-    with BoundedWritePool(threads) as pool:
-        for index, img_path in enumerate(all_files):
-            dest_path = real_output / img_path.with_suffix(".png").name
-            with chain.posterized.get_frame(index) as frame:
-                image = vs_frame_to_image(frame)
-            _drain(results, pool.submit(_save_png, image, dest_path), progress, task)
-
-        for future in pool.pending():
-            _drain(results, future, progress, task)
+    writer = vs_png_writer(chain.posterized, real_output, overwrite=True, debug=debug)
+    for frame in writer.frames(prefetch=threads):
+        frame.close()
+        results.append(PosterizedResult.PROCESSED)
+        progress.update(task, advance=1)
     return results
 
 
@@ -572,6 +535,7 @@ def _posterize2_fan_out(
     prefetch: int,
     cache_mb: int,
     threads: int,
+    gpu: bool,
     debug: bool,
     progress,
     task,
@@ -585,12 +549,18 @@ def _posterize2_fan_out(
 
     A page that no candidate passes is copied from the source, which is what the single depth
     gate already does with a failing page.
+
+    The write stage is one `PNGWrite` node per candidate depth, built over `group.raw` because that
+    is the eight bit `Posterize` frame; `group.branches` is the float form `vship` scores, and
+    storing it would write a float frame rather than the plugin's own bytes. The writer's frame
+    index is the group local `offset`, since a group's `Read` holds only that group's pages, and
+    the destination still comes from `all_files[index]` through the frame's `ImgSeqPath`.
     """
     vs = get_vapoursynth()
     sizes = vs_page_sizes(all_files, core=vs.core)
     results: list[PosterizedResult] = []
 
-    with BoundedWritePool(threads) as pool:
+    with PngWriteWindow(threads) as window:
         for start in range(0, len(all_files), chunk):
             stop = min(start + chunk, len(all_files))
             for size, indices in _chunk_groups(sizes, start, stop):
@@ -601,6 +571,7 @@ def _posterize2_fan_out(
                     prefetch=prefetch,
                     debug=debug,
                     cache_mb=cache_mb,
+                    gpu=gpu,
                     core=vs.core,
                 )
                 if group.size != size:
@@ -613,23 +584,36 @@ def _posterize2_fan_out(
                     minimums=minimums,
                     order=order,
                 )
+                writers = {
+                    bits: vs_png_writer(group.raw[bits], real_output, overwrite=True, debug=debug)
+                    for bits in bit_candidates
+                }
+
                 for offset, index in enumerate(indices):
                     img_path = all_files[index]
                     dest_path = real_output / img_path.with_suffix(".png").name
-                    future = _submit_selection(
-                        pool,
-                        group,
-                        scores,
-                        selected=selected,
-                        offset=offset,
-                        img_path=img_path,
-                        dest_path=dest_path,
-                        debug=debug,
-                    )
-                    _drain(results, future, progress, task)
+                    bits = int(selected[offset])
+                    if debug:
+                        console.log(f"{img_path.name}: {_format_scores(scores, offset, bits)}")
+                    if bits < 0:
+                        # No candidate passed every thresholded metric, so the source page is
+                        # written and no degraded page ever reaches the output. A copy is not an
+                        # encode, so it stays on this thread instead of opening a write request.
+                        results.append(_copy_page(img_path, dest_path.with_suffix(img_path.suffix)))
+                        progress.update(task, advance=1)
+                        continue
 
-        for future in pool.pending():
-            _drain(results, future, progress, task)
+                    page = window.submit(
+                        writers[bits],
+                        offset,
+                        PosterizedResult.PROCESSED,
+                    )
+                    _drain(results, page, progress, task)
+
+                # Drain the group before the next one builds its own `Read` node, so the frames
+                # the metric just read are still the frames the writers store.
+                for page in window.pending():
+                    _drain(results, page, progress, task)
     return results
 
 
@@ -702,6 +686,17 @@ def _posterize2_fan_out(
     show_default=True,
     help="VapourSynth frame cache in MiB",
 )
+@click.option(
+    "--gpu",
+    "gpu",
+    is_flag=True,
+    default=False,
+    help=(
+        "Run the posterize passes on the GPU. Needs vapoursynth-nimages 0.2.1 or newer and a "
+        "Vulkan 1.4 device; it fails loudly when the device is missing instead of falling back "
+        "to the host."
+    ),
+)
 @options.prefetch
 @options.threads
 @options.recursive
@@ -718,6 +713,7 @@ def posterize2(
     cache_mb: int,
     prefetch: int,
     threads: int,
+    gpu: bool,
     recursive: bool,
 ):
     """
@@ -725,13 +721,17 @@ def posterize2(
 
     This will always use PNG as the output format. VapourSynth schedules the pages across its
     own worker threads. `--prefetch` is how many pages the decoder reads ahead, and `--threads`
-    is how many pages are encoded and written at once. Pass `-v` for the plugin's per frame log
-    lines and the per page scores.
+    is the write window: how many PNG encode requests are open at once, which `PNGWrite` runs in
+    parallel. Pass `-v` for the plugin's per frame log lines and the per page scores.
 
     `--bits` is the whole candidate set. One depth posterizes every page to it and scores
     nothing. Several make a fan-out: every page is posterized at each depth and scored, the least
     degraded depth that every thresholded metric accepts is kept, and a page no candidate passes
     is copied from the source. `--bits 1-6` is automatic degradation.
+
+    `--gpu` runs the `Posterize` passes on the GPU, the fan-out candidates included. It needs
+    `vapoursynth-nimages` 0.2.1 or newer and a Vulkan 1.4 device; without one the plugin refuses at
+    node creation, so the flag never falls back to the host silently.
     """
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -775,8 +775,10 @@ def posterize2(
             for metric, minimum in minimums.items()
         )
         depths = ", ".join(str(bits) for bits in bit_candidates)
-        console.info(f"Scoring candidate depth{'s' if len(bit_candidates) > 1 else ''} {depths} with "
-                     f"{', '.join(metric_names)} ({thresholds or 'no thresholded metric'})")
+        console.info(
+            f"Scoring candidate depth{'s' if len(bit_candidates) > 1 else ''} {depths} with "
+            f"{', '.join(metric_names)} ({thresholds or 'no thresholded metric'})"
+        )
         if len(bit_candidates) == 1:
             console.info("A page that fails is copied from the source, so a single depth is a yes or no gate.")
 
@@ -810,6 +812,17 @@ def posterize2(
 
         all_files.sort(key=lambda path: path.stem)
         console.info(f"Found {total_files} files in the directory.")
+        duplicates = _duplicate_destination_stems(all_files)
+        if duplicates:
+            detail = "; ".join(
+                f"{', '.join(page.name for page in pages)} would all write {stem}.png"
+                for stem, pages in sorted(duplicates.items())
+            )
+            raise click.BadParameter(
+                f"pages that would share one output name: {detail}. "
+                "Rename one of each pair so every page keeps its own `<stem>.png`.",
+                param_hint="path_or_archive",
+            )
 
         real_output = dest_output
         if recursive:
@@ -833,6 +846,7 @@ def posterize2(
                 prefetch=prefetch,
                 cache_mb=cache_mb,
                 threads=threads,
+                gpu=gpu,
                 debug=console.debugged,
                 progress=progress,
                 task=task,
@@ -847,6 +861,7 @@ def posterize2(
                 prefetch=prefetch,
                 cache_mb=cache_mb,
                 threads=threads,
+                gpu=gpu,
                 debug=console.debugged,
                 progress=progress,
                 task=task,

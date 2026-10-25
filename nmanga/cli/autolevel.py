@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import rich_click as click
 from PIL import Image
@@ -48,19 +48,23 @@ from ..autolevel import (
     find_local_peak_legacy,
     gamma_correction,
 )
-from ..common import BoundedWritePool, lowest_or, threaded_worker
+from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
 from ..vapour import (
-    level_color_page,
+    PageWrite,
+    PngWriteWindow,
     vs_attach_logger,
     vs_autolevel_clip,
+    vs_duplicate_png_stems,
     vs_find_missing_plugins,
-    vs_frame_to_image,
+    vs_png_writer,
 )
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler, test_or_find_magick
 
+if TYPE_CHECKING:
+    from vapoursynth import VideoFrame, VideoNode
 console = term.get_console()
 
 
@@ -623,84 +627,66 @@ def autolevel2(
         console.info(f"Finished processing {len(candidates)} folders.")
 
 
+class OutputMode(str, Enum):
+    """What every page the command writes is saved as."""
+
+    COLOR = "color"
+    GRAY = "gray"
+
+
 @dataclass
 class Autolevel3Config:
     upper_limit: int
     peak_offset: int
     peak_min_pct: float | None
     peak_prom_pct: float | None
-    force_gray: bool
-    keep_colorspace: bool
-    image_fmt: str
     no_white: bool
+    output_mode: OutputMode = OutputMode.COLOR
     cache_mb: int = 512
+    gpu: bool = False
 
 
-def write_page(
-    img_path: Path,
-    dest_output: Path,
-    image: Image.Image,
-    black_level: int,
-    white_level: int,
-    config: Autolevel3Config,
-) -> AutoLevelResult:
+def _page_levels(frame: "VideoFrame") -> tuple[int, int, bool, bool]:
+    """Read the two detected levels and their found flags off one levelled page."""
+    return (
+        int(frame.props["NImagesBlackLevel"]),  # type: ignore[arg-type]
+        int(frame.props["NImagesWhiteLevel"]),  # type: ignore[arg-type]
+        bool(frame.props["NImagesBlackPeakFound"]),
+        bool(frame.props["NImagesWhitePeakFound"]),
+    )
+
+
+def _levels_are_unusable(black_level: int, white_level: int, config: Autolevel3Config) -> bool:
     """
-    Write, grayscale or copy one already-levelled page.
+    The skip decision, byte for byte the one `autolevel2` makes.
 
-    This is the tail of `_autolevel2_wrapper`: the same skip decisions, the same
-    `force_gray` grayscale, the same "skipping existing file" warning and the same
-    `AutoLevelResult` values, so the two commands stay comparable.
-
-    The per page decisions are byte for byte `autolevel2`'s, including the `black_level <= 0`
-    skip. `PeakStats` can tell a real peak on bin 0 from a missing one through
-    `NImagesBlackPeakFound`, and `not black_found` is the check `autolevel2` meant to write,
-    but switching to it would level pages `autolevel2` copies and make the two commands
-    produce different output for the same input. `--debug` reports both found flags per page,
-    so the choice stays visible.
-
-    One thing deliberately differs, because reproducing it would mean reproducing a bug:
-    `_autolevel2_wrapper` asks Pillow for a format named by the upper cased `--format`
-    choice, and Pillow has no `JPG` writer, so `autolevel2 --format jpg` raises a
-    `KeyError`. The format is mapped properly here.
+    `PeakStats` reports `NImagesBlackPeakFound`, which separates "no peak" from "a real peak
+    on bin 0", and `not black_found` is the check `autolevel2` meant to write, but switching
+    to it would level pages `autolevel2` copies and make the two commands produce different
+    output for the same input. `--debug` reports both found flags per page, so the choice
+    stays visible.
     """
-    pillow_format = {"jpg": "JPEG"}.get(config.image_fmt, config.image_fmt.upper())
-
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not config.no_white else False
-
-    if (
+    return (
         (is_black_bad and is_white_bad and not config.no_white)  # both levels are bad
         or (is_black_bad and config.no_white)
         or black_level > config.upper_limit
-    ):
-        dest_path = dest_output / img_path.name
-        if config.force_gray:
-            image = image.convert("L")
-            image.save(dest_path.with_suffix(".png"), format="PNG")
-            image.close()
-            return AutoLevelResult.GRAYSCALED
+    )
 
-        image.close()
 
-        if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
-            return AutoLevelResult.COPIED
-        shutil.copy2(img_path, dest_path)
-        return AutoLevelResult.COPIED
+def _source_page_is_gray(source: "VideoNode", index: int) -> bool:
+    """
+    Whether this page's container already holds one plane.
 
-    dest_path = dest_output / img_path.with_suffix(f".{config.image_fmt}").name
-    if dest_path.exists():
-        console.warning(f"Skipping existing file: {dest_path}")
-        image.close()
-        return AutoLevelResult.COPIED
-
-    # If jpeg, set quality to 98
-    params = {}
-    if config.image_fmt == "jpg":
-        params["quality"] = 98
-    image.save(dest_path, format=pillow_format, **params)
-    image.close()
-    return AutoLevelResult.PROCESSED
+    This is what decides whether a skipped page under `--gray` needs re-encoding: a page
+    that is already gray is already in the output mode and is copied byte for byte.
+    `imgseqs` hands an `RGB24` page back as `RGB24` even when every sample is a gray one, so
+    the container is the only thing that can say whether a conversion would change a byte.
+    """
+    vs = get_vapoursynth()
+    with source.get_frame(index) as frame:
+        return frame.format.color_family == vs.GRAY
 
 
 @click.command(
@@ -747,29 +733,11 @@ def write_page(
     help="The offset to add to the detected black level, as a code value",
 )
 @click.option(
-    "-gr",
-    "--force-gray",
-    "force_gray",
-    is_flag=True,
-    default=False,
-    help="Force convert all images to grayscale for image that is not autoleveled",
-)
-@click.option(
-    "-kc",
-    "--keep-colorspace",
-    "keep_colorspace",
-    is_flag=True,
-    default=False,
-    help="Keep the original colorspace of the image instead of converting to grayscale",
-)
-@click.option(
-    "-f",
-    "--format",
-    "image_fmt",
-    default="png",
-    show_default=True,
-    type=click.Choice(["png", "jpg"]),
-    help="The format of the output image",
+    "--color/--gray",
+    "color_output",
+    default=True,
+    show_default="--color",
+    help=("Write every page in its own colours (default), or convert every page, a skipped one included, to grayscale"),
 )
 @click.option(
     "--no-white",
@@ -786,6 +754,16 @@ def write_page(
     show_default=True,
     help="VapourSynth frame cache in MiB",
 )
+@click.option(
+    "--gpu",
+    "gpu",
+    is_flag=True,
+    default=False,
+    help=(
+        "Run the analysis and the leveling on the GPU, needs vapoursynth-nimages 0.2.1 or "
+        "newer and a Vulkan 1.4 device (it fails rather than falling back)"
+    ),
+)
 @options.prefetch
 @options.threads
 @options.recursive
@@ -797,11 +775,10 @@ def autolevel3(
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
     peak_offset: int,
-    force_gray: bool,
-    keep_colorspace: bool,
-    image_fmt: str,
+    color_output: bool,
     no_white: bool,
     cache_mb: int,
+    gpu: bool,
     prefetch: int,
     threads: int,
     recursive: bool,
@@ -811,9 +788,16 @@ def autolevel3(
 
     The analysis and the leveling both happen inside the `nimages` VapourSynth plugin, one
     clip per directory, and VapourSynth schedules the pages across its own worker threads.
-    `--prefetch` is how many pages the decoder reads ahead, and `--threads` is how many pages
-    are encoded and written at once, which is where most of the time goes. Pass `-v` for the
-    plugin's per frame log lines.
+    `--prefetch` is how many pages the decoder reads ahead, and `--threads` is how many
+    pages are encoded and written at once, which is where most of the time goes: with PNG
+    output that is the number of `PNGWrite` requests kept open, so the encode happens on
+    the plugin's threads instead of a Pillow worker. Pass `-v` for the plugin's per frame
+    log lines.
+
+    `--color/--gray` picks what every page is written as. Colour is the default and keeps
+    each page in its own container's colour; gray forces one plane per page, a skipped
+    page included. A page that is skipped is copied byte for byte when it is already in
+    the chosen mode and re-encoded from the analysed page when it is not.
     """
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -846,9 +830,8 @@ def autolevel3(
         peak_offset=peak_offset,
         peak_min_pct=peak_min_pct,
         peak_prom_pct=peak_prom_pct,
-        force_gray=force_gray,
-        keep_colorspace=keep_colorspace,
-        image_fmt=image_fmt,
+        output_mode=OutputMode.COLOR if color_output else OutputMode.GRAY,
+        gpu=gpu,
         no_white=no_white,
         cache_mb=cache_mb,
     )
@@ -864,6 +847,19 @@ def autolevel3(
 
         all_files.sort(key=lambda path: path.stem)
         console.info(f"Found {total_files} files in the directory.")
+        # `output_dir` names every still from its source's stem, and the writer refuses two
+        # frames that land on one file only once half the volume may already be written.
+        duplicates = vs_duplicate_png_stems(all_files)
+        if duplicates:
+            detail = "; ".join(
+                f"{', '.join(page.name for page in pages)} would all write {stem}.png"
+                for stem, pages in sorted(duplicates.items())
+            )
+            raise click.BadParameter(
+                f"pages that would share one output name: {detail}. "
+                "Rename one of each pair so every page keeps its own `<stem>.png`.",
+                param_hint="path_or_archive",
+            )
 
         real_output = dest_output
         if recursive:
@@ -876,45 +872,68 @@ def autolevel3(
             prefetch=prefetch,
             debug=console.debugged,
             core=vs.core,
+            gray=full_config.output_mode is OutputMode.GRAY,
+            gpu=full_config.gpu,
         )
 
         results: list[AutoLevelResult] = []
         progress = console.make_progress()
         task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
+        gray_mode = full_config.output_mode is OutputMode.GRAY
 
-        with BoundedWritePool(threads) as pool:
-            for n, img_path in enumerate(all_files):
-                # Pull the levelled frame once per page. Asking `stats` first and then `leveled`
-                # would analyse every page twice, and VapourSynth keeps no intermediate frame
-                # between two external requests.
-                with chain.leveled.get_frame(n) as frame:
-                    black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore
-                    white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore
-                    black_found = bool(frame.props["NImagesBlackPeakFound"])
-                    white_found = bool(frame.props["NImagesWhitePeakFound"])
-                    image = vs_frame_to_image(frame)
-
+        # One writer per clip: the node's output frame `n` is its input frame `n` plus the
+        # write, so the encode and the publish both leave Python. The destination is decided
+        # from the frame the loop pulls, before the request is made, so a skipped page never
+        # opens one and the writer's own `output_dir` name is always final.
+        with PngWriteWindow(threads) as window:
+            writer = vs_png_writer(chain.leveled, real_output, overwrite=True, debug=console.debugged, core=vs.core)
+            # Under `--gray`, a skipped colour page is re-encoded from the analysis clip: the
+            # levelled frame carries the curve the skip decision rejected, and the analysis
+            # frame does not.
+            gray_writer = (
+                vs_png_writer(chain.analysis, real_output, overwrite=True, debug=console.debugged, core=vs.core)
+                if gray_mode
+                else None
+            )
+            for index, img_path in enumerate(all_files):
+                with chain.leveled.get_frame(index) as frame:
+                    black_level, white_level, black_found, white_found = _page_levels(frame)
                 console.log(
                     f"{img_path.name}: black={black_level} (found={black_found}) "
                     f"white={white_level} (found={white_found})"
                 )
 
-                # Level the colour page itself rather than its luma, carrying the levels the
-                # gray page was leveled with onto it.
-                if full_config.keep_colorspace:
-                    color_image = level_color_page(chain, n, full_config, debug=console.debugged)
-                    image.close()
-                    image = color_image
+                page: PageWrite[AutoLevelResult] | None = None
+                if _levels_are_unusable(black_level, white_level, full_config):
+                    if gray_writer is not None and not _source_page_is_gray(chain.source, index):
+                        page = window.submit(gray_writer, index, AutoLevelResult.GRAYSCALED)
+                    else:
+                        copy_dest = real_output / img_path.name
+                        if copy_dest.exists():
+                            console.warning(f"Skipping existing file: {copy_dest}")
+                            results.append(AutoLevelResult.COPIED)
+                            progress.update(task, advance=1)
+                            continue
+                        shutil.copy2(img_path, copy_dest)
+                        results.append(AutoLevelResult.COPIED)
+                        progress.update(task, advance=1)
+                        continue
+                else:
+                    dest_path = real_output / f"{img_path.stem}.png"
+                    if dest_path.exists():
+                        console.warning(f"Skipping existing file: {dest_path}")
+                        results.append(AutoLevelResult.COPIED)
+                        progress.update(task, advance=1)
+                        continue
+                    page = window.submit(writer, index, AutoLevelResult.PROCESSED)
 
-                oldest = pool.submit(write_page, img_path, real_output, image, black_level, white_level, full_config)
-                if oldest is not None:
-                    results.append(oldest.result())
+                if page is not None:
+                    results.append(page.result())
                     progress.update(task, advance=1)
 
-            for future in pool.pending():
-                results.append(future.result())
+            for page in window.pending():
+                results.append(page.result())
                 progress.update(task, advance=1)
-
         console.stop_progress(progress, f"Processed {total_files} images.")
         autolevel_count = sum(1 for result in results if result == AutoLevelResult.PROCESSED)
         copied_count = sum(1 for result in results if result == AutoLevelResult.COPIED)

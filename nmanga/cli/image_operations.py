@@ -34,10 +34,16 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..common import BoundedWritePool, lowest_or, threaded_worker
+from ..common import lowest_or, threaded_worker
 from ..deblur import deblur_deconv, deblur_edge_sharp
 from ..lazy import get_vapoursynth
-from ..vapour import vs_attach_logger, vs_deblur_clip, vs_find_missing_plugins, vs_frame_to_rgb_image
+from ..vapour import (
+    PngWriteWindow,
+    vs_attach_logger,
+    vs_deblur_clip,
+    vs_find_missing_plugins,
+    vs_png_writer,
+)
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -394,13 +400,6 @@ def image_ops_deblur(
 _DEBLUR_PLUGIN_METHODS = {"deconv": 0, "edge": 1}
 
 
-def _save_deblur_png(image: Image.Image, dest_path: Path) -> ThreadingResult:
-    """Encode and write one finished page. Runs on the write pool."""
-    image.save(dest_path, format="PNG")
-    image.close()
-    return ThreadingResult.PROCESSED
-
-
 def _deblur2_directory(
     all_files: list[Path],
     real_output: Path,
@@ -418,9 +417,11 @@ def _deblur2_directory(
     Deblur every page in one directory from a single VapourSynth clip.
 
     The clip stays at the source's own colour: `Deblur` moves the luma and carries the change
-    onto the colour planes, so normalising to gray first would throw the colour away. The writes
-    are submitted to a :class:`~nmanga.common.BoundedWritePool`, because a page sized PNG encode
-    does not overlap the frame loop on its own.
+    onto the colour planes, so normalising to gray first would throw the colour away. One
+    `PNGWrite` node owns the encode and the publish for the whole clip, and ``threads`` bounds
+    the open writer requests, not Python threads: at most that many frames are in flight and the
+    oldest is settled before another is requested. The writer stores the frame in its own
+    format, so a 16-bit source now writes a 16-bit PNG instead of raising.
     """
     vs = get_vapoursynth()
     chain = vs_deblur_clip(
@@ -438,7 +439,9 @@ def _deblur2_directory(
     )
 
     results: list[ThreadingResult] = []
-    with BoundedWritePool(threads) as pool:
+    writer = vs_png_writer(chain.deblurred, real_output, overwrite=force, debug=debug)
+
+    with PngWriteWindow(threads) as window:
         for index, img_path in enumerate(all_files):
             dest_path = real_output / f"{img_path.stem}.png"
             if dest_path.exists() and not force:
@@ -447,16 +450,17 @@ def _deblur2_directory(
                 progress.update(task, advance=1)
                 continue
 
-            with chain.deblurred.get_frame(index) as frame:
-                image = vs_frame_to_rgb_image(frame)
-
-            oldest = pool.submit(_save_deblur_png, image, dest_path)
+            oldest = window.submit(
+                writer,
+                index,
+                ThreadingResult.PROCESSED,
+            )
             if oldest is not None:
                 results.append(oldest.result())
                 progress.update(task, advance=1)
 
-        for future in pool.pending():
-            results.append(future.result())
+        for page in window.pending():
+            results.append(page.result())
             progress.update(task, advance=1)
     return results
 
@@ -557,7 +561,8 @@ def image_ops_deblur2(
 
     The sharpening happens inside the `nimages` VapourSynth plugin, one clip per directory, and
     VapourSynth schedules the pages across its own worker threads. `--prefetch` is how many pages
-    the decoder reads ahead, and `--threads` is how many pages are encoded and written at once.
+    the decoder reads ahead, and `--threads` bounds the open writer requests, not Python
+    threads: that many PNG encodes may be in flight on the plugin side at once.
     Pass `-v` for the plugin's per frame log lines.
 
     Unlike the Pillow `deblur`, the colour planes are kept: only the luma moves, and the change
@@ -589,7 +594,7 @@ def image_ops_deblur2(
         return 1
 
     deblur_params = DeblurParams(method.lower(), radius, strength, iterations, threshold, overshoot)
-    console.info(f"Using {threads} CPU threads for processing.")
+    console.info(f"Using {threads} concurrent PNG writer requests for processing.")
     console.info(
         f"Using deblur method: {deblur_params.method}, radius: {radius}, "
         f"strength: {'auto' if strength is None else strength}, "

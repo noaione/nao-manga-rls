@@ -36,15 +36,14 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
 from ...autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
-from ...common import BoundedWritePool, lowest_or, threaded_worker
+from ...common import lowest_or, threaded_worker
 from ...lazy import get_vapoursynth
 from ...utils import secure_filename
-from ...vapour import level_color_page, vs_attach_logger, vs_autolevel_clip, vs_frame_to_image
+from ...vapour import PngWriteWindow, vs_attach_logger, vs_autolevel_clip, vs_png_writer
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
-    from ...term import ConsoleInterface
     from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = (
@@ -163,56 +162,20 @@ def _runner_autolevel2_threaded_star(
     return _runner_autolevel2_threaded(*args)
 
 
-def _runner_autolevel3_write_page(
-    cnsl: "ConsoleInterface",
-    img_path: Path,
-    output_dir: Path,
-    image: Image.Image,
-    black_level: int,
-    white_level: int,
-    action: "ActionAutolevel",
-) -> ThreadedResult:
+def _levels_are_unusable(black_level: int, white_level: int, action: "ActionAutolevel") -> bool:
     """
-    Write, grayscale or copy one page the VapourSynth chain has already levelled.
+    The skip decision `nmanga autolevel3` makes, kept identical so `v3` matches `v2`.
 
-    This is the orchestrator's own copy of `nmanga autolevel3`'s ``write_page`` rather than a
-    shared function, so the action can return its own :class:`ThreadedResult` and report
-    through the console it was handed. The branch decisions are the ones autolevel2 makes, so
-    `v3` stays comparable with `v2`:
-
-    - the bad level test is ``black_level <= 0``, or a black level above ``upper_limit``. The
-      plugin also reports `NImagesBlackPeakFound`, which separates "no peak" from "a real peak
-      on bin 0", but acting on it would level pages autolevel2 copies
-    - an unlevelable page is grayscaled when ``force_gray``, otherwise copied unchanged
-    - a levelled page is written to ``image_fmt``, with the JPEG quality autolevel2 uses
+    `PeakStats` also reports `NImagesBlackPeakFound`, which separates "no peak" from "a real
+    peak on bin 0", but acting on it would level pages `autolevel2` copies.
     """
-
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not action.no_white else False
-
-    if (
+    return (
         (is_black_bad and is_white_bad and not action.no_white)  # both levels are bad
         or (is_black_bad and action.no_white)
         or black_level > action.upper_limit
-    ):
-        dest_path = output_dir / img_path.name
-        image.close()
-
-        if dest_path.exists():
-            cnsl.warning(f"Skipping existing file: {dest_path}")
-            return ThreadedResult.COPIED
-        shutil.copy2(img_path, dest_path)
-        return ThreadedResult.COPIED
-
-    dest_path = output_dir / img_path.with_suffix(".png").name
-    if dest_path.exists():
-        cnsl.warning(f"Skipping existing file: {dest_path}")
-        image.close()
-        return ThreadedResult.COPIED
-
-    image.save(dest_path, format="PNG")
-    image.close()
-    return ThreadedResult.PROCESSED
+    )
 
 
 class ActionAutolevel(BaseAction, ActionColorMixin):
@@ -221,7 +184,8 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
 
     This version is "smarter" than the CLI version:
     - It would force convert the image to grayscale for half-tones/b&w images before processing
-    - All tagged color images will be leveled in keep colorspace mode
+    - A colour page is levelled on its own planes: the VapourSynth chain measures the page's
+      luma and applies the curve to every plane, so nothing is converted to gray first
     """
 
     model_config = ConfigDict(
@@ -401,8 +365,8 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
 
         One clip is built for the whole volume and the pages are pulled from it in order,
         because that is what keeps the decoder readahead and the plugin's per frame log
-        useful. VapourSynth schedules its own work across threads, so the only thing put on
-        a pool is the encode and write, which is where the time goes.
+        useful. VapourSynth schedules its own work across threads, so the only thing that
+        leaves this thread is the write, which the PNG writer does on the plugin's threads.
 
         The frames are pulled on this thread, so this cannot go through `threaded_worker`:
         a VapourSynth clip holds native state and cannot be handed to a worker process.
@@ -419,7 +383,6 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
         # or moved across as they are and left out of the clip, so the frame index of a page
         # always matches its position in `to_process`.
         to_process: list[Path] = []
-        color_pages: set[str] = set()
         skip_actions: list[tuple[Path, SkipActionKind]] = []
         for image in all_images:
             pg_num, is_color = self.is_color_page(image, context=context, volume=volume, orchestrator=orchestrator)
@@ -431,8 +394,6 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
                 if requested != SkipActionKind.IGNORE:
                     skip_actions.append((image, requested))
                     continue
-            if is_color:
-                color_pages.add(image.name)
             to_process.append(image)
 
         context.terminal.info(f"Processing {context.current_dir} with autolevel (VapourSynth)...")
@@ -455,56 +416,57 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
                 core=vs.core,
             )
 
-            # The pool hands back the oldest queued write once it is full, and the result has
-            # to name the page it came from for the stats dump, so the descriptions are kept
-            # in the order the writes were submitted.
+            # One writer per clip: the node's output frame `n` is its input frame `n` plus the
+            # write, so the encode and the publish both leave Python. The skip decision is made
+            # from the frame the loop pulls, before the request is made, so a skipped page never
+            # opens one and the writer's own `output_dir` name is always final.
+            writer = vs_png_writer(
+                chain.leveled, output_dir, overwrite=True, debug=context.terminal.debugged, core=vs.core
+            )
+            # The window hands back the oldest request once it is full, and the stats dump needs
+            # the page it came from, so the descriptions are kept in submission order.
             queued: list[tuple[str, int, int]] = []
-            with BoundedWritePool(self.threads) as pool:
+            with PngWriteWindow(self.threads) as window:
                 for index, img_path in enumerate(to_process):
                     with chain.leveled.get_frame(index) as frame:
-                        black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore
-                        white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore
+                        black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore[arg-type]
+                        white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore[arg-type]
                         black_found = bool(frame.props["NImagesBlackPeakFound"])
                         white_found = bool(frame.props["NImagesWhitePeakFound"])
-                        image = vs_frame_to_image(frame)
-
                     context.terminal.log(
                         f"{img_path.name}: black={black_level} (found={black_found}) "
                         f"white={white_level} (found={white_found})"
                     )
 
-                    # A colour page is levelled on its own planes with the levels found on its
-                    # luma, which is the per page `keep_colorspace` behaviour.
-                    if img_path.name in color_pages:
-                        color_image = level_color_page(
-                            chain,
-                            index,
-                            self,  # pyright: ignore[reportArgumentType]
-                            debug=context.terminal.debugged,
-                            core=vs.core,
-                        )
-                        image.close()
-                        image = color_image
+                    if _levels_are_unusable(black_level, white_level, self):
+                        copy_dest = output_dir / img_path.name
+                        if copy_dest.exists():
+                            context.terminal.warning(f"Skipping existing file: {copy_dest}")
+                            results.append(AutolevelResult.from_threaded_result(img_path.name, ThreadedResult.COPIED))
+                            progress.update(task, advance=1)
+                            continue
+                        shutil.copy2(img_path, copy_dest)
+                        results.append(AutolevelResult(img_path.name, black_level, white_level, ThreadedResult.COPIED))
+                        progress.update(task, advance=1)
+                        continue
+
+                    dest_path = output_dir / f"{img_path.stem}.png"
+                    if dest_path.exists():
+                        context.terminal.warning(f"Skipping existing file: {dest_path}")
+                        results.append(AutolevelResult(img_path.name, black_level, white_level, ThreadedResult.COPIED))
+                        progress.update(task, advance=1)
+                        continue
 
                     queued.append((img_path.name, black_level, white_level))
-                    oldest = pool.submit(
-                        _runner_autolevel3_write_page,
-                        context.terminal,
-                        img_path,
-                        output_dir,
-                        image,
-                        black_level,
-                        white_level,
-                        self,
-                    )
-                    if oldest is not None:
+                    page = window.submit(writer, index, ThreadedResult.PROCESSED)
+                    if page is not None:
                         name, black, white = queued.pop(0)
-                        results.append(AutolevelResult(name, black, white, oldest.result()))
+                        results.append(AutolevelResult(name, black, white, page.result()))
                         progress.update(task, advance=1)
 
-                for future in pool.pending():
+                for page in window.pending():
                     name, black, white = queued.pop(0)
-                    results.append(AutolevelResult(name, black, white, future.result()))
+                    results.append(AutolevelResult(name, black, white, page.result()))
                     progress.update(task, advance=1)
 
         context.terminal.stop_progress(
