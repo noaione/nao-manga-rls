@@ -404,10 +404,12 @@ class TestAutolevelClip:
 
     def test_a_colour_page_keeps_its_container_family_and_round_trips(self, tmp_path: Path):
         """
-        The write stage stores the frame the analysis found, in its own container family.
+        The write stage stores the frame the chain selected, in its own container family.
 
-        A gray page stays one plane, an RGB page stays RGB, and a YUV page is converted
-        to RGB24 first; the PNG the writer publishes decodes back to the same samples.
+        A gray page stays one plane and an `RGB24` page stays RGB, so the PNG the writer
+        publishes decodes back to the same samples. A YUV page stays YUV through the chain --
+        the analysis reads plane 0 and `Levels` maps native code values -- and `PNGWrite`
+        converts it to RGB with the frame's own matrix and range when it publishes.
         """
         import numpy as np
 
@@ -419,14 +421,15 @@ class TestAutolevelClip:
         rgb_path = pages / "rgb.png"
         _colour_gradient().save(rgb_path)
         webp_path = pages / "even.webp"
-        # An even size, so this webp is a plain YUV to RGB conversion; the odd width case
+        # An even size, so this webp decodes as a plain YUV page; the odd width case
         # belongs to the command level mixed directory test.
         _gradient(width=66, height=34).save(webp_path, quality=90)
 
+        # (page, chain family, Pillow mode of the chain frame, mode of the published PNG)
         expected = (
             (gray_path, "Gray8", "L", "L"),
             (rgb_path, "RGB24", "RGB", "RGB"),
-            (webp_path, "RGB24", "RGB", "RGB"),
+            (webp_path, "YUV420P8", None, "RGB"),
         )
         vs = get_vapoursynth()
         for page, family, image_mode, written_mode in expected:
@@ -434,19 +437,25 @@ class TestAutolevelClip:
             output = tmp_path / f"out-{page.stem}"
             writer = vs_png_writer(chain.leveled, output, core=vs.core)
 
+            expected_pixels = None
             with chain.leveled.get_frame(0) as frame:
                 assert frame.format.name == family
-                image = vs_frame_to_image(frame)
-                expected_pixels = np.asarray(image).copy()
-            assert image.mode == image_mode
+                size = (frame.width, frame.height)
+                if image_mode is not None:
+                    # A gray or RGB frame is stored verbatim, so its samples are the reference.
+                    image = vs_frame_to_image(frame)
+                    expected_pixels = np.asarray(image).copy()
+                    assert image.mode == image_mode
 
-            with writer.get_frame(0):
-                pass
+            with writer.get_frame(0) as frame:
+                assert frame.props["ImgSeqPNGWritePath"] == str(output / f"{page.stem}.png")
             (written,) = list(output.iterdir())
             assert written.name == f"{page.stem}.png"
             with Image.open(written) as opened:
                 assert opened.mode == written_mode
-                assert np.array_equal(np.asarray(opened), expected_pixels)
+                assert opened.size == size
+                if expected_pixels is not None:
+                    assert np.array_equal(np.asarray(opened), expected_pixels)
 
     def test_imgseqpath_survives_every_migrated_branch(self, tmp_path: Path):
         """`output_dir` names a still from this property, so each branch has to keep it."""
