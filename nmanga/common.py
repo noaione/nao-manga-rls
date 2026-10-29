@@ -61,6 +61,7 @@ __all__ = (
     "is_pingo_alpha",
     "lowest_or",
     "make_metadata_command",
+    "make_strip_metadata_command",
     "optimize_images",
     "parse_volume_number",
     "run_pingo_and_verify",
@@ -642,7 +643,7 @@ def inquire_chapter_ranges(
 
 
 def make_metadata_command(exiftool_path: str, image_title: str, image_email: str) -> list[str]:  # pragma: no cover
-    base_cmd = [exiftool_path]
+    base_cmd = [exiftool_path, "-charset", "filename=utf8"]
     update_tags = {
         "XPComment": image_email,
         "Artist": image_email,
@@ -654,6 +655,23 @@ def make_metadata_command(exiftool_path: str, image_title: str, image_email: str
     }
     for tag, value in update_tags.items():
         base_cmd.append(f"-{tag}={value}")
+    base_cmd.append("-overwrite_original_in_place")
+    return base_cmd
+
+
+def make_strip_metadata_command(exiftool_path: str, keep_color_space: bool = False) -> list[str]:  # pragma: no cover
+    """
+    Make a command to strip all metadata from an image with exiftool
+
+    :param exiftool_path: Path to the exiftool executable
+    :param keep_color_space: Keep colour space related tags (ICC profile, ColorSpace, etc.)
+    :return: The base exiftool command
+    """
+    base_cmd = [exiftool_path, "-all=", "-P"]
+    if keep_color_space:
+        # `-all=` also removes the colour space information, which may shift the colours of the image.
+        # Copy the colour space tags back from the original file after the deletion.
+        base_cmd.extend(["-tagsFromFile", "@", "-ColorSpaceTags"])
     base_cmd.append("-overwrite_original_in_place")
     return base_cmd
 

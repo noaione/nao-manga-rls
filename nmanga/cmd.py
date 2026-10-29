@@ -47,7 +47,7 @@ from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.epub_stuff import epub_group
 from .cli.image_operations import imops_group
 from .cli.image_optimizer import image_jpegify, image_jxlify, image_mixmatch, image_optimizer
-from .cli.image_tagging import image_tagging, image_tagging_raw
+from .cli.image_tagging import image_tagging, image_tagging_raw, image_tagging_strip
 from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
@@ -192,6 +192,7 @@ signal.signal(signal.SIGTERM, exit_143)
         "releasesch",
         "tag",
         "rawtag",
+        "strip",
         "shiftname",
         "timewizard",
     ],
@@ -308,6 +309,7 @@ main.add_command(prepare_releases_chapter)
 main.add_command(spreads)
 main.add_command(image_tagging)
 main.add_command(image_tagging_raw)
+main.add_command(image_tagging_strip)
 main.add_command(image_optimizer)
 main.add_command(image_jpegify)
 main.add_command(image_jxlify)

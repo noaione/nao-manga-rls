@@ -44,6 +44,7 @@ from ..common import (
     format_volume_text,
     lowest_or,
     make_metadata_command,
+    make_strip_metadata_command,
     threaded_worker,
 )
 from ..constants import MangaPublication
@@ -88,6 +89,39 @@ def _threaded_tagging(
 def _threaded_tagging_star(args: tuple[term.MessageQueue, str, Path, str, str]) -> None:
     """Star wrapper for threaded tagging"""
     return _threaded_tagging(*args)
+
+
+def _threaded_strip_metadata(
+    log_q: term.MessageOrInterface,
+    exiftool_exe: str,
+    image_path: Path,
+    keep_color_space: bool,
+) -> None:
+    """Threaded helper for stripping all metadata from images"""
+    ext = image_path.suffix.lower().lstrip(".")
+    if ext not in ALLOWED_TAG_EXTENSIONS:
+        cnsl = term.with_thread_queue(log_q)
+        cnsl.warning(f"Skipping unsupported image format for metadata stripping: {image_path.name}")
+        return
+    base_cmd = make_strip_metadata_command(exiftool_exe, keep_color_space)
+    # `stdin` MUST be redirected: exiftool is a PAR-packed Perl binary that hangs during
+    # startup if it inherits a console stdin handle from a multiprocessing worker process.
+    proc = sp.Popen(
+        [*base_cmd, str(image_path)],
+        stdin=sp.DEVNULL,
+        stdout=sp.DEVNULL,
+        stderr=sp.DEVNULL,
+    )
+    # No timeout here: exiftool rewrites the file in place, so killing it mid-write may corrupt the image.
+    return_code = proc.wait()
+    if return_code != 0:
+        cnsl = term.with_thread_queue(log_q)
+        cnsl.warning(f"Failed to strip metadata from image: {image_path.name} (exit code {return_code})")
+
+
+def _threaded_strip_metadata_star(args: tuple[term.MessageQueue, str, Path, bool]) -> None:
+    """Star wrapper for threaded metadata stripping"""
+    return _threaded_strip_metadata(*args)
 
 
 @click.command(
@@ -245,3 +279,69 @@ def image_tagging_raw(
         ):
             progress.update(task, advance=1)
     console.stop_progress(progress, "Tagged all possible images with exif metadata.")
+
+
+@click.command(
+    name="strip",
+    help="Strip all metadata from images",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@click.option(
+    "-k",
+    "--keep-colorspace",
+    "keep_colorspace",
+    is_flag=True,
+    default=False,
+    help=(
+        "Keep colour-space related tags (ICC profile, ColorSpace, etc.). "
+        "Removing them may shift the colors of the image."
+    ),
+    panel="Metadata Options",
+)
+@options.exiftool_path
+@options.threads_alt
+@check_config_first
+@time_program
+def image_tagging_strip(
+    path_or_archive: Path,
+    keep_colorspace: bool,
+    exiftool_path: str,
+    threads: int,
+):  # pragma: no cover
+    """
+    Strip all metadata from images with exiftool.
+    """
+
+    if not path_or_archive.is_dir():
+        raise click.BadParameter(
+            f"{path_or_archive} is not a directory. Please provide a directory.",
+            param_hint="path_or_archive",
+        )
+
+    force_search = not is_executeable_global_path(exiftool_path, "exiftool")
+    exiftool_exe = test_or_find_exiftool(exiftool_path, force_search)
+    if exiftool_exe is None:
+        console.error("Exiftool not found, unable to strip metadata from images!")
+        raise Exit(1)
+
+    precollect_images = [file_path for file_path, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
+    if not precollect_images:
+        console.warning(f"No images found in {path_or_archive}, nothing to strip.")
+        return
+    precollect_images.sort(key=lambda p: p.name)
+
+    console.info("Stripping all metadata from images...")
+    progress = console.make_progress()
+
+    task = progress.add_task("Stripping metadata...", finished_text="Stripped metadata", total=len(precollect_images))
+
+    console.info(f"Using {threads} CPU threads for processing.")
+
+    with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
+        for _ in pool.imap_unordered(
+            _threaded_strip_metadata_star,
+            ((log_q, exiftool_exe, image, keep_colorspace) for image in precollect_images),
+        ):
+            progress.update(task, advance=1)
+    console.stop_progress(progress, "Stripped all possible images of their metadata.")
