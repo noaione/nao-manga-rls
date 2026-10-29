@@ -28,35 +28,35 @@ dependencies = [
     "inquirer==3.4.1",
     "click==8.5.0",
     "ftfy==6.3.1",
-    "pydantic==2.13.5",
+    "pydantic==2.14.1",
     "typing-extensions==4.16.0",
-    "Pillow==12.3.0",
+    "Pillow==13.0.0",
     "lxml==6.1.3",
     "unrar2-cffi==0.5.0",
-    "py7zr==1.1.3",
+    "py7zr==1.1.4",
     "defusedxml==0.7.1",
     "rich-click==1.9.9",
     "cykooz.resizer==4.0.1",
     "wand==0.7.2",
     "click-pwsh==0.9.7",
     "beautifulsoup4>=4.15.0",
-    "pikepdf==10.13.0.post1",
+    "pikepdf==10.17.0",
     "natsort==8.4.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-cov==7.1.0",
-    "ruff==0.16.9",
+    "ruff==0.17.3",
 ]
 gui = ["PySide6>=6.7"]
 autostuff = [
-    "numpy>=2.5.3",
+    "numpy>=2.5.4",
     "scipy>=1.18.1",
 ]
 denoiser = [
-    "numpy>=2.5.3",
+    "numpy>=2.5.4",
     "onnx>=1.22.0",
     "onnxruntime==1.30.0; sys_platform == 'darwin'",
     "onnxruntime-ep-nv-tensorrt-rtx-cu13==0.4.0; sys_platform == 'linux' or sys_platform == 'win32'",
@@ -75,11 +75,11 @@ denoiser = [
 ]
 vapoursynth = [
     "vapoursynth==81",
-    "vapoursynth-imageseqs==0.3.0",
+    "vapoursynth-imageseqs==0.4.2",
     "vapoursynth-nimages==0.2.1",
     "vsrepo"
 ]
-epub-render = ["playwright==1.63.0"]
+epub-render = ["playwright==1.64.1"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nmanga._metadata.__version__"}
