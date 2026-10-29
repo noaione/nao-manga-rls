@@ -66,7 +66,7 @@ def _test_exec(
     extra_check: Callable[[str, str], bool] | None = None,
 ):
     try:
-        proc = sp.Popen(arguments, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc = sp.Popen(arguments, stdin=sp.DEVNULL, stdout=sp.PIPE, stderr=sp.PIPE)
         proc.wait(5.0)
 
         if proc.stdout is None or proc.stderr is None:

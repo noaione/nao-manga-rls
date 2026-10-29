@@ -64,10 +64,14 @@ def _runner_tagging_threaded(
         cnsl.warning(f"Skipping unsupported image format for tagging: {image_path.name}")
         return
     base_cmd = make_metadata_command(exiftool_exe, archive_filename, rls_email)
+    # `stdin` MUST be redirected: exiftool is a PAR-packed Perl binary that hangs during
+    # startup if it inherits a console stdin handle from a multiprocessing worker process.
+    # `stdout`/`stderr` are discarded so a full pipe buffer can never deadlock `wait()`.
     proc = sp.Popen(
         [*base_cmd, str(image_path)],
-        stdout=sp.PIPE,
-        stderr=sp.PIPE,
+        stdin=sp.DEVNULL,
+        stdout=sp.DEVNULL,
+        stderr=sp.DEVNULL,
     )
     proc.wait()
 

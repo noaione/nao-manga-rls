@@ -684,32 +684,31 @@ def inject_metadata(exiftool_dir: str, current_directory: Path, image_title: str
         full_dir = current_directory.resolve() / "*.jpg"
         base_cmd.append(str(full_dir))
         console.info("Injecting metadata into JP(e)G files...")
-        proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        proc.wait()
+        proc = sp.Popen(base_cmd, stdin=sp.DEVNULL, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.communicate()
         base_cmd.pop()
     if any_tiff:
         full_dir = current_directory.resolve() / "*.tiff"
         base_cmd.append(str(full_dir))
         console.info("Injecting metadata into TIFF files...")
-        proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        proc.wait()
+        proc = sp.Popen(base_cmd, stdin=sp.DEVNULL, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.communicate()
+        base_cmd.pop()
     if any_png:
         full_dir = current_directory.resolve() / "*.png"
         base_cmd.append(str(full_dir))
         console.info("Injecting metadata into PNG files...")
-        proc = sp.Popen(base_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        proc.wait()
+        proc = sp.Popen(base_cmd, stdin=sp.DEVNULL, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc.communicate()
 
 
 def run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
-    proc = sp.Popen(pingo_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    proc.wait()
-
-    if proc.stdout is None or proc.stderr is None:
-        raise ValueError("Subprocess stream is None, cannot proceed.")
-
-    stdout = proc.stdout.read().decode("utf-8")
-    stderr = proc.stderr.read().decode("utf-8")
+    proc = sp.Popen(pingo_cmd, stdin=sp.DEVNULL, stdout=sp.PIPE, stderr=sp.PIPE)
+    # `communicate()` drains both pipes; calling `wait()` first can deadlock once the
+    # child fills the OS pipe buffer (pingo prints one line per optimized file).
+    stdout_b, stderr_b = proc.communicate()
+    stdout = stdout_b.decode("utf-8")
+    stderr = stderr_b.decode("utf-8")
     # Merge both stdout and stderr
     output = stdout + stderr
 
@@ -730,14 +729,10 @@ def run_pingo_and_verify(pingo_cmd: list[str]):  # pragma: no cover
 
 def is_pingo_alpha(pingo_path: str) -> bool:  # pragma: no cover
     console.info("Checking if pingo is alpha version...")
-    proc = sp.Popen([pingo_path, "-help"], stdout=sp.PIPE, stderr=sp.PIPE)
-    proc.wait()
-
-    if proc.stdout is None or proc.stderr is None:
-        raise ValueError("Subprocess stream is None, cannot proceed.")
-
-    stdout = proc.stdout.read().decode("utf-8")
-    stderr = proc.stderr.read().decode("utf-8")
+    proc = sp.Popen([pingo_path, "-help"], stdin=sp.DEVNULL, stdout=sp.PIPE, stderr=sp.PIPE)
+    stdout_b, stderr_b = proc.communicate()
+    stdout = stdout_b.decode("utf-8")
+    stderr = stderr_b.decode("utf-8")
     # Merge both stdout and stderr
     output = stdout + stderr
 

@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Upscale images using a tiled approach with overlapping seams to prevent artifacts.
+# Image rescaler using PIL and pillow-simd
 
 from __future__ import annotations
 

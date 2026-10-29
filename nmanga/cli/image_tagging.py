@@ -47,7 +47,6 @@ from ..common import (
     threaded_worker,
 )
 from ..constants import MangaPublication
-from ..utils import is_py
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, is_executeable_global_path, test_or_find_exiftool
@@ -69,17 +68,20 @@ def _threaded_tagging(
         cnsl.warning(f"Skipping unsupported image format for tagging: {image_path.name}")
         return
     base_cmd = make_metadata_command(exiftool_exe, archive_filename, rls_email)
+    # `stdin` MUST be redirected: exiftool is a PAR-packed Perl binary that hangs during
+    # startup if it inherits a console stdin handle from a multiprocessing worker process.
     proc = sp.Popen(
         [*base_cmd, str(image_path)],
+        stdin=sp.DEVNULL,
         stdout=sp.DEVNULL,
         stderr=sp.DEVNULL,
     )
     try:
         proc.wait(3.0)  # timeout after 3s, if still running, kill it
-        proc.kill()
     except sp.TimeoutExpired:
-        cnsl = term.with_thread_queue(log_q)
         proc.kill()
+        proc.wait()
+        cnsl = term.with_thread_queue(log_q)
         cnsl.warning(f"Timed out tagging image: {image_path.name}")
 
 
@@ -174,10 +176,6 @@ def image_tagging(
 
     task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
-    # Check if python 3.14
-    if is_py((3, 14)):
-        # Force single threaded execution because of a weird stalling issue with multiprocessing
-        threads = 1
     console.info(f"Using {threads} CPU threads for processing.")
 
     with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
@@ -238,10 +236,6 @@ def image_tagging_raw(
 
     task = progress.add_task("Tagging images...", finished_text="Tagged images", total=len(precollect_images))
 
-    # Check if python 3.14
-    if is_py((3, 14)):
-        # Force single threaded execution because of a weird stalling issue with multiprocessing
-        threads = 1
     console.info(f"Using {threads} CPU threads for processing.")
 
     with threaded_worker(console, lowest_or(threads, precollect_images)) as (pool, log_q):
