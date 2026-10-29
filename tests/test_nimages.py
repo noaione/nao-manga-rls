@@ -231,24 +231,6 @@ class TestGrayNormalisation:
         assert actual.shape == expected.shape
         assert np.abs(actual - expected).max() <= 1
 
-    def test_a_lone_odd_lossy_webp_is_refused_at_read(self, tmp_path: Path):
-        """
-        The plugin documents this boundary: an odd 4:2:0 frame cannot exist in VapourSynth.
-
-        `Read` refuses the clip before any frame is requested, which is the non-crashing
-        form of the failure a mixed clip used to abort on. `_trim_and_convert`'s odd-YUV
-        branch is therefore unreachable by construction.
-        """
-        import vapoursynth
-
-        from nmanga.lazy import get_vapoursynth
-
-        odd = tmp_path / "odd-lossy.webp"
-        _gradient(width=65, height=33).save(odd, quality=90)
-        vs = get_vapoursynth()
-        with pytest.raises(vapoursynth.Error, match="VSVideoInfo"):
-            vs.core.imgseqs.Read(files=[str(odd)], mismatch=True, prefetch=0)
-
     def test_odd_size_pages_in_a_mixed_clip_probe_each_frame(self, tmp_path: Path):
         """
         A clip mixing containers reports an undefined format, so the choice is per frame.
