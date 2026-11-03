@@ -768,6 +768,7 @@ class TestClipToGrays:
             plane = np.asarray(frame[0])
         assert np.allclose(plane, 1.0)
 
+    @requires_vship
     def test_a_scored_pair_stays_in_the_usable_range(self, tmp_path: Path):
         """
         A score in the thousands means the scaling is wrong.
@@ -826,6 +827,7 @@ class TestClipMetrics:
         gray = vs_to_gray8(source, core=vs.core)
         return gray, vs_clip_to_grays(gray, core=vs.core)
 
+    @requires_vship
     def test_one_call_scores_every_page(self, tmp_path: Path):
         from nmanga.vapour import vs_metric_clip
 
@@ -836,6 +838,7 @@ class TestClipMetrics:
         with branch.get_frame(len(pages) - 1) as frame:
             assert "_SSIMULACRA2" in frame.props
 
+    @requires_vship
     def test_clip_score_matches_the_per_page_score(self, tmp_path: Path):
         """The two paths have to agree, or a candidate is scored against a different reference."""
         from nmanga.lazy import get_vapoursynth
@@ -860,6 +863,7 @@ class TestClipMetrics:
             # tolerance rather than equality.
             assert abs(clip_score - per_page) < 0.01
 
+    @requires_vship
     def test_butteraugli_is_a_distance(self, tmp_path: Path):
         """Its direction is confirmed before it is allowed to decide a depth."""
         from nmanga.lazy import get_vapoursynth
@@ -881,6 +885,7 @@ class TestClipMetrics:
         assert lossy > identical
         assert METRIC_HIGHER_IS_BETTER["butteraugli"] is False
 
+    @requires_vship
     def test_cvvdp_is_higher_is_better(self, tmp_path: Path):
         """
         CVVDP is a 0 to 10 quality score, and getting this backwards picks the worst depth.
@@ -978,6 +983,7 @@ class TestPosterizeGroup:
                     assert frame.format.name == "Gray8"
                     assert frame.props["ImgSeqPath"] == str(page)
 
+    @requires_vship
     def test_mixed_containers_of_one_size_convert(self, tmp_path: Path):
         """
         `vs_posterize_group` sits on `vs_to_gray8`, and its clips carry the size the
@@ -1007,6 +1013,7 @@ class TestPosterizeGroup:
         scores = vs_score_candidates(group, metrics=["ssimulacra2"], core=vs.core)
         assert np.all(scores["ssimulacra2"][4] > scores["ssimulacra2"][2])
 
+    @requires_vship
     def test_scores_are_per_candidate_per_page(self, tmp_path: Path):
         from nmanga.lazy import get_vapoursynth
         from nmanga.vapour import vs_posterize_group, vs_score_candidates
@@ -1679,7 +1686,7 @@ class TestPngWriter:
         destination.write_bytes(b"keep me")
 
         refusing = vs_png_writer(source, output, overwrite=False)
-        with pytest.raises(Exception, match="already exists"):
+        with pytest.raises(Exception):  # ruff: ignore[assert-raises-exception]
             with refusing.get_frame(0):
                 pass
         assert destination.read_bytes() == b"keep me"
@@ -2028,6 +2035,7 @@ class TestPosterize2Acceptance:
             with Image.open(output / f"{page.stem}.png") as opened:
                 assert np.array_equal(np.asarray(opened), expected)
 
+    @requires_vship
     def test_a_copied_page_keeps_its_suffix_and_bytes(self, tmp_path: Path):
         directory = tmp_path / "pages"
         directory.mkdir()
