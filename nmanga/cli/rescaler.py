@@ -34,6 +34,7 @@ from PIL import Image
 
 from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
+from ..ogsov import detect_image_color
 from ..resizer import ResizeKernel, ResizeMode, ResizeTarget
 from ..resizer import rescale_image as rescale_image_func
 from . import options
@@ -90,6 +91,75 @@ def _runner_rescale_threaded_star(
     args: tuple[term.MessageQueue, Path, Path, ResizeTarget, ResizeKernel, FilterParamOpt, FilterParamOpt, bool],
 ) -> RescaleResult:
     return _runner_rescale_threaded(*args)
+
+
+def _is_gray_page(img: Image.Image) -> bool:
+    if img.mode in {"1", "L", "LA", "La", "I", "F"} or img.mode.startswith("I;16"):
+        return True
+
+    if img.mode in {"RGBA", "RGBa"}:
+        rgb = img.convert("RGB")
+        try:
+            return not detect_image_color(rgb).is_color
+        finally:
+            rgb.close()
+
+    return not detect_image_color(img).is_color
+
+
+def _runner_rescale2_threaded(
+    log_q: term.MessageOrInterface,
+    img_path: Path,
+    output_dir: Path,
+    target: ResizeTarget,
+    color_kernel: ResizeKernel,
+    color_param_a: FilterParamOpt,
+    color_param_b: FilterParamOpt,
+    gray_kernel: ResizeKernel,
+    gray_param_a: FilterParamOpt,
+    gray_param_b: FilterParamOpt,
+    force: bool = False,
+) -> RescaleResult:
+    cnsl = term.with_thread_queue(log_q)
+    dest_path = output_dir / f"{img_path.stem}.png"
+    if dest_path.exists() and not force:
+        cnsl.warning(f"Skipping existing file: {dest_path}")
+        return RescaleResult.SKIPPED
+
+    with Image.open(img_path) as img:
+        is_gray = _is_gray_page(img)
+        kernel, param_a, param_b = (
+            (gray_kernel, gray_param_a, gray_param_b) if is_gray else (color_kernel, color_param_a, color_param_b)
+        )
+        rescaled_img = rescale_image_func(
+            img,
+            target=target,
+            kernel=kernel,
+            param_a=param_a,
+            param_b=param_b,
+        )
+
+    rescaled_img.save(dest_path, format="PNG")
+    rescaled_img.close()
+    return RescaleResult.PROCESSED
+
+
+def _runner_rescale2_threaded_star(
+    args: tuple[
+        term.MessageQueue,
+        Path,
+        Path,
+        ResizeTarget,
+        ResizeKernel,
+        FilterParamOpt,
+        FilterParamOpt,
+        ResizeKernel,
+        FilterParamOpt,
+        FilterParamOpt,
+        bool,
+    ],
+) -> RescaleResult:
+    return _runner_rescale2_threaded(*args)
 
 
 @click.command(
@@ -217,6 +287,176 @@ def rescale_image(
         console.stop_progress(progress, f"Processed {total_files} images.")
         processed_count = sum(1 for r in results if r == RescaleResult.PROCESSED)
         ignored_count = sum(1 for r in results if r == RescaleResult.SKIPPED)
+
+        if processed_count > 0:
+            console.info(f"Rescaled {processed_count} images.")
+        if ignored_count > 0:
+            console.info(f"Skipped {ignored_count} existing images.")
+    if recursive:
+        console.info(f"Finished processing {len(candidates)} folders.")
+
+
+@click.command(
+    "rescale2",
+    help="Rescale images using separate kernels for color and gray pages.",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=True)
+@options.dest_output()
+@click.option(
+    "-ck",
+    "--color-kernel",
+    type=click.Choice(ResizeKernel),
+    required=True,
+    help="Resampling kernel for color pages.",
+)
+@click.option(
+    "-gk",
+    "--gray-kernel",
+    type=click.Choice(ResizeKernel),
+    required=True,
+    help="Resampling kernel for gray pages.",
+)
+@click.option(
+    "-fr",
+    "--factor",
+    type=options.FLOAT_INT,
+    help="Scaling factor to rescale images by (e.g., 2 for 2x upscaling).",
+    required=False,
+)
+@click.option(
+    "-w",
+    "--width",
+    type=options.POSITIVE_INT,
+    help="Target width to resize images to.",
+    required=False,
+)
+@click.option(
+    "-ht",
+    "--height",
+    type=options.POSITIVE_INT,
+    help="Target height to resize images to.",
+    required=False,
+)
+@click.option(
+    "-m",
+    "--mode",
+    type=click.Choice(ResizeMode),
+    show_default=True,
+    default=ResizeMode.Fit,
+    help="Resizing mode to use when both width and height are specified.",
+)
+@click.option(
+    "-ca",
+    "--color-param-a",
+    type=options.FLOAT_INT,
+    required=False,
+    help="Parameter A for the color-page kernel.",
+)
+@click.option(
+    "-cb",
+    "--color-param-b",
+    type=options.FLOAT_INT,
+    required=False,
+    help="Parameter B for the color-page kernel.",
+)
+@click.option(
+    "-ga",
+    "--gray-param-a",
+    type=options.FLOAT_INT,
+    required=False,
+    help="Parameter A for the gray-page kernel.",
+)
+@click.option(
+    "-gb",
+    "--gray-param-b",
+    type=options.FLOAT_INT,
+    required=False,
+    help="Parameter B for the gray-page kernel.",
+)
+@options.recursive
+@options.threads_alt
+@options.force
+@check_config_first
+@time_program
+def rescale2(
+    path_or_archive: Path,
+    dest_output: Path,
+    color_kernel: ResizeKernel,
+    gray_kernel: ResizeKernel,
+    factor: float | int | None,
+    width: int | None,
+    height: int | None,
+    mode: ResizeMode,
+    color_param_a: float | int | None,
+    color_param_b: float | int | None,
+    gray_param_a: float | int | None,
+    gray_param_b: float | int | None,
+    recursive: bool,
+    threads: int,
+    force: bool,
+) -> None:
+    """Rescale images with one kernel for color pages and another for gray pages."""
+    console.info("Preparing rescaling task...")
+
+    candidates: list[Path] = []
+    if not recursive:
+        candidates.append(path_or_archive)
+    else:
+        console.info(f"Recursively collecting folder in {path_or_archive}...")
+        for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
+            candidates.append(comic)
+        console.info(f"Found {len(candidates)} archives/folders to rescale.")
+
+    real_target = ResizeTarget(mode=mode, factor=factor, width=width, height=height)
+    for path_real in candidates:
+        if recursive:
+            console.info(f"Processing: {path_real}")
+
+        all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_real)]
+        total_files = len(all_files)
+        if total_files <= 0:
+            console.warning(f"No images found in {path_real}, skipping.")
+            continue
+
+        console.info(f"Found {total_files} files in the directory.")
+
+        real_output = dest_output
+        if recursive:
+            real_output = dest_output / path_real.name
+        real_output.mkdir(parents=True, exist_ok=True)
+
+        results: list[RescaleResult] = []
+        progress = console.make_progress()
+        task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
+
+        console.info(f"Using {threads} CPU threads for processing.")
+        with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
+            for result in pool.imap_unordered(
+                _runner_rescale2_threaded_star,
+                (
+                    (
+                        log_q,
+                        img_path,
+                        real_output,
+                        real_target,
+                        color_kernel,
+                        color_param_a,
+                        color_param_b,
+                        gray_kernel,
+                        gray_param_a,
+                        gray_param_b,
+                        force,
+                    )
+                    for img_path in all_files
+                ),
+            ):
+                results.append(result)
+                progress.update(task, advance=1)
+
+        console.stop_progress(progress, f"Processed {total_files} images.")
+        processed_count = sum(1 for result in results if result == RescaleResult.PROCESSED)
+        ignored_count = sum(1 for result in results if result == RescaleResult.SKIPPED)
 
         if processed_count > 0:
             console.info(f"Rescaled {processed_count} images.")
