@@ -56,7 +56,7 @@ from .cli.pdf_stuff import pdf_group
 from .cli.posterize import analyze_shades, auto_posterize, posterize2, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
 from .cli.renamer import shift_renamer
-from .cli.rescaler import rescale_image
+from .cli.rescaler import rescale2, rescale_image
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
 from .cli.upscaler import export_to_onnx, upscale_trt
@@ -219,6 +219,7 @@ signal.signal(signal.SIGTERM, exit_143)
         "posterize",
         "posterize2",
         "rescale",
+        "rescale2",
         "jpegify",
         "jxlify",
         "spreads",
@@ -333,6 +334,7 @@ main.add_command(shift_renamer)
 main.add_command(orchestractor)
 main.add_command(lookup_group)
 main.add_command(rescale_image)
+main.add_command(rescale2)
 main.add_command(epub_group)
 main.add_command(pdf_group)
 main.add_command(imops_group)
