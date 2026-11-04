@@ -93,20 +93,6 @@ def _runner_rescale_threaded_star(
     return _runner_rescale_threaded(*args)
 
 
-def _is_gray_page(img: Image.Image) -> bool:
-    if img.mode in {"1", "L", "LA", "La", "I", "F"} or img.mode.startswith("I;16"):
-        return True
-
-    if img.mode in {"RGBA", "RGBa"}:
-        rgb = img.convert("RGB")
-        try:
-            return not detect_image_color(rgb).is_color
-        finally:
-            rgb.close()
-
-    return not detect_image_color(img).is_color
-
-
 def _runner_rescale2_threaded(
     log_q: term.MessageOrInterface,
     img_path: Path,
@@ -127,7 +113,7 @@ def _runner_rescale2_threaded(
         return RescaleResult.SKIPPED
 
     with Image.open(img_path) as img:
-        is_gray = _is_gray_page(img)
+        is_gray = not detect_image_color(img).is_color
         kernel, param_a, param_b = (
             (gray_kernel, gray_param_a, gray_param_b) if is_gray else (color_kernel, color_param_a, color_param_b)
         )

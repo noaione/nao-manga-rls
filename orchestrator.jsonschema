@@ -2,7 +2,7 @@
     "$defs": {
         "ActionAutolevel": {
             "additionalProperties": false,
-            "description": "Action to auto level all images in a volume with Pillow\n\nThis version is \"smarter\" than the CLI version:\n- It would force convert the image to grayscale for half-tones/b&w images before processing\n- All tagged color images will be leveled in keep colorspace mode",
+            "description": "Action to auto level all images in a volume with Pillow\n\nThis version is \"smarter\" than the CLI version:\n- It would force convert the image to grayscale for half-tones/b&w images before processing\n- A colour page is levelled on its own planes: the VapourSynth chain measures the page's\n  luma and applies the curve to every plane, so nothing is converted to gray first",
             "properties": {
                 "conditions": {
                     "anyOf": [
@@ -1115,6 +1115,18 @@
                     "$ref": "#/$defs/ResizeKernel",
                     "title": "Rescale Kernel"
                 },
+                "gray_kernel": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ResizeKernel"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Gray Rescale Kernel"
+                },
                 "param_a": {
                     "anyOf": [
                         {
@@ -1144,6 +1156,36 @@
                     ],
                     "default": null,
                     "title": "Parameter B"
+                },
+                "gray_param_a": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Gray Parameter A"
+                },
+                "gray_param_b": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Gray Parameter B"
                 },
                 "threads": {
                     "minimum": 1,

@@ -34,10 +34,10 @@ from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import RegexCollection, lowest_or, threaded_worker
+from ...common import lowest_or, threaded_worker
 from ...resizer import ResizeKernel, ResizeMode, ResizeTarget, rescale_image
 from ..common import SkipActionKind, perform_skip_action
-from ._base import ActionKind, BaseAction, ThreadedResult, WorkerContext
+from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, WorkerContext
 
 if TYPE_CHECKING:
     from ..models import OrchestratorConfig, VolumeConfig
@@ -157,6 +157,8 @@ def _runner_rescale_threaded(
     output_dir: Path,
     rescale: RescaleTarget,
     param: SimpleRescaleParam,
+    is_color: bool,
+    gray_param: SimpleRescaleParam | None = None,
     skip_action: SkipActionKind | None = None,
 ) -> ThreadedResult:
     cnsl = term.with_thread_queue(log_q)
@@ -171,12 +173,15 @@ def _runner_rescale_threaded(
 
     img = Image.open(img_path)
     res_target = rescale.to_params()
+    sel_param = param
+    if not is_color and gray_param is not None:
+        sel_param = gray_param
     rescaled_img = rescale_image(
         img,
         target=res_target,
-        kernel=param.kernel,
-        param_a=param.a,
-        param_b=param.b,
+        kernel=sel_param.kernel,
+        param_a=sel_param.a,
+        param_b=sel_param.b,
     )
 
     rescaled_img.save(dest_path, format="PNG")
@@ -186,12 +191,21 @@ def _runner_rescale_threaded(
 
 
 def _runner_rescale_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, RescaleTarget, SimpleRescaleParam, SkipActionKind | None],
+    args: tuple[
+        term.MessageQueue,
+        Path,
+        Path,
+        RescaleTarget,
+        SimpleRescaleParam,
+        bool,
+        SimpleRescaleParam | None,
+        SkipActionKind | None,
+    ],
 ) -> ThreadedResult:
     return _runner_rescale_threaded(*args)
 
 
-class ActionRescale(BaseAction):
+class ActionRescale(BaseAction, ActionColorMixin):
     """
     Action to rescale images to a specified size.
     """
@@ -211,10 +225,16 @@ class ActionRescale(BaseAction):
     """The rescale target configuration"""
     kernel: ResizeKernel = Field(..., title="Rescale Kernel")
     """The rescale kernel to use"""
+    gray_kernel: ResizeKernel | None = Field(None, title="Gray Rescale Kernel")
+    """The rescale kernel to use for gray pages, if different from the main kernel"""
     param_a: float | int | None = Field(None, title="Parameter A")
     """Optional parameter A for certain kernels (e.g., Lanczos support)."""
     param_b: float | int | None = Field(None, title="Parameter B")
     """Optional parameter B for certain kernels (e.g., Lanczos blur factor)."""
+    gray_param_a: float | int | None = Field(None, title="Gray Parameter A")
+    """Optional parameter A for certain gray kernels, only if `gray_kernel` is used (e.g., Lanczos support)."""
+    gray_param_b: float | int | None = Field(None, title="Gray Parameter B")
+    """Optional parameter B for certain gray kernels, only if `gray_kernel` is used (e.g., Lanczos blur factor)."""
     threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
@@ -234,6 +254,8 @@ class ActionRescale(BaseAction):
             as_params = self.rescale.to_params()
             context.terminal.info(f"- Rescale Target: {as_params!s}")
             context.terminal.info(f"- Rescale Kernel: {self.kernel.name}")
+            if self.gray_kernel is not None:
+                context.terminal.info(f"- Gray Rescale Kernel: {self.gray_kernel.name}")
             context.terminal.info(f"- Processing Threads: {self.threads}")
             context.update_cwd(output_dir)
             return
@@ -245,25 +267,21 @@ class ActionRescale(BaseAction):
             context.update_cwd(output_dir)  # We still need to update CWD
             return
 
-        page_re = RegexCollection.page_re()
-
         context.terminal.info(f"Processing {context.current_dir} with posterizer...")
         all_images = [img for img, _, _, _ in file_handler.collect_image_from_folder(context.current_dir)]
         total_images = len(all_images)
         all_images.sort(key=lambda x: x.stem)
 
         # Do pre-processing
-        images_complete: list[tuple[Path, SkipActionKind | None]] = []
+        images_complete: list[tuple[Path, SkipActionKind | None, bool]] = []
         for image in all_images:
-            img_match = page_re.match(image.stem)
             is_skip_action = None
 
-            if img_match is not None:
-                p01 = int(img_match.group("a"))
-                if context.skip_action is not None and p01 in context.skip_action.pages:
-                    is_skip_action = context.skip_action.action
+            pg_num, is_color = self.is_color_page(image, context=context, volume=volume, orchestrator=orchestrator)
+            if pg_num is not None and context.skip_action is not None and pg_num in context.skip_action.pages:
+                is_skip_action = context.skip_action.action
 
-            images_complete.append((image, is_skip_action))
+            images_complete.append((image, is_skip_action, is_color))
 
         rescaler = self.rescale
         if metafield := volume.metafields:
@@ -272,6 +290,9 @@ class ActionRescale(BaseAction):
 
         results: list[ThreadedResult] = []
         parameter = SimpleRescaleParam(self.kernel, self.param_a, self.param_b)
+        gray_param: SimpleRescaleParam | None = None
+        if self.gray_kernel is not None:
+            gray_param = SimpleRescaleParam(self.gray_kernel, self.gray_param_a, self.gray_param_b)
         progress = context.terminal.make_progress()
         task = progress.add_task("Rescaling images...", finished_text="Rescaled images", total=total_images)
         context.terminal.info(f"Using {self.threads} CPU threads for processing.")
@@ -279,8 +300,8 @@ class ActionRescale(BaseAction):
             for result in pool.imap_unordered(
                 _runner_rescale_threaded_star,
                 [
-                    (log_q, image, output_dir, rescaler, parameter, is_skip_action)
-                    for image, is_skip_action in images_complete
+                    (log_q, image, output_dir, rescaler, parameter, is_color, gray_param, is_skip_action)
+                    for image, is_skip_action, is_color in images_complete
                 ],
             ):
                 results.append(result)

@@ -619,10 +619,13 @@ def detect_image_color(img: Image.Image) -> DetectedColor:
         if palette is not None and is_grayscale_palette(palette):
             return DetectedColor(False, 100, "is grayscale palette", True)
 
-    if img.mode == "L":
+    if img.mode in {"1", "L", "LA", "La", "I", "F"} or img.mode.startswith("I;16"):
         return DetectedColor(False, 100, "is grayscale mode", False)
 
-    if img.mode == "RGB":
+    is_rgba = img.mode in {"RGBA", "RGBa"}
+    if img.mode == "RGB" or is_rgba:
+        if is_rgba:
+            img = img.convert("RGB")
         rgb = img.split()
         if (
             ImageChops.difference(rgb[0], rgb[1]).getextrema()[1] == 0
