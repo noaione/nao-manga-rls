@@ -24,13 +24,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from array import array
 from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from typing import Literal, cast, overload
 
 from cykooz_resizer import FilterType, ImageData, PixelType, ResizeAlg, ResizeOptions, Resizer
-from PIL import Image
+from PIL import Image, ImageMath
 from wand.image import Image as WandImage
 
 __all__ = (
@@ -38,6 +39,19 @@ __all__ = (
     "ResizeMode",
     "ResizeTarget",
     "rescale_image",
+)
+
+
+_SRGB_TO_LINEAR_LUT = tuple(
+    value / 255 / 12.92 if value / 255 <= 0.04045 else ((value / 255 + 0.055) / 1.055) ** 2.4
+    for value in range(256)
+)
+_LINEAR_TO_SRGB_16_LUT = tuple(
+    round(
+        (value / 65535 * 12.92 if value / 65535 <= 0.0031308 else (1.055 * (value / 65535) ** (1 / 2.4) - 0.055))
+        * 255
+    )
+    for value in range(65536)
 )
 
 
@@ -116,6 +130,16 @@ class WandResizeOptions:
         filters = self.apply_filters(param_a, param_b)
         # wand's channel_map uses 'I' (intensity) for grayscale and 'IA' for grayscale+alpha
         wand_channel_map = {"L": "I", "LA": "IA"}.get(img.mode, img.mode)
+        if img.mode == "F":
+            # Float samples are normalized to [0, 1] for ImageMagick. Keep the result
+            # in float form so the linear-light path does not get quantized through PNG.
+            with WandImage.from_array(img, channel_map="I", storage="float") as wand_img:
+                for filter_name, filter_value in filters.items():
+                    wand_img.artifacts[filter_name] = filter_value  # type: ignore
+                wand_img.resize(width, height, filter=self.kernel.value)
+                pixels = array("f", wand_img.export_pixels(channel_map="I", storage="float"))
+                return Image.frombytes("F", (width, height), pixels.tobytes())
+
         with WandImage.from_array(img, channel_map=wand_channel_map) as wand_img:
             # Apply the filters as needed based on the kernel
             for filter_name, filter_value in filters.items():
@@ -462,6 +486,21 @@ def _do_wand_resize(
     return resample.resize_image(img, new_width, new_height, param_a=param_a, param_b=param_b)
 
 
+def _srgb_gray_to_linear(img: Image.Image) -> Image.Image:
+    """Convert an 8-bit sRGB grayscale image to normalized linear-light floats."""
+    return img.point(_SRGB_TO_LINEAR_LUT, mode="F")
+
+
+def _linear_gray_to_srgb(img: Image.Image) -> Image.Image:
+    """Encode normalized linear-light floats as 8-bit sRGB grayscale."""
+    clamped = ImageMath.lambda_eval(
+        lambda images: images["min"](images["max"](images["gray"], 0.0), 1.0),
+        gray=img,
+    )
+    linear_16 = ImageMath.lambda_eval(lambda images: images["gray"] * 65535.0, gray=clamped).convert("I")
+    return linear_16.point(_LINEAR_TO_SRGB_16_LUT, mode="L")
+
+
 def rescale_image(
     img: Image.Image,
     target: ResizeTarget,
@@ -478,6 +517,8 @@ def rescale_image(
     :param kernel: The resampling kernel to use.
     :param param_a: Optional parameter A for certain kernels (e.g., Lanczos support).
     :param param_b: Optional parameter B for certain kernels (e.g., Lanczos blur factor).
+    Grayscale ``L`` images resized without enlarging either dimension are processed in linear light
+    whenever at least one dimension is reduced.
     :return: The rescaled image.
     :rtype: Image.Image
     """
@@ -485,11 +526,21 @@ def rescale_image(
     new_width, new_height = target.get_scale(img)
     resample = kernel.to_resample()
 
+    linear_gray_downscale = (
+        img.mode == "L"
+        and new_width <= img.width
+        and new_height <= img.height
+        and (new_width < img.width or new_height < img.height)
+    )
+    resize_img = _srgb_gray_to_linear(img) if linear_gray_downscale else img
+
     if isinstance(resample, ResizeOptions):
-        return _do_cykooz_resize(img, resample, new_width, new_height)
+        resized = _do_cykooz_resize(resize_img, resample, new_width, new_height)
     elif isinstance(resample, WandResizeOptions):
-        return _do_wand_resize(img, resample, new_width, new_height, param_a=param_a, param_b=param_b)
+        resized = _do_wand_resize(resize_img, resample, new_width, new_height, param_a=param_a, param_b=param_b)
     elif isinstance(resample, Image.Resampling):
-        return img.resize((new_width, new_height), resample=resample)
+        resized = resize_img.resize((new_width, new_height), resample=resample)
     else:
         raise ValueError("Invalid resample type")
+
+    return _linear_gray_to_srgb(resized) if linear_gray_downscale else resized
