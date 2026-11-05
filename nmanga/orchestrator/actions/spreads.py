@@ -27,7 +27,7 @@ from __future__ import annotations
 import shutil
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, TypedDict, cast
 
 from PIL import Image
 from pydantic import ConfigDict, Field
@@ -114,6 +114,8 @@ class ActionSpreads(BaseAction):
 
     kind: Literal[ActionKind.SPREADS] = Field(ActionKind.SPREADS, title="Image Spreads Joiner Action")
     """The kind of action"""
+    supported_in_target_run: ClassVar[bool] = False
+    """Needs the spread list from the volume configuration, which a target run does not have"""
     direction: SpreadDirection = Field(SpreadDirection.LTR, title="Spread Direction")
     """Whether to use reverse mode when joining spreads"""
     quality: float = Field(100.0, ge=1.0, le=100.0, title="Output Quality")

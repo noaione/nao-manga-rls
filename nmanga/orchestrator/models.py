@@ -52,6 +52,7 @@ __all__ = (
     "SeriesMetafields",
     "VolumeConfig",
     "VolumeMetafields",
+    "build_target_volume",
 )
 
 
@@ -205,10 +206,14 @@ class VolumeConfig(BaseModel):
 
     This would be made into a range from the first to the second number inclusive.
     """
-    colors: list[int] | Literal["auto"] = Field(
+    colors: list[int] | Literal["auto"] | None = Field(
         default_factory=list, title="Volume Color Pages", examples=[[0], "auto"]
     )
-    """The list of color tagged pages in the volume"""
+    """The list of color tagged pages in the volume
+
+    Set this to `null` to mark the color pages as unknown, which lets color-aware actions
+    detect them on the fly instead of treating the volume as having no color pages at all.
+    """
     meta_naming: list[MetadataNamingConfig] = Field(default_factory=list, title="Metadata Naming Configurations")
     """The list of metadata naming configurations"""
     chapters: list[ChapterConfig] = Field(default_factory=list, title="Volume Chapters")
@@ -357,6 +362,49 @@ class VolumeConfig(BaseModel):
                 ),
             )
         return ranges
+
+
+def build_target_volume(
+    path: str,
+    *,
+    number: VolumeNumberT | None = None,
+    oneshot: bool = False,
+    year: int | None = None,
+    revision: int = 1,
+    extra_text: str | None = None,
+) -> VolumeConfig:
+    """
+    Build an ephemeral :class:`VolumeConfig` for a ``run-target`` invocation.
+
+    A target run has no chapter, spread, or color page metadata, so those are left empty.
+    When no volume number is provided, the volume is treated as a oneshot and no volume
+    number will be added to any generated filename.
+
+    :param path: Volume directory, relative to the orchestrator ``base_path``
+    :param number: Volume number, can be an omnibus range tuple
+    :param oneshot: Force oneshot naming even if a volume number is provided
+    :param year: Volume year, defaults to the current year
+    :param revision: Release revision
+    :param extra_text: Extra text to add to generated filenames
+    :return: The synthesized volume configuration
+    """
+
+    if number is None:
+        number = 1
+        oneshot = True
+
+    return VolumeConfig(
+        path=path,
+        number=number,
+        oneshot=oneshot,
+        year=year if year is not None else current_year(),
+        revision=revision,
+        extra_text=extra_text,
+        chapters=[],
+        spreads=[],
+        meta_naming=[],
+        colors=None,
+    )
 
 
 class OrchestratorConfig(BaseModel):

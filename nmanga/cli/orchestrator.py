@@ -30,7 +30,7 @@ import importlib.util
 import json
 from pathlib import Path
 from time import time
-from typing import Literal
+from typing import Literal, Sequence
 
 import rich_click as click
 
@@ -49,6 +49,162 @@ from .base import (
 )
 
 console = term.get_console()
+
+
+def _detect_required_tools(
+    actions: "Sequence[BaseAction]",
+    *,
+    magick_path: str,
+    pingo_path: str,
+    exiftool_path: str,
+    cjpegli_path: str,
+) -> dict[str, str]:
+    """
+    Detect all the tools required by the given actions.
+
+    :param actions: The actions that are going to run
+    :return: A mapping of tool name to executable path
+    """
+
+    toolsets: dict[str, str] = {}
+    tested_pkg: set[str] = set()
+    tested_vs_pkg: set[str] = set()
+    console.info("Detecting needed tools...")
+    for action in actions:
+        action_name = getattr(action, "kind", "unknown")
+        needed_tools = action.get_tools()
+        for tool_name, tool_kind in needed_tools.items():
+            match tool_kind:
+                case ToolsKind.PACKAGE:
+                    if tool_name in tested_pkg:
+                        continue
+                    test_pkg = importlib.util.find_spec(tool_name)
+                    if test_pkg is None:
+                        console.error(f"Required package '{tool_name}' for action '{action_name}' not found!")
+                        raise click.Abort()
+                    tested_pkg.add(tool_name)
+                case ToolsKind.BINARY:
+                    match tool_name:
+                        case "magick":
+                            tool_path = test_or_find_magick(magick_path)
+                        case "pingo":
+                            tool_path = test_or_find_pingo(pingo_path)
+                        case "exiftool":
+                            tool_path = test_or_find_exiftool(exiftool_path)
+                        case "cjpegli":
+                            tool_path = test_or_find_cjpegli(cjpegli_path)
+                        case _:
+                            console.error(f"Unknown tool '{tool_name}' for action '{action_name}'!")
+                            raise click.Abort()
+                    if tool_path is None:
+                        console.error(f"Required binary '{tool_name}' for action '{action_name}' not found!")
+                        raise click.Abort()
+                    toolsets[tool_name] = tool_path
+                case ToolsKind.VAPOURSYNTH:
+                    if tool_name in tested_vs_pkg:
+                        continue
+                    missing_plugins = vs_find_missing_plugins([tool_name])
+                    if missing_plugins:
+                        console.error(
+                            f"Required vapoursynth plugin '{tool_name}' for action '{action_name}' not found!"
+                        )
+                        raise click.Abort()
+                    tested_vs_pkg.add(tool_name)
+    console.info(f"Detected tools: {', '.join(toolsets.keys()) if toolsets else 'None'}")
+    console.info(f"Detected packages: {', '.join(tested_pkg) if tested_pkg else 'None'}")
+    console.info(f"Detected vapoursynth plugins: {', '.join(tested_vs_pkg) if tested_vs_pkg else 'None'}")
+    return toolsets
+
+
+def _run_volume(
+    context: WorkerContext,
+    volume: VolumeConfig,
+    config: OrchestratorConfig,
+    actions: "dict[str, Actions]",
+) -> bool:
+    """
+    Run the whole action chain on a single volume.
+
+    :return: Whether the whole orchestrator run should stop
+    """
+
+    skips_mappings: dict[str, SkipActionConfig] = {skips.step: skips for skips in volume.skip_actions}
+    volume_start = time()
+    volume_interrupted = False
+    stop_whole_chain = False
+    for action_name, action in actions.items():
+        console.info(f" - Running action {action.kind.name}...")
+        start_action = time()
+
+        skip_action = skips_mappings.get(action_name)
+        context.set_skip_action(skip_action)
+
+        context.terminal.set_space(3)
+        try:
+            action.run(context, volume, config)
+        except OrchestratorInterruptError as interrupt:
+            volume_interrupted = True
+            stop_whole_chain = interrupt.whole_chain
+        finally:
+            context.terminal.set_space(0)
+
+        end_action = time()
+        if volume_interrupted:
+            console.warning(f" - Action {action.kind.name} interrupted the chain in {end_action - start_action:.2f}s")
+            break
+
+        console.info(f" - Finished action {action.kind.name} in {end_action - start_action:.2f}s")
+        console.enter()
+
+    volume_end = time()
+    if volume_interrupted:
+        console.info(f"Interrupted volume {volume.number_display} after {volume_end - volume_start:.2f}s")
+    else:
+        console.info(f"Finished processing volume {volume.number_display} in {volume_end - volume_start:.2f}s")
+
+    return stop_whole_chain
+
+
+def _validate_target_actions(config: OrchestratorConfig) -> "dict[str, Actions]":
+    """
+    Ensure every configured action can run without volume metadata.
+
+    :return: The action mapping to run
+    :raises click.ClickException: If any action requires volume metadata
+    """
+
+    action_maps = config.actions_maps
+    blocked = [name for name, action in action_maps.items() if not action.supported_in_target_run]
+    if blocked:
+        raise click.ClickException(
+            "The following action steps require volume metadata and cannot run with `orchestra run-target`: "
+            f"{', '.join(blocked)}. Remove them from the configuration action list, or use `orchestra run` instead."
+        )
+    return action_maps
+
+
+def _resolve_target_path(config: OrchestratorConfig, root_dir: Path, target: Path) -> tuple[Path, Path]:
+    """
+    Resolve and validate a ``run-target`` target directory.
+
+    The target has to live inside the configured base path, because most actions derive
+    their output directory from ``root_dir / base_path / volume.path``.
+
+    :return: Tuple of (absolute target directory, target relative to the configured base path)
+    :raises click.ClickException: If the target is not a valid volume directory inside the base path
+    """
+
+    base_dir = (root_dir / Path(config.base_path)).resolve()
+    target_dir = target.resolve()
+    try:
+        relative_path = target_dir.relative_to(base_dir)
+    except ValueError:
+        raise click.ClickException(f"Target {target_dir} is not inside the configured base path {base_dir}") from None
+    if relative_path == Path():
+        raise click.ClickException(
+            f"Target {target_dir} cannot be the base path itself, pick a specific volume directory"
+        )
+    return target_dir, relative_path
 
 
 @click.group(name="orchestra", help="Orchestrator for manga processing")
@@ -190,54 +346,13 @@ def orchestrator_runner(
     console.info(f"Running orchestrator for {config.title}...")
     full_base = input_file.resolve().parent
 
-    # Tools detection
-    toolsets = {}
-    tested_pkg = set()
-    tested_vs_pkg = set()
-    console.info("Detecting needed tools...")
-    for action in config.actions:
-        action_name = action.kind.name
-        needed_tools = action.get_tools()
-        for tool_name, tool_kind in needed_tools.items():
-            match tool_kind:
-                case ToolsKind.PACKAGE:
-                    if tool_name in tested_pkg:
-                        continue
-                    test_pkg = importlib.util.find_spec(tool_name)
-                    if test_pkg is None:
-                        console.error(f"Required package '{tool_name}' for action '{action_name}' not found!")
-                        raise click.Abort()
-                    tested_pkg.add(tool_name)
-                case ToolsKind.BINARY:
-                    match tool_name:
-                        case "magick":
-                            tool_path = test_or_find_magick(magick_path)
-                        case "pingo":
-                            tool_path = test_or_find_pingo(pingo_path)
-                        case "exiftool":
-                            tool_path = test_or_find_exiftool(exiftool_path)
-                        case "cjpegli":
-                            tool_path = test_or_find_cjpegli(cjpegli_path)
-                        case _:
-                            console.error(f"Unknown tool '{tool_name}' for action '{action_name}'!")
-                            raise click.Abort()
-                    if tool_path is None:
-                        console.error(f"Required binary '{tool_name}' for action '{action_name}' not found!")
-                        raise click.Abort()
-                    toolsets[tool_name] = tool_path
-                case ToolsKind.VAPOURSYNTH:
-                    if tool_name in tested_vs_pkg:
-                        continue
-                    missing_plugins = vs_find_missing_plugins([tool_name])
-                    if missing_plugins:
-                        console.error(
-                            f"Required vapoursynth plugin '{tool_name}' for action '{action_name}' not found!"
-                        )
-                        raise click.Abort()
-                    tested_vs_pkg.add(tool_name)
-    console.info(f"Detected tools: {', '.join(toolsets.keys()) if toolsets else 'None'}")
-    console.info(f"Detected packages: {', '.join(tested_pkg) if tested_pkg else 'None'}")
-    console.info(f"Detected vapoursynth plugins: {', '.join(tested_vs_pkg) if tested_vs_pkg else 'None'}")
+    toolsets = _detect_required_tools(
+        config.actions,
+        magick_path=magick_path,
+        pingo_path=pingo_path,
+        exiftool_path=exiftool_path,
+        cjpegli_path=cjpegli_path,
+    )
 
     input_dir = full_base / Path(config.base_path)
     stop_whole_chain = False
@@ -250,9 +365,6 @@ def orchestrator_runner(
             console.warning(f"Volume path {chapter_path} is not a directory, skipping...")
             continue
 
-        skips_mappings: dict[str, SkipActionConfig] = {}
-        for skips in volume.skip_actions:
-            skips_mappings[skips.step] = skips
         console.info(f"Processing volume {volume.number_display} {chapter_path}...")
 
         context = WorkerContext(
@@ -262,43 +374,151 @@ def orchestrator_runner(
             toolsets=toolsets,
         )
 
-        volume_start = time()
-        volume_interrupted = False
-        for action_name, action in config.actions_maps.items():
-            console.info(f" - Running action {action.kind.name}...")
-            start_action = time()
-
-            skip_action = skips_mappings.get(action_name)
-            context.set_skip_action(skip_action)
-
-            context.terminal.set_space(3)
-            try:
-                action.run(context, volume, config)
-            except OrchestratorInterruptError as interrupt:
-                volume_interrupted = True
-                stop_whole_chain = interrupt.whole_chain
-            finally:
-                context.terminal.set_space(0)
-
-            end_action = time()
-            if volume_interrupted:
-                console.warning(
-                    f" - Action {action.kind.name} interrupted the chain in {end_action - start_action:.2f}s"
-                )
-                break
-
-            console.info(f" - Finished action {action.kind.name} in {end_action - start_action:.2f}s")
-            console.enter()
-
-        volume_end = time()
-        if volume_interrupted:
-            console.info(f"Interrupted volume {volume.number_display} after {volume_end - volume_start:.2f}s")
-        else:
-            console.info(f"Finished processing volume {volume.number_display} in {volume_end - volume_start:.2f}s")
-
+        stop_whole_chain = _run_volume(context, volume, config, config.actions_maps)
         if stop_whole_chain:
             console.warning("Interrupting the whole action chain, stopping the orchestrator...")
             break
+
+    if stop_whole_chain:
+        console.info("Orchestrator stopped early due to interrupt.")
+    else:
+        console.info("Orchestrator finished all tasks.")
+
+
+@orchestractor.command(
+    name="run-target",
+    help="Run the orchestrator action chain on a single target directory",
+    cls=NMangaCommandHandler,
+)
+@click.option(
+    "--config",
+    "config_file",
+    metavar="CONFIG_FILE",
+    required=True,
+    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False, path_type=Path),
+    help="Path to the orchestrator configuration file",
+)
+@click.argument(
+    "target",
+    metavar="TARGET_DIR",
+    required=True,
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True, path_type=Path),
+)
+@click.option(
+    "-vol",
+    "--volume",
+    "manga_volume",
+    type=options.VOLUME_NUMBER,
+    default=None,
+    help=(
+        "The volume number of the target, supports omnibus range like `1-2`. "
+        "When not provided, the target is treated as a oneshot."
+    ),
+    panel="Release Options",
+)
+@click.option(
+    "-oshot",
+    "--is-oneshot",
+    "is_oneshot",
+    is_flag=True,
+    default=False,
+    help="Treat the target as a oneshot, this will not add volume to the filename",
+    panel="Release Options",
+)
+@click.option(
+    "-r",
+    "--revision",
+    "rls_revision",
+    type=click.IntRange(min=1, max_open=True),
+    default=1,
+    show_default=True,
+    help="The revision of the release, if the number 1 provided it will not put in the filename",
+    panel="Release Options",
+)
+@click.option(
+    "-ex",
+    "--extra-meta",
+    "rls_extra_metadata",
+    default=None,
+    required=False,
+    help="Extra metadata to add to the archive filename",
+    panel="Release Options",
+)
+@click.option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    default=False,
+    help="Only show what each action would do without touching any file",
+    panel="Execution Options",
+)
+@options.magick_path
+@options.pingo_path
+@options.exiftool_path
+@options.cjpegli_path
+@check_config_first
+@time_program
+def orchestrator_run_target(
+    config_file: Path,
+    target: Path,
+    manga_volume: VolumeNumberT | None,
+    is_oneshot: bool,
+    rls_revision: int,
+    rls_extra_metadata: str | None,
+    dry_run: bool,
+    magick_path: str,
+    pingo_path: str,
+    exiftool_path: str,
+    cjpegli_path: str,
+):
+    with config_file.open("r", encoding="utf-8") as f:
+        config = OrchestratorConfig.model_validate_json(f.read(), strict=True)
+
+    # The action list is shared with `orchestra run`, so refuse up-front instead of
+    # failing halfway through the chain.
+    action_maps = _validate_target_actions(config)
+
+    root_dir = config_file.resolve().parent
+    target_dir, relative_path = _resolve_target_path(config, root_dir, target)
+
+    volume = build_target_volume(
+        relative_path.as_posix(),
+        number=manga_volume,
+        oneshot=is_oneshot,
+        revision=rls_revision,
+        extra_text=rls_extra_metadata,
+    )
+    console.info(f"Running orchestrator for {config.title} on {target_dir}...")
+    if volume.oneshot:
+        console.info("Treating the target as a oneshot, no volume number will be added to generated filenames.")
+    else:
+        console.info(f"Treating the target as volume {volume.number_display}.")
+
+    toolsets = _detect_required_tools(
+        list(action_maps.values()),
+        magick_path=magick_path,
+        pingo_path=pingo_path,
+        exiftool_path=exiftool_path,
+        cjpegli_path=cjpegli_path,
+    )
+
+    context = WorkerContext(
+        root_dir=root_dir,
+        current_dir=target_dir,
+        terminal=console,
+        toolsets=toolsets,
+        dry_run=dry_run,
+    )
+
+    # Most actions derive their output directory from `root_dir / base_path / volume.path`,
+    # so this has to line up with the requested target exactly.
+    resolved_volume_dir = (root_dir / Path(config.base_path) / Path(volume.path)).resolve()
+    if resolved_volume_dir != target_dir:
+        raise click.ClickException(
+            f"Resolved volume directory {resolved_volume_dir} does not match target {target_dir}"
+        )
+
+    stop_whole_chain = _run_volume(context, volume, config, action_maps)
 
     if stop_whole_chain:
         console.info("Orchestrator stopped early due to interrupt.")

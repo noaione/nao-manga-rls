@@ -25,7 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from pydantic import ConfigDict, Field
 
@@ -147,6 +147,8 @@ class ActionRename(BaseAction):
 
     kind: Literal[ActionKind.RENAME] = Field(ActionKind.RENAME, title="Daiz-like Rename Images Action")
     """The kind of action"""
+    supported_in_target_run: ClassVar[bool] = False
+    """Needs the chapter list from the volume configuration, which a target run does not have"""
     title: str | None = Field(None, title="Title of the Series")
     """Override title for the rename action"""
     volume_filename: bool = Field(True, title="Use Volume in Filename")

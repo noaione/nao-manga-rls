@@ -210,6 +210,13 @@ class BaseAction(BaseModel, abc.ABC):
     conditions: RuleModel | None = Field(None, title="Conditions to run the action")
     """Run the action only if a certain condition is met"""
 
+    supported_in_target_run: ClassVar[bool] = True
+    """Whether this action can run with `orchestra run-target`
+
+    Target runs have no volume metadata (chapters, spreads, color pages), so actions that
+    rely on those cannot run in this mode.
+    """
+
     @abc.abstractmethod
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """

@@ -77,7 +77,10 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
 
         if context.dry_run:
             context.terminal.info(f"- Base path: {self.base_path}")
-            context.terminal.info(f"- Total {len(volume.colors)} would be moved.")
+            if isinstance(volume.colors, list):
+                context.terminal.info(f"- Total {len(volume.colors)} would be moved.")
+            else:
+                context.terminal.info("- Color pages would be detected on the fly")
             return
 
         output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
@@ -85,17 +88,17 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
 
         moved_count = 0
         progress = context.terminal.make_progress()
-        task = progress.add_task("Moving color images...", finished_text="Moved color images", total=len(volume.colors))
-        for img_file, _, _, _ in file_handler.collect_image_from_folder(context.current_dir):
+        task = progress.add_task("Moving color images...", finished_text="Moved color images", total=None)
+        for img_file, _, total_img, _ in file_handler.collect_image_from_folder(context.current_dir):
             pg_num, is_color = self.is_color_page(img_file, context=context, volume=volume, orchestrator=orchestrator)
             if is_color and pg_num is not None:
                 dest_path = output_dir / img_file.name
                 if dest_path.exists():
                     context.terminal.warning(f"Skipping existing file: {dest_path}")
-                    continue
-                shutil.move(img_file, dest_path)
-                moved_count += 1
-            progress.update(task, advance=1)
+                else:
+                    shutil.move(img_file, dest_path)
+                    moved_count += 1
+            progress.update(task, advance=1, total=total_img)
 
         context.terminal.stop_progress(progress, f"Moved {moved_count} color images to {output_dir}", skip_total=True)
 
@@ -164,7 +167,10 @@ class ActionColorJpegify(BaseAction, ActionColorMixin):
             context.terminal.info(f"- Source path: {self.source_path}")
             if self.base_path is not None:
                 context.terminal.info(f"- Output base path: {self.base_path}")
-            context.terminal.info(f"- Total {len(volume.colors)} would be converted to JPEG.")
+            if isinstance(volume.colors, list):
+                context.terminal.info(f"- Total {len(volume.colors)} would be converted to JPEG.")
+            else:
+                context.terminal.info("- Color pages would be detected on the fly")
             return
 
         output_dir = context.current_dir
@@ -262,8 +268,10 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
             if volume.colors == "auto":
                 context.terminal.info("- Detect color pages automatically")
                 context.terminal.info(f"- Color model path: {orchestrator.metafields.color_model}")
-            if isinstance(volume.colors, list):
+            elif isinstance(volume.colors, list) and volume.colors:
                 context.terminal.info(f"- Has color page information from config: {sorted(volume.colors)}")
+            else:
+                context.terminal.info("- No color page information from config, would detect automatically")
             return
 
         if isinstance(volume.colors, list):

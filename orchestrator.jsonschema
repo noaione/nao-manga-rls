@@ -2348,6 +2348,9 @@
                         {
                             "const": "auto",
                             "type": "string"
+                        },
+                        {
+                            "type": "null"
                         }
                     ],
                     "examples": [

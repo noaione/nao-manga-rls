@@ -339,6 +339,15 @@ Rewritten every thing as a module with `nmanga` namespace.
 ## Unversioned
 **New Features**
 - `nmanga orchestra` - Create/run a JSON file that will run multiple functions in nmanga together
+- `nmanga orchestra run-target` - Run the whole action chain on a single target directory, without having to
+  list it in the configuration `volumes`
+  - The target has to live inside the configured `base_path`, and is turned into an ephemeral volume using
+    `--volume`/`-vol` (supports omnibus ranges like `1-2`), or treated as a oneshot when no volume is given
+  - Actions that need volume metadata (`rename`, `spreads`) are refused before anything runs, since the
+    action list is shared with `orchestra run`
+  - `--dry-run` prints what every action would do without touching any file
+- Orchestrator volume `colors` - Accept `null` to mark the color pages as unknown, so color actions detect
+  them on the fly instead of treating the volume as having no color pages at all
 - `nmanga lookup imagesize` - Lookup image sizes in an archive or folder
 - Orchestrator `autolevel` action - The `v3` algorithm is now actually implemented, backed by the `nimages`
   VapourSynth plugin like `nmanga autolevel3`. It builds one clip per volume and levels the pages with the same

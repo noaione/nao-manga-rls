@@ -46,4 +46,5 @@ __all__ = (
     "ToolsKind",
     "VolumeConfig",
     "WorkerContext",
+    "build_target_volume",
 )
