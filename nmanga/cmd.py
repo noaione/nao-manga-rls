@@ -41,6 +41,7 @@ from .cli.archive import pack_releases, pack_releases_comment_archive, pack_rele
 from .cli.auto_split import auto_split
 from .cli.autolevel import analyze_level, autolevel, autolevel2, autolevel3, force_gray
 from .cli.base import NMangaCommandHandler
+from .cli.calc import calc_group
 from .cli.config import cli_config
 from .cli.debugging import simulate_progress
 from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
@@ -167,7 +168,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Analyze",
     help="Commands for analyzing and processing images",
-    commands=["analyze-peaks", "analyze-shades", "lookup", "identify-quality"],
+    commands=["analyze-peaks", "analyze-shades", "lookup", "identify-quality", "calc"],
 )
 @click.command_panel(
     name="Auto Processing",
@@ -338,6 +339,7 @@ main.add_command(rescale2)
 main.add_command(epub_group)
 main.add_command(pdf_group)
 main.add_command(imops_group)
+main.add_command(calc_group)
 main.add_command(show_version)
 main.add_command(install_completion)
 main.add_command(simulate_progress)
