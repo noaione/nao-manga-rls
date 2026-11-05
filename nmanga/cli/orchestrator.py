@@ -52,7 +52,7 @@ console = term.get_console()
 
 
 def _detect_required_tools(
-    actions: "Sequence[BaseAction]",
+    actions: "Sequence[Actions]",
     *,
     magick_path: str,
     pingo_path: str,
@@ -71,7 +71,7 @@ def _detect_required_tools(
     tested_vs_pkg: set[str] = set()
     console.info("Detecting needed tools...")
     for action in actions:
-        action_name = getattr(action, "kind", "unknown")
+        action_name = action.kind.name
         needed_tools = action.get_tools()
         for tool_name, tool_kind in needed_tools.items():
             match tool_kind:

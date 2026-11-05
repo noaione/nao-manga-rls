@@ -394,6 +394,9 @@ def build_target_volume(
         oneshot = True
 
     return VolumeConfig(
+        title=None,
+        quality="auto",
+        pub_type="digital",
         path=path,
         number=number,
         oneshot=oneshot,
@@ -404,6 +407,7 @@ def build_target_volume(
         spreads=[],
         meta_naming=[],
         colors=None,
+        metafields=None,
     )
 
 
