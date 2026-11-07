@@ -1,5 +1,5 @@
 """
-Tests for the JaNai style tensor tiler in :mod:`nmanga.ml.tiling`.
+Tests for the JaNai style tensor tiler in :mod:`nmanga.ml.torch_backend`.
 
 Everything here runs on CPU with a fake runner, so no checkpoint, no CUDA device and none of the
 legacy ONNX overlap tiling is involved. The reference for these expectations is the validated
@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from nmanga.ml.contracts import TilingConfig
-from nmanga.ml.tiling import infer_tensor
+from nmanga.ml.torch_backend import infer_tensor
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -178,7 +178,7 @@ def test_tiling_config_rejects_invalid_grids(kwargs: dict[str, int]):
 def test_importing_the_tiler_does_not_import_torch():
     script = "\n".join([
         "import sys",
-        "import nmanga.ml.tiling",
+        "import nmanga.ml.torch_backend",
         "import nmanga.ml.images",
         "print('torch' in sys.modules)",
     ])

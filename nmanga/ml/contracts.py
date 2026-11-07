@@ -23,9 +23,6 @@ SOFTWARE.
 """
 
 # Runtime contracts shared by the ONNX and PyTorch backends.
-#
-# Nothing in here may import torch, ONNX Runtime or an optional dependency: the contracts
-# are plain data and are imported by the CLI as well as by the heavy backends.
 
 from __future__ import annotations
 

@@ -22,17 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# ONNX Runtime initialization: DLL preloading, telemetry and execution provider registration.
-#
-# This module owns the one and only ORT module instance and initialization state. Every loader
-# entry point (`nmanga.ml.ort`, the `nmanga.lazy` compatibility facade) has to go through
-# :func:`get_onnxruntime`, otherwise a process ends up registering plugin execution providers
-# twice or building a session against a runtime that never got its DLLs preloaded.
-#
-# Importing this module must not import ONNX Runtime, TensorRT, Windows ML or a provider DLL:
-# the runtime is imported inside :func:`get_onnxruntime`, and WinML discovery is imported from
-# :mod:`nmanga.ml.winml` inside that same initialization path. It must not call the compatibility
-# loader in `nmanga.lazy` either.
+# ONNX Runtime initialization: DLL preload, telemetry and provider registration.
 
 from __future__ import annotations
 

@@ -23,9 +23,6 @@ SOFTWARE.
 """
 
 # ONNX graph fingerprints and the compilation cache key.
-#
-# The cache identity and the cache-directory layout are part of the on-disk contract: an engine
-# compiled before this module existed has to be found again afterwards.
 
 from __future__ import annotations
 

@@ -23,14 +23,9 @@ SOFTWARE.
 """
 
 # PyTorch model tooling: run a checkpoint model directly, or export one to ONNX.
-#
-# `torch infer` loads the model through `resselt`, which detects the architecture and
-# constructs it, so it needs neither an ONNX Runtime session nor a TensorRT engine.
-# See docs/torch-infer-implementation-plan.md for the validated recipes and their limits.
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import time
 from pathlib import Path
@@ -48,7 +43,7 @@ from .base import NMangaCommandHandler
 
 if TYPE_CHECKING:
     from ..ml.contracts import TorchPreset
-    from ..ml.torch_backend import TorchRuntime
+    from ..ml.torch_session import TorchRuntime
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
 Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
@@ -219,7 +214,7 @@ def infer(
     # The heavy runtime is imported here so `nmanga --help`, `torch infer --help` and every
     # unrelated command keep working on an installation without torch or resselt.
     try:
-        from ..ml.torch_backend import create_runtime, resolve_device
+        from ..ml.torch_session import create_runtime, resolve_device
     except ImportError as exc:
         raise click.ClickException(
             "PyTorch is not installed. Install the `denoiser` extra to use this command."
@@ -274,7 +269,7 @@ def infer(
     console.info(f"Model loaded and warmed up in {load_elapsed}.")
 
     from ..ml.images import image_to_tensor, tensor_to_image
-    from ..ml.tiling import infer_tensor
+    from ..ml.torch_backend import infer_tensor
 
     info = runtime.info
     try:
@@ -405,14 +400,6 @@ def to_onnx(
 
     if importlib.util.find_spec("safetensors") is None:
         raise click.ClickException("safetensors is not installed. Please install it to use this command.")
-
-    # Monkeypatch typing.Self for resselt
-    if not hasattr(importlib.import_module("typing"), "Self"):
-        import typing
-
-        from typing_extensions import Self as TypingSelf
-
-        typing.Self = TypingSelf  # type: ignore
 
     try:
         from resselt import load_from_file  # pyright: ignore[reportMissingImports]

@@ -13,7 +13,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from nmanga.ml.contracts import ModelInfo, TilingConfig, TorchRuntimeConfig  # ruff: ignore[module-import-not-at-top-of-file] - after importorskip
-from nmanga.ml.torch_backend import (  # ruff: ignore[module-import-not-at-top-of-file]
+from nmanga.ml.torch_session import (  # ruff: ignore[module-import-not-at-top-of-file]
     TorchRuntime,
     configure_torch_runtime,
     create_runtime,
@@ -32,7 +32,7 @@ TINY_INFO = ModelInfo(architecture="TEST", scale=2, in_channels=3, out_channels=
 
 
 def test_importing_the_module_stays_lightweight():
-    script = "import sys, nmanga.ml.torch_backend; print('torch' in sys.modules, 'resselt' in sys.modules)"
+    script = "import sys, nmanga.ml.torch_session; print('torch' in sys.modules, 'resselt' in sys.modules)"
     result = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,

@@ -22,12 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Machine learning implementation home: ONNX Runtime, its caches and exporters, the
-# Windows ML provider discovery and the PyTorch inference backend.
-#
-# This package initializer is deliberately empty of runtime work: importing `nmanga.ml`
-# (or any compatibility facade) must never pull in torch, ONNX Runtime, TensorRT, the
-# Windows ML package or a provider DLL. Everything is imported by the module that needs it.
+# Machine learning implementation home.
 
 from __future__ import annotations
 
