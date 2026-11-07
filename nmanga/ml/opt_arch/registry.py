@@ -26,6 +26,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from importlib import import_module
 from typing import TYPE_CHECKING
 
 from ..contracts import ModelInfo
@@ -35,10 +36,31 @@ if TYPE_CHECKING:
 
     from torch import nn
 
-__all__ = ("FAST_PRESET_ARCHITECTURES", "adapter_for", "build_fast_model", "supports_fast_preset")
+__all__ = (
+    "FAST_PRESET_ARCHITECTURES",
+    "adapter_for",
+    "build_fast_model",
+    "layout_for",
+    "supports_fast_preset",
+)
 
-FAST_PRESET_ARCHITECTURES: tuple[str, ...] = ("FDAT",)
-"""The architectures that have an adapted `fast` recipe."""
+FAST_PRESET_ARCHITECTURES: tuple[str, ...] = ("FDAT", "SPAN", "GateRV3")
+"""The architectures that have an adapted `fast` recipe, by their resselt display name."""
+
+_ADAPTER_MODULES: dict[str, str] = {
+    "FDAT": "fdat",
+    "SPAN": "span",
+    "GATERV3": "gaterv3",
+}
+"""Normalized architecture key to the adapter module that implements its recipe."""
+
+_CHANNELS_LAST_ARCHITECTURES = frozenset({"FDAT"})
+"""The architectures whose `fast` recipe was measured with the channels-last memory format."""
+
+
+def _key(architecture: str) -> str:
+    """Normalize a resselt display name into a dispatch key, so `GateRV3` and `GATERV3` agree."""
+    return architecture.strip().upper()
 
 
 def adapter_for(architecture: str) -> ModuleType | None:
@@ -55,12 +77,12 @@ def adapter_for(architecture: str) -> ModuleType | None:
     ModuleType | None
         The adapter module, or `None` when the architecture has no `fast` recipe.
     """
-    name = architecture.strip().upper()
-    if name == "FDAT":
-        from . import fdat
-
-        return fdat
-    return None
+    module_name = _ADAPTER_MODULES.get(_key(architecture))
+    if module_name is None:
+        return None
+    # The adapter modules only import torch inside their class factories and their rewrites,
+    # so importing one never pulls torch, resselt or CUDA into a process that only asks.
+    return import_module(f"{__package__}.{module_name}")
 
 
 def supports_fast_preset(info: ModelInfo) -> bool:
@@ -78,6 +100,27 @@ def supports_fast_preset(info: ModelInfo) -> bool:
         `True` when a `fast` adapter exists for the architecture.
     """
     return adapter_for(info.architecture) is not None
+
+
+def layout_for(architecture: str) -> bool:
+    """
+    Report the memory format the architecture's `fast` recipe was measured with.
+
+    Channels-last is only a measured win for FDAT, so every other architecture starts at the
+    contiguous layout until its own comparison justifies the change. The runtime still gates
+    this on the device and the preset; an explicit `TorchRuntimeConfig` override wins.
+
+    Parameters
+    ----------
+    architecture : str
+        The normalized architecture name reported by the checkpoint loader.
+
+    Returns
+    -------
+    bool
+        `True` when the adapter selects the channels-last memory format.
+    """
+    return _key(architecture) in _CHANNELS_LAST_ARCHITECTURES
 
 
 def build_fast_model(model: nn.Module, info: ModelInfo) -> nn.Module:

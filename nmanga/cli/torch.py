@@ -37,6 +37,7 @@ from PIL import Image
 from .. import file_handler, term
 from ..common import format_elapsed_time
 from ..ml.contracts import DEFAULT_TILE_OVERLAP, DEFAULT_TILE_SIZE, TilingConfig, TorchRuntimeConfig
+from ..ml.model import CHECKPOINT_SUFFIXES
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler
@@ -77,6 +78,18 @@ class DeviceParamType(click.ParamType):
 DEVICE = DeviceParamType()
 
 
+def _describe_layout(runtime: TorchRuntime) -> str:
+    """
+    Name where the resolved memory format came from, so a report can be reproduced.
+
+    :param runtime: The prepared runtime, which knows what was actually selected
+    :return: A short description of the source of the layout decision
+    """
+    if runtime.channels_last_explicit:
+        return "explicit override"
+    return f"adapter default for {runtime.info.architecture}"
+
+
 def _describe_run(config: TorchRuntimeConfig, runtime: TorchRuntime) -> list[str]:
     """
     Describe the exact settings a run uses, so a failure can be reproduced or tuned.
@@ -93,7 +106,8 @@ def _describe_run(config: TorchRuntimeConfig, runtime: TorchRuntime) -> list[str
         f"Stored checkpoint dtype: {', '.join(info.stored_dtypes) or 'unknown'}",
         f"Runtime dtype: {runtime.dtype}",
         f"Device: {runtime.device}",
-        f"Recipe: {config.preset} (channels-last: {runtime.channels_last!r})",
+        f"Recipe: {config.preset}",
+        f"Layout: {'channels-last' if runtime.channels_last else 'contiguous'} ({_describe_layout(runtime)})",
         f"Tiling: {tiling.tile_size}px tile, {tiling.tile_overlap}px overlap (stride {tiling.stride}px)",
         f"Compilation: {'enabled' if runtime.compiled else 'disabled'}",
     ]
@@ -191,9 +205,10 @@ def infer(
             param_hint="path_or_archive",
         )
 
-    if model_path.suffix.lower() != ".safetensors":
+    if model_path.suffix.lower() not in CHECKPOINT_SUFFIXES:
+        accepted = " or ".join(CHECKPOINT_SUFFIXES)
         raise click.BadParameter(
-            f"{model_path.name} is not a safetensors checkpoint. "
+            f"{model_path.name} is not a {accepted} checkpoint. "
             "`torch infer` runs checkpoint models with PyTorch, use `upscale-trt` for ONNX graphs.",
             param_hint="model_path",
         )
@@ -250,8 +265,8 @@ def infer(
     runtime_config = TorchRuntimeConfig(
         device=device,
         preset=selected_preset,
-        # The validated `fast` recipe uses channels-last on CUDA; `original` stays contiguous.
-        use_channels_last=selected_preset == "fast",
+        # The memory format is left to the architecture's adapter: channels-last is only a
+        # measured win for FDAT, and an explicit override is still available to callers.
         enable_compile=enable_compile,
         tiling=tiling,
     )

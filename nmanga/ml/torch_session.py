@@ -34,13 +34,19 @@ from typing import TYPE_CHECKING, Any
 
 from .contracts import MLDataType, ModelInfo, TorchPreset, TorchRuntimeConfig
 from .model import load_checkpoint
-from .opt_arch import build_fast_model
+from .opt_arch import build_fast_model, layout_for
 
 if TYPE_CHECKING:
     import torch
 
-__all__ = ("RUNTIME_DTYPE", "TorchRuntime", "configure_torch_runtime", "create_runtime", "resolve_device")
-
+__all__ = (
+    "RUNTIME_DTYPE",
+    "TorchRuntime",
+    "configure_torch_runtime",
+    "create_runtime",
+    "resolve_channels_last",
+    "resolve_device",
+)
 RUNTIME_DTYPE = MLDataType.FP32
 """The runtime precision: FP32 is the contract, never FP16/BF16 from a name or metadata."""
 
@@ -64,6 +70,37 @@ def configure_torch_runtime() -> None:
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cudnn.benchmark = True
+
+
+def resolve_channels_last(info: ModelInfo, *, preset: TorchPreset, device_type: str, override: bool | None) -> bool:
+    """
+    Decide the memory format for one prepared model.
+
+    Only the CUDA `fast` recipe has a measured layout: channels-last is a win for FDAT and
+    nothing is measured for the other architectures yet, so they stay contiguous. An explicit
+    `TorchRuntimeConfig.use_channels_last` override wins over the adapter's policy.
+
+    Parameters
+    ----------
+    info : ModelInfo
+        The normalized contract of the loaded checkpoint.
+    preset : TorchPreset
+        The recipe that was prepared.
+    device_type : str
+        The resolved torch device type, e.g. `cuda` or `cpu`.
+    override : bool | None
+        The caller's explicit layout choice, or `None` to follow the adapter.
+
+    Returns
+    -------
+    bool
+        `True` when the prepared model should be converted to channels-last.
+    """
+    if preset != "fast" or device_type != "cuda":
+        return False
+    if override is not None:
+        return override
+    return layout_for(info.architecture)
 
 
 def resolve_device(spec: str) -> torch.device:
@@ -189,7 +226,11 @@ class TorchRuntime:
         prepared = build_fast_model(model, info) if self.preset == "fast" else model
         prepared = prepared.eval().requires_grad_(False).to(device=resolved)
         self._model = prepared
-        self.channels_last = bool(settings.use_channels_last) and resolved.type == "cuda" and self.preset == "fast"
+        self.channels_last = resolve_channels_last(
+            info, preset=self.preset, device_type=resolved.type, override=settings.use_channels_last
+        )
+        self.channels_last_explicit = settings.use_channels_last is not None
+        """Whether the resolved layout came from an explicit setting instead of the adapter."""
         self._memory_format = torch.channels_last if self.channels_last else torch.contiguous_format
         if self.channels_last:
             self._model = self._model.to(memory_format=torch.channels_last)

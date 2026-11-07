@@ -168,8 +168,8 @@ class TorchRuntimeConfig:
     preset: TorchPreset = "fast"
     """The rewriting recipe applied to the loaded model."""
 
-    use_channels_last: bool = True
-    """Whether to use the channels-last memory format (the validated `fast` layout)."""
+    use_channels_last: bool | None = None
+    """An explicit memory-format override: `None` lets the architecture's adapter choose."""
 
     enable_compile: bool = False
     """Whether to wrap the prepared model with `torch.compile`."""

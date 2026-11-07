@@ -24,6 +24,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from .registry import FAST_PRESET_ARCHITECTURES, adapter_for, build_fast_model, supports_fast_preset
+from .registry import (
+    FAST_PRESET_ARCHITECTURES,
+    adapter_for,
+    build_fast_model,
+    layout_for,
+    supports_fast_preset,
+)
 
-__all__ = ("FAST_PRESET_ARCHITECTURES", "adapter_for", "build_fast_model", "supports_fast_preset")
+__all__ = (
+    "FAST_PRESET_ARCHITECTURES",
+    "adapter_for",
+    "build_fast_model",
+    "layout_for",
+    "supports_fast_preset",
+)

@@ -39,10 +39,13 @@ from .opt_arch import adapter_for
 if TYPE_CHECKING:
     from torch import nn
 
-__all__ = ("CHECKPOINT_SUFFIX", "LOADER_NAME", "load_checkpoint", "read_model_info")
+__all__ = ("CHECKPOINT_SUFFIX", "CHECKPOINT_SUFFIXES", "LOADER_NAME", "load_checkpoint", "read_model_info")
 
 CHECKPOINT_SUFFIX = ".safetensors"
-"""The checkpoint format `nmanga torch infer` accepts; resselt loads it natively."""
+"""The safetensors suffix, kept for callers that ask about that format specifically."""
+
+CHECKPOINT_SUFFIXES = (CHECKPOINT_SUFFIX, ".pth")
+"""Every checkpoint format `nmanga torch infer` accepts; resselt loads both natively."""
 
 LOADER_NAME = "resselt"
 """The library that detects, constructs and loads the architecture."""
@@ -73,13 +76,19 @@ def _validate_checkpoint_path(model_path: str | Path) -> Path:
         raise ValueError(f"Checkpoint not found: {path}")
     if not path.is_file():
         raise ValueError(f"Checkpoint is not a file: {path}")
-    if path.suffix.lower() != CHECKPOINT_SUFFIX:
+    if path.suffix.lower() not in CHECKPOINT_SUFFIXES:
+        accepted = " or ".join(CHECKPOINT_SUFFIXES)
         raise ValueError(
             f"Unsupported checkpoint format {path.suffix or '(none)'!r}: {path.name} is not a "
-            f"{CHECKPOINT_SUFFIX} file. PyTorch inference loads resselt checkpoints; an ONNX or "
+            f"{accepted} file. PyTorch inference loads resselt checkpoints; an ONNX or "
             f"TensorRT model needs the existing `upscale-trt` command instead."
         )
     return path
+
+
+def _is_safetensors(path: Path) -> bool:
+    """Report whether this checkpoint's header can be inspected without loading the model."""
+    return path.suffix.lower() == CHECKPOINT_SUFFIX
 
 
 def _read_header(path: Path) -> dict[str, tuple[str, tuple[int, ...]]]:
@@ -237,9 +246,10 @@ def read_model_info(model_path: str | Path) -> ModelInfo:
     """
     Describe a checkpoint without running it.
 
-    The stored dtypes, tensor names and shapes come from the safetensors header, and an
-    architecture with a header adapter is described from that header as well, so the model is not
-    constructed for it. Any other architecture is described by loading it through resselt.
+    The stored dtypes and tensor names come from the safetensors header, and an architecture
+    with a header adapter is described from that header as well, so the model is not constructed
+    for it. A `.pth` checkpoint, or any other architecture, is described by loading it through
+    resselt.
 
     Parameters
     ----------
@@ -254,9 +264,14 @@ def read_model_info(model_path: str | Path) -> ModelInfo:
     Raises
     ------
     ValueError
-        If the checkpoint is missing, is not a `.safetensors` file, or resselt cannot describe it.
+        If the checkpoint is missing, is not a supported checkpoint format, or resselt
     """
     path = _validate_checkpoint_path(model_path)
+    if not _is_safetensors(path):
+        # There is no safetensors header to read: resselt loads the checkpoint and the
+        # architecture's adapter describes the loaded model. The storage precision stays
+        # unknown instead of being read back from the promoted FP32 parameters.
+        return load_checkpoint(path)[1]
     header = _read_header(path)
     stored_dtypes = _stored_float_dtypes(header)
     checkpoint_sha256 = _sha256(path)
@@ -291,7 +306,7 @@ def load_checkpoint(model_path: str | Path) -> tuple[nn.Module, ModelInfo]:
     Parameters
     ----------
     model_path : str | Path
-        The `.safetensors` checkpoint to load.
+        The checkpoint to load, `.safetensors` or `.pth`.
 
     Returns
     -------
@@ -318,8 +333,10 @@ def load_checkpoint(model_path: str | Path) -> tuple[nn.Module, ModelInfo]:
             "`pip install nmanga[denoiser]`."
         ) from exc
 
-    header = _read_header(path)
-    stored_dtypes = _stored_float_dtypes(header)
+    header = _read_header(path) if _is_safetensors(path) else None
+    # A `.pth` archive exposes no stored-precision header through resselt, so the storage
+    # dtypes stay unknown rather than being inferred from the promoted FP32 parameters.
+    stored_dtypes = _stored_float_dtypes(header) if header is not None else ()
     checkpoint_sha256 = _sha256(path)
     loader_version = _loader_version()
     try:
