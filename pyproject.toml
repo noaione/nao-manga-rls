@@ -80,6 +80,10 @@ denoiser-intel = [
     # denoiser-nvidia. The plugin only ships x86_64 wheels.
     "onnxruntime-ep-openvino==1.8.1; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
 ]
+denoiser-wgpu = [
+    # WebGPU which use Vulkan at the backend for most of the time
+    "onnxruntime-ep-webgpu==0.5.0",
+]
 denoiser-mlx = [
     # Apple Silicon MLX plugin EP (macOS 14+) on top of denoiser-ort.
     "onnxruntime-ep-mlx==0.31.0; sys_platform == 'darwin' and platform_machine == 'arm64'",

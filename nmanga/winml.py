@@ -32,17 +32,13 @@ from pathlib import Path
 __all__ = ("get_winml_ep_libraries",)
 
 
-def win():
-    return sys.platform == "win32"
-
-
 def get_winml_ep_libraries(exclusion_list: list[str] | None = None) -> list[tuple[str, Path]]:
-    if not win():
+    if sys.platform != "win32":
         return []
 
     excluded = set(exclusion_list or [])
 
-    from windowsml import EpCatalog, EpReadyState
+    from windowsml import EpCatalog, EpReadyState  # pyright: ignore[reportMissingImports]
 
     new_sets: list[tuple[str, Path]] = []
     with EpCatalog() as catalog:

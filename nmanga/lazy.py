@@ -170,6 +170,7 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
     is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
     is_mlx_ep_available = importutil.find_spec("onnxruntime_ep_mlx")
     is_openvino_ep_available = importutil.find_spec("onnxruntime_ep_openvino")
+    is_webgpu_ep_available = importutil.find_spec("onnxruntime_ep_webgpu")
 
     if sys.platform != "darwin":
         ort.preload_dlls()
@@ -178,8 +179,9 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
     if is_trt_ep_available is not None:
         import onnxruntime_ep_nv_tensorrt_rtx as trt_rtx_ep  # type: ignore
 
-        ort.register_execution_provider_library(trt_rtx_ep.get_ep_name(), trt_rtx_ep.get_library_path())  # type: ignore
-        excluded.append(trt_rtx_ep.get_ep_name())
+        rtx_name = trt_rtx_ep.get_ep_name()
+        ort.register_execution_provider_library(rtx_name, trt_rtx_ep.get_library_path())  # type: ignore
+        excluded.append(rtx_name)
     if is_mlx_ep_available is not None:
         # MLX is an Apple Silicon plugin EP, it has to be registered before any session is built
         import onnxruntime_ep_mlx  # type: ignore
@@ -188,8 +190,15 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
     if is_openvino_ep_available is not None:
         import onnxruntime_ep_openvino as openvino_ep  # type: ignore
 
-        ort.register_execution_provider_library(openvino_ep.get_ep_name(), openvino_ep.get_library_path())  # type: ignore
-        excluded.append(openvino_ep.get_ep_name())
+        ov_name = openvino_ep.get_ep_name()
+        ort.register_execution_provider_library(ov_name, openvino_ep.get_library_path())  # type: ignore
+        excluded.append(ov_name)
+    if is_webgpu_ep_available is not None:
+        import onnxruntime_ep_webgpu as webgpu_ep  # type: ignore
+
+        wgpu_name = webgpu_ep.get_ep_name()
+        ort.register_execution_provider_library(wgpu_name, webgpu_ep.get_library_path())  # type: ignore
+        excluded.append(wgpu_name)
 
     winml_libs = get_winml_ep_libraries(excluded)
     for name, path in winml_libs:

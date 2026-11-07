@@ -820,12 +820,16 @@ def prepare_model_runtime_builders(
     # list around instead of only the last device seen per name.
     all_ep_devices = ort.get_ep_devices()
     ep_devices = {ep_device.ep_name: ep_device for ep_device in all_ep_devices}
+    config_entry = {}
     has_good_ep_devices = False
     has_nvrtx = False
     raw_providers = set(ort.get_available_providers())
+
+    # Selected providers
+    providers = []
+    ep_providers = []
+
     if sys.platform != "darwin":
-        providers = []
-        ep_providers = []
         has_nvrtx = False
         if "NvTensorRTRTXExecutionProvider" in ep_devices and with_nvrtx:
             ep_providers.append((ep_devices["NvTensorRTRTXExecutionProvider"], trtrtx_ep_config))
@@ -871,30 +875,35 @@ def prepare_model_runtime_builders(
             # options only apply to a runtime that ships the provider itself.
             providers.append(("OpenVINOExecutionProvider", {} if ov_plugin_devices else onv_ep_config))
     else:
-        ep_providers = []
-        providers = []
         if "MLXExecutionProvider" in raw_providers:
             # Apple Silicon only; unsupported nodes fall through to CoreML and then the CPU
             providers.append(("MLXExecutionProvider", {}))
-        providers.append(
-            (
-                "CoreMLExecutionProvider",
-                {
-                    "ModelFormat": "MLProgram",
-                    "MLComputeUnits": "ALL",
-                    "RequireStaticInputShapes": "1",
-                    "EnableOnSubgraphs": "1",
-                    "ModelCacheDirectory": str(cache_dir),
-                    "SpecializationStrategy": "FastPrediction",
-                },
-            ),
-        )
+            config_entry["ep.mlx.enable_compile"] = "1"
+        else:
+            providers.append(
+                (
+                    "CoreMLExecutionProvider",
+                    {
+                        "ModelFormat": "MLProgram",
+                        "MLComputeUnits": "ALL",
+                        "RequireStaticInputShapes": "1",
+                        "EnableOnSubgraphs": "1",
+                        "ModelCacheDirectory": str(cache_dir),
+                        "SpecializationStrategy": "FastPrediction",
+                    },
+                ),
+            )
 
     if not providers and not ep_providers:
-        raise RuntimeError(
-            "No suitable ONNX Runtime execution providers found. "
-            "Ensure you have compatible hardware and the necessary dependencies installed."
-        )
+        if "WebGpuExecutionProvider" not in ep_devices:
+            raise RuntimeError(
+                "No suitable ONNX Runtime execution providers found. "
+                "Ensure you have compatible hardware and the necessary dependencies installed."
+            )
+
+        # Has webgpu, add it
+        ep_providers.append((ep_devices["WebGpuExecutionProvider"], {}))
+        has_good_ep_devices = True
 
     # Resolve what a strict run has to see in the finished session. TRT-RTX answers to two names
     # depending on whether it is the built-in provider or the standalone plugin, so both count.
@@ -920,6 +929,9 @@ def prepare_model_runtime_builders(
     sess_opt = ort.SessionOptions()
     for ep_devices, ep_config in ep_providers:
         sess_opt.add_provider_for_devices([ep_devices], ep_config)
+
+    for key_c, val_c in config_entry.items():
+        sess_opt.add_session_config_entry(key_c, val_c)
 
     # Check if nvrtx exist, if yes we should recompile
     selected_model_path = model_path

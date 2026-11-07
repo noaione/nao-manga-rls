@@ -872,6 +872,9 @@ denoiser-nvidia = [
 denoiser-ort = [
     { name = "onnxruntime" },
 ]
+denoiser-wgpu = [
+    { name = "onnxruntime-ep-webgpu" },
+]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -908,6 +911,7 @@ requires-dist = [
     { name = "onnxruntime-ep-mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'denoiser-mlx'", specifier = "==0.31.0" },
     { name = "onnxruntime-ep-nv-tensorrt-rtx-cu13", marker = "(sys_platform == 'linux' and extra == 'denoiser-nvidia') or (sys_platform == 'win32' and extra == 'denoiser-nvidia')", specifier = "==0.5.0" },
     { name = "onnxruntime-ep-openvino", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'denoiser-intel') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'denoiser-intel')", specifier = "==1.8.1" },
+    { name = "onnxruntime-ep-webgpu", marker = "extra == 'denoiser-wgpu'", specifier = "==0.5.0" },
     { name = "onnxruntime-gpu", marker = "(sys_platform == 'linux' and extra == 'denoiser-nvidia') or (sys_platform == 'win32' and extra == 'denoiser-nvidia')", specifier = "==1.31.1" },
     { name = "onnxscript", marker = "extra == 'denoiser'", specifier = ">=0.7.2" },
     { name = "pikepdf", specifier = "==10.17.0" },
@@ -936,7 +940,7 @@ requires-dist = [
     { name = "wand", specifier = "==0.7.2" },
     { name = "windowsml", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = "==2.5.96" },
 ]
-provides-extras = ["dev", "gui", "denoiser", "denoiser-ort", "denoiser-nvidia", "denoiser-intel", "denoiser-mlx", "vapoursynth", "epub-render"]
+provides-extras = ["dev", "gui", "denoiser", "denoiser-ort", "denoiser-nvidia", "denoiser-intel", "denoiser-wgpu", "denoiser-mlx", "vapoursynth", "epub-render"]
 
 [[package]]
 name = "numpy"
@@ -1232,6 +1236,18 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/01/4e72a8a65b584f01d6e59eb453bae397b82b2e51df1b5c94efa05e17800b/onnxruntime_ep_openvino-1.8.1-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:3832643158c8c187fcab6db661cde2a8c06a2b3559d95d0f2411ac0e51c5e924", size = 52587628, upload-time = "2026-10-26T05:00:42.704Z" },
     { url = "https://files.pythonhosted.org/packages/75/98/224ead07344390258ae0515ed285ba2951e9c1405f4507443a03bb7dd5c7/onnxruntime_ep_openvino-1.8.1-py3-none-win_amd64.whl", hash = "sha256:1acd878be173b02bb8b953460f2f59b121e5f6e47ebc6aad490c0590cf6718fb", size = 75824318, upload-time = "2026-10-26T05:00:51.017Z" },
+]
+
+[[package]]
+name = "onnxruntime-ep-webgpu"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/c3/e047d38981e7d6f198f92b488e2c9cd12e45c73017ec851996ea69778922/onnxruntime_ep_webgpu-0.5.0-py3-none-macosx_14_0_universal2.whl", hash = "sha256:c9a757c7afaf114fde86993420810ff616e2d3046d42ae419bb0c8b9ebcf57fb", size = 4864395, upload-time = "2026-10-29T21:04:37.083Z" },
+    { url = "https://files.pythonhosted.org/packages/93/ca/71f305dc822d62ef33d7f3862ba7058a0099086112d9ab679d8252e7b77d/onnxruntime_ep_webgpu-0.5.0-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:d39e0769f8b2ff7a4b04a492ef882510474d52cf722408d393569b36558b2829", size = 6107612, upload-time = "2026-10-29T21:04:39.355Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/1d/ac0ccbe8bd6435b6e1946fea964790ffa3d73ee2513775e90958fd6b860e/onnxruntime_ep_webgpu-0.5.0-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:b6baa3e223d9a679023388b1179e5597b6bc0d282ba72f2afe38d46ef37deeb4", size = 6935993, upload-time = "2026-10-29T21:04:41.954Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/36/9935a5b7851099da3da81d9e04f3021bcc61a5a1039e6c098cf08e5c6607/onnxruntime_ep_webgpu-0.5.0-py3-none-win_amd64.whl", hash = "sha256:713b94e7b4ce5979a356e19b926ecba2c0d4ba24f857ef4bbb11c75c37cc5b61", size = 13608886, upload-time = "2026-10-29T21:04:44.466Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/f2/f62eb9fde3b790507da4e1c4a3f366ea8e69b3b424fe70e97c898dd8f9c2/onnxruntime_ep_webgpu-0.5.0-py3-none-win_arm64.whl", hash = "sha256:928b3849a52403b5ccee3264a721a104c0fa3ebebb1e725d486e9dc6611f848e", size = 14582521, upload-time = "2026-10-29T21:04:47.498Z" },
 ]
 
 [[package]]
