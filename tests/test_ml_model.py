@@ -22,6 +22,9 @@ FDAT_M = MODELS_DIR / "2x_IllustrationJaNai_V3detail_FDAT_M_unshuffle_40k_fp16.s
 FDAT_XL = MODELS_DIR / "4x_IllustrationJaNai_V3detail_FDAT_XL_27k_bf16.safetensors"
 FDAT_M_4X = MODELS_DIR / "4x_IllustrationJaNai_V3detail_FDAT_M_40k_fp16.safetensors"
 SPAN_S = MODELS_DIR / "2x_IllustrationJaNai_V3detail_SPAN_S_40k_fp16.safetensors"
+GATERV3_PTH = MODELS_DIR / "1x_umzi_digital_decompress_gaterv3_1.pth"
+requires_span = pytest.mark.skipif(not SPAN_S.is_file(), reason=f"missing test checkpoint {SPAN_S.name}")
+requires_gaterv3 = pytest.mark.skipif(not GATERV3_PTH.is_file(), reason=f"missing test checkpoint {GATERV3_PTH.name}")
 
 requires_m = pytest.mark.skipif(not FDAT_M.is_file(), reason=f"missing test checkpoint {FDAT_M.name}")
 requires_xl = pytest.mark.skipif(not FDAT_XL.is_file(), reason=f"missing test checkpoint {FDAT_XL.name}")
@@ -168,7 +171,7 @@ def _metadata_model(**overrides: object) -> torch.nn.Module:
         in_channels=overrides.get("in_channels", 3),
         out_channels=overrides.get("out_channels", 3),
         upscale=overrides.get("upscale", 2),
-        name=overrides.get("name", "SPAN"),
+        name=overrides.get("name", "HAT"),
     )
     return module
 
@@ -178,7 +181,7 @@ def test_normalize_accepts_an_isotropic_scale_sequence():
 
     assert info.scale == 2
     assert info.unshuffle == 1
-    assert info.architecture == "SPAN"
+    assert info.architecture == "HAT"
 
 
 def test_normalize_rejects_an_anisotropic_scale():
@@ -222,10 +225,73 @@ def test_fdat_structure_mismatch_is_reported():
         model_module._normalize_metadata(model, path=FDAT_M)
 
 
-@pytest.mark.skipif(not SPAN_S.is_file(), reason=f"missing test checkpoint {SPAN_S.name}")
+@requires_span
 def test_a_non_fdat_architecture_is_still_described():
     info = read_model_info(SPAN_S)
 
     assert info.architecture == "SPAN"
     assert info.scale == 2
     assert info.unshuffle == 1
+
+
+@requires_gaterv3
+def test_a_pth_checkpoint_is_loaded_through_resselt():
+    model, info = load_checkpoint(GATERV3_PTH)
+
+    assert type(model).__name__ == "GateRV3"
+    assert info.architecture == "GateRV3"
+    assert info.scale == 1
+    # GateRV3 downscales and re-upsamples internally; the external contract is still 1:1.
+    assert info.unshuffle == 1
+    assert (info.in_channels, info.out_channels) == (3, 3)
+    assert info.checkpoint_sha256 is not None and len(info.checkpoint_sha256) == 64
+    assert model.training is False
+    assert all(parameter.requires_grad is False for parameter in model.parameters())
+    assert {str(parameter.dtype) for parameter in model.parameters()} == {"torch.float32"}
+
+
+@requires_gaterv3
+def test_a_pth_checkpoint_reports_an_unknown_storage_dtype():
+    """A `.pth` archive has no safetensors header, so the stored precision stays unknown
+    rather than being read back from the FP32 parameters the loader promoted."""
+    assert read_model_info(GATERV3_PTH).stored_dtypes == ()
+
+
+@requires_gaterv3
+def test_read_model_info_matches_the_loaded_pth():
+    assert read_model_info(GATERV3_PTH) == load_checkpoint(GATERV3_PTH)[1]
+
+
+@requires_gaterv3
+def test_an_unsupported_pth_format_is_still_rejected(tmp_path: Path):
+    false_pth = tmp_path / "model.ckpt"
+    false_pth.write_bytes(b"\x00")
+
+    with pytest.raises(ValueError, match="Unsupported checkpoint format"):
+        read_model_info(false_pth)
+    with pytest.raises(ValueError, match="Unsupported checkpoint format"):
+        load_checkpoint(false_pth)
+
+
+@requires_span
+def test_the_span_adapter_hooks_are_reachable_through_the_loader():
+    from nmanga.ml.opt_arch import adapter_for
+
+    info = read_model_info(SPAN_S)
+    adapter = adapter_for(info.architecture)
+
+    assert adapter is not None
+    for hook in ("build_fast_model", "unshuffle_of", "cross_check", "info_from_header"):
+        assert callable(getattr(adapter, hook)), hook
+
+
+@requires_gaterv3
+def test_the_gaterv3_adapter_hooks_are_reachable_through_the_loader():
+    from nmanga.ml.opt_arch import adapter_for
+
+    info = read_model_info(GATERV3_PTH)
+    adapter = adapter_for(info.architecture)
+
+    assert adapter is not None
+    for hook in ("build_fast_model", "unshuffle_of", "cross_check", "info_from_header"):
+        assert callable(getattr(adapter, hook)), hook

@@ -14,7 +14,8 @@ torch = pytest.importorskip("torch")
 
 from nmanga.ml.contracts import ModelInfo  # ruff: ignore[module-import-not-at-top-of-file] - after importorskip
 from nmanga.ml.model import load_checkpoint  # ruff: ignore[module-import-not-at-top-of-file]
-from nmanga.ml.opt_arch import build_fast_model, supports_fast_preset  # ruff: ignore[module-import-not-at-top-of-file]
+from nmanga.ml.opt_arch import adapter_for, build_fast_model, supports_fast_preset  # ruff: ignore[module-import-not-at-top-of-file]
+from nmanga.ml.opt_arch import span as span_adapter  # ruff: ignore[module-import-not-at-top-of-file]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = Path(os.environ.get("NMANGA_TEST_MODELS", REPO_ROOT.parent / "umzi-bench" / "models"))
@@ -44,14 +45,15 @@ def test_importing_the_module_stays_lightweight():
     assert result.stdout.strip() == "False False"
 
 
-def test_only_fdat_has_a_fast_preset():
-    assert supports_fast_preset(ModelInfo(architecture="FDAT", scale=2, in_channels=3, out_channels=3))
-    assert not supports_fast_preset(ModelInfo(architecture="SPAN", scale=4, in_channels=3, out_channels=3))
-    assert not supports_fast_preset(ModelInfo(architecture="HAT", scale=4, in_channels=3, out_channels=3))
+def test_the_registry_knows_which_architectures_have_a_recipe():
+    for architecture in ("FDAT", "SPAN", "GateRV3", "GATERV3"):
+        assert supports_fast_preset(ModelInfo(architecture=architecture, scale=2, in_channels=3, out_channels=3))
+    for architecture in ("HAT", "SPANPlus", "GFISR", "DAT2"):
+        assert not supports_fast_preset(ModelInfo(architecture=architecture, scale=4, in_channels=3, out_channels=3))
 
 
 def test_an_unsupported_architecture_is_rejected_with_a_hint():
-    info = ModelInfo(architecture="SPAN", scale=4, in_channels=3, out_channels=3)
+    info = ModelInfo(architecture="HAT", scale=4, in_channels=3, out_channels=3)
 
     with pytest.raises(ValueError, match="--preset original"):
         build_fast_model(torch.nn.Identity(), info)
@@ -202,15 +204,17 @@ def test_the_xl_checkpoint_is_rewritten_the_same_way():
 
 
 @pytest.mark.skipif(not SPAN_S.is_file(), reason=f"missing test checkpoint {SPAN_S.name}")
-def test_another_architecture_receives_no_fdat_rewrites():
+def test_span_gets_its_own_adapter_and_no_fdat_rewrites():
     model, info = load_checkpoint(SPAN_S)
-    assert not supports_fast_preset(info)
-    before = sorted(type(module).__name__ for module in model.modules())
+    assert supports_fast_preset(info)
+    assert adapter_for(info.architecture) is span_adapter
 
-    with pytest.raises(ValueError, match="--preset original"):
-        build_fast_model(model, info)
+    fast = build_fast_model(model, info)
 
-    # The rejected build touched nothing: same module-type multiset, no lean rewrite injected.
-    assert sorted(type(module).__name__ for module in model.modules()) == before
-    replaced = {"InplaceGELU", "LeanSpatialAttention", "LeanFFN", "LeanDATBlock"}
-    assert not any(type(module).__name__ in replaced for module in model.modules())
+    # SPAN has its own recipe: the FDAT rewrites must not leak into it.
+    fdat_rewrites = {"InplaceGELU", "LeanSpatialAttention", "LeanFFN", "LeanDATBlock"}
+    assert not any(type(module).__name__ in fdat_rewrites for module in fast.modules())
+    assert any(type(module).__name__ == "LeanSPAB" for module in fast.modules())
+    # The source model is independent of the candidate.
+    assert any(type(module).__name__ == "SPAB" for module in model.modules())
+    assert not any(type(module).__name__ == "LeanSPAB" for module in model.modules())

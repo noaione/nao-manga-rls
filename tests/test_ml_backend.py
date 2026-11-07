@@ -17,6 +17,7 @@ from nmanga.ml.torch_session import (  # ruff: ignore[module-import-not-at-top-o
     TorchRuntime,
     configure_torch_runtime,
     create_runtime,
+    resolve_channels_last,
     resolve_device,
 )
 
@@ -24,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = Path(os.environ.get("NMANGA_TEST_MODELS", REPO_ROOT.parent / "umzi-bench" / "models"))
 FDAT_M = MODELS_DIR / "2x_IllustrationJaNai_V3detail_FDAT_M_unshuffle_40k_fp16.safetensors"
 SPAN_S = MODELS_DIR / "2x_IllustrationJaNai_V3detail_SPAN_S_40k_fp16.safetensors"
+HAT_L = MODELS_DIR / "4x_IllustrationJaNai_V3detail_HAT_L_28k_bf16.safetensors"
 
 requires_m = pytest.mark.skipif(not FDAT_M.is_file(), reason=f"missing test checkpoint {FDAT_M.name}")
 requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA device")
@@ -261,10 +263,10 @@ def test_create_runtime_runs_the_original_preset_to_end():
         runtime.close()
 
 
-@pytest.mark.skipif(not SPAN_S.is_file(), reason=f"missing test checkpoint {SPAN_S.name}")
-def test_create_runtime_rejects_the_fast_preset_for_another_architecture():
+@pytest.mark.skipif(not HAT_L.is_file(), reason=f"missing test checkpoint {HAT_L.name}")
+def test_create_runtime_rejects_the_fast_preset_for_an_architecture_without_a_recipe():
     with pytest.raises(ValueError, match="--preset original"):
-        create_runtime(SPAN_S, TorchRuntimeConfig(device="cpu", preset="fast"))
+        create_runtime(HAT_L, TorchRuntimeConfig(device="cpu", preset="fast"))
 
 
 @requires_m
@@ -342,3 +344,73 @@ def test_the_compiled_runtime_matches_the_eager_one():
 
     assert optimized.shape == reference.shape
     assert _psnr(reference, optimized) > 90.0
+
+
+# --------------------------------------------------------------------------------------
+# Layout policy
+# --------------------------------------------------------------------------------------
+
+
+def _arch(name: str) -> ModelInfo:
+    return ModelInfo(architecture=name, scale=2, in_channels=3, out_channels=3)
+
+
+def test_only_fdat_selects_channels_last_by_default():
+    """Channels-last is a measured win for FDAT and unmeasured for everything else, so the
+    other architectures stay contiguous until their own comparison justifies the change."""
+    assert resolve_channels_last(_arch("FDAT"), preset="fast", device_type="cuda", override=None) is True
+    for architecture in ("SPAN", "GateRV3", "HAT"):
+        assert resolve_channels_last(_arch(architecture), preset="fast", device_type="cuda", override=None) is False
+
+
+def test_an_explicit_override_wins_over_the_adapter_policy():
+    assert resolve_channels_last(_arch("SPAN"), preset="fast", device_type="cuda", override=True) is True
+    assert resolve_channels_last(_arch("FDAT"), preset="fast", device_type="cuda", override=False) is False
+
+
+def test_the_untouched_recipe_never_uses_channels_last():
+    for architecture in ("FDAT", "SPAN", "GateRV3"):
+        info = _arch(architecture)
+        assert resolve_channels_last(info, preset="original", device_type="cuda", override=False) is False
+        # An explicit override cannot turn on a layout the untouched model was not measured with.
+        assert resolve_channels_last(info, preset="original", device_type="cuda", override=True) is False
+
+
+def test_a_cpu_runtime_never_uses_channels_last():
+    assert resolve_channels_last(_arch("FDAT"), preset="fast", device_type="cpu", override=True) is False
+
+
+def test_the_runtime_reports_where_its_layout_came_from():
+    automatic = _tiny_runtime()
+    assert automatic.channels_last_explicit is False
+
+    overridden = _tiny_runtime(use_channels_last=False)
+    assert overridden.channels_last_explicit is True
+    assert overridden.channels_last is False
+    overridden.close()
+    automatic.close()
+
+
+@pytest.mark.skipif(not SPAN_S.is_file(), reason=f"missing test checkpoint {SPAN_S.name}")
+def test_create_runtime_runs_the_span_fast_preset_to_end():
+    runtime = create_runtime(
+        SPAN_S,
+        TorchRuntimeConfig(device="cpu", preset="fast", tiling=TilingConfig(tile_size=32, tile_overlap=0)),
+    )
+    try:
+        assert runtime.info.architecture == "SPAN"
+        assert runtime.preset == "fast"
+        # SPAN is not FDAT: the adapter's layout policy is contiguous even on CUDA.
+        assert runtime.channels_last is False
+        sample = torch.rand(1, 3, 32, 32, generator=torch.Generator().manual_seed(11))
+        before = {name: tensor.clone() for name, tensor in runtime._model.state_dict().items()}
+        result = runtime.predict(sample)
+        assert result.shape == (1, 3, 64, 64)
+        assert result.device.type == "cpu"
+        assert torch.isfinite(result).all()
+        # Repeated predictions are deterministic and never move a weight.
+        assert torch.equal(result, runtime.predict(sample))
+        for name, tensor in runtime._model.state_dict().items():
+            assert torch.equal(before[name], tensor), name
+    finally:
+        runtime.close()
