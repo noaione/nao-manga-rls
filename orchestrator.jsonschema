@@ -427,6 +427,29 @@
                     "default": null,
                     "title": "The data type to use for TensorRT model"
                 },
+                "workspace_size": {
+                    "anyOf": [
+                        {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "TensorRT Workspace Size"
+                },
+                "enable_cuda_graph": {
+                    "default": true,
+                    "title": "Enable CUDA Graph Replay",
+                    "type": "boolean"
+                },
+                "strict_ep": {
+                    "default": false,
+                    "title": "Fail if the execution provider is unavailable",
+                    "type": "boolean"
+                },
                 "base_path": {
                     "default": "denoised",
                     "title": "Output Base Path",
@@ -1528,6 +1551,29 @@
                     "default": null,
                     "title": "The data type to use for TensorRT model"
                 },
+                "workspace_size": {
+                    "anyOf": [
+                        {
+                            "minimum": 1,
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "TensorRT Workspace Size"
+                },
+                "enable_cuda_graph": {
+                    "default": true,
+                    "title": "Enable CUDA Graph Replay",
+                    "type": "boolean"
+                },
+                "strict_ep": {
+                    "default": false,
+                    "title": "Fail if the execution provider is unavailable",
+                    "type": "boolean"
+                },
                 "base_path": {
                     "default": "upscaled",
                     "title": "Output Base Path",
@@ -1888,6 +1934,7 @@
             "type": "string"
         },
         "QualityMapping": {
+            "additionalProperties": false,
             "description": "The mapping for image quality based on resolution thresholds, we use height in pixels.",
             "properties": {
                 "LQ": {

@@ -34,7 +34,7 @@ import sys
 import time
 import warnings
 from enum import Enum
-from hashlib import md5
+from hashlib import md5, sha256
 from importlib import metadata
 from importlib import util as importutil
 from pathlib import Path
@@ -58,11 +58,17 @@ if TYPE_CHECKING:
 
 __all__ = (
     "MLDataType",
+    "build_compilation_cache_key",
     "denoise_single_image",
     "denoise_single_image_with_overlap",
+    "get_model_fingerprint",
+    "get_model_information",
+    "get_model_static_input",
+    "get_tf32_tag",
     "hook_onnx_extensions",
     "prepare_model_runtime",
     "prepare_model_runtime_builders",
+    "resolve_model_static_shapes",
 )
 
 logger = logging.getLogger(__name__)
@@ -163,7 +169,9 @@ def hook_onnx_extensions():
     _preload_custom_extensions()
 
 
-def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: int | None = None) -> tuple[int, bool]:
+def get_model_scale_factor(
+    session: "InferenceSessionWithScale", *, tile_size: int | None = None, batch_size: int | None = None
+) -> tuple[int, bool]:
     import numpy as np
 
     if scale_factor := getattr(session, "scale_factor", None):
@@ -185,8 +193,13 @@ def get_model_scale_factor(session: "InferenceSessionWithScale", *, tile_size: i
         real_tile_size = 64  # Fallback tile size
 
     # Most model would have shape like (batch_size, channels, height, width)
-    batch_size = inp.shape[0] if isinstance(inp.shape[0], int) else 1
-    shapes = [batch_size, inp.shape[1], real_tile_size, real_tile_size]
+    # A symbolic output forces this probe to actually run inference, so it has to use the batch
+    # the session will later be captured with: a TRT-RTX CUDA graph is replayed with the shapes of
+    # the first run, and a probe at batch 1 would capture a graph that cannot serve a bigger batch.
+    probe_batch_size = batch_size if batch_size is not None else inp.shape[0]
+    if not isinstance(probe_batch_size, int):
+        probe_batch_size = 1
+    shapes = [probe_batch_size, inp.shape[1], real_tile_size, real_tile_size]
 
     x = np.zeros(shapes, dtype=np.float16 if is_float16 else np.float32)
     input_name = inp.name
@@ -251,6 +264,50 @@ def resolve_model_input_sizes(model: "InferenceSessionWithScale", *, batch_size:
             f"Re-run with the tile size set to {fixed_tile_size}."
         )
     return batch_size
+
+
+def resolve_model_static_shapes(
+    input_shape: tuple[int | None, ...] | list[int | None] | None,
+    *,
+    batch_size: int,
+    tile_size: int | None,
+) -> tuple[int, int | None]:
+    """Clamp the requested optimization profile to the dimensions the graph declares as static.
+
+    The TensorRT optimization profiles are configured *before* any session exists, so they cannot
+    rely on :func:`resolve_model_input_sizes`, which only runs once an image is already being
+    processed. Building profiles that contradict a fixed-shape graph yields an engine that fails at
+    the first inference instead of a clear error here.
+
+    :param input_shape: The declared input dimensions, `None` for a dynamic axis, or `None` when unknown
+    :param batch_size: The requested batch size
+    :param tile_size: The requested tile size, or `None` when it should stay dynamic
+    :return: The batch size and tile size to build the profiles with
+    :raises ValueError: If the graph declares a fixed tile size different from `tile_size`
+    """
+
+    if not input_shape or len(input_shape) < 4:
+        return batch_size, tile_size
+
+    fixed_batch_size = input_shape[0]
+    if fixed_batch_size is not None and 0 < fixed_batch_size < batch_size:
+        get_console().warning(
+            f"Model declares a fixed batch size of {fixed_batch_size}; "
+            f"building the optimization profiles for it instead of the requested {batch_size}."
+        )
+        batch_size = fixed_batch_size
+
+    if tile_size is None:
+        return batch_size, tile_size
+
+    fixed_spatial_dims = [dim for dim in input_shape[-2:] if dim is not None and dim > 0]
+    if fixed_spatial_dims and any(dim != tile_size for dim in fixed_spatial_dims):
+        fixed_tile_size = "x".join(str(dim) for dim in fixed_spatial_dims)
+        raise ValueError(
+            f"The model only accepts a fixed tile size of {fixed_tile_size}, but {tile_size} was requested. "
+            f"Re-run with the tile size set to {fixed_tile_size}."
+        )
+    return batch_size, tile_size
 
 
 def prepare_model_runtime(
@@ -324,7 +381,7 @@ def get_model_information(model_path: Path) -> tuple[str, int]:
         )
         return "input", 3  # Default input name and channel count
 
-    model = onnx.load_model(str(model_path))
+    model = onnx.load_model(str(model_path), load_external_data=False)
     # input channel count
     if len(model.graph.input) != 1:
         raise ValueError("Model has multiple inputs, cannot determine input name.")
@@ -332,11 +389,208 @@ def get_model_information(model_path: Path) -> tuple[str, int]:
     return model.graph.input[0].name, model_channel_count
 
 
+def get_model_static_input(model_path: Path) -> tuple[str, tuple[int | None, ...]] | None:
+    """
+    Read the input name and the declared size of every input dimension of an ONNX graph.
+
+    Only the graph metadata is parsed (`load_external_data=False`), so this is safe for
+    graphs whose weights live in a sidecar file. A dimension is reported as `None` when the
+    graph declares it as dynamic/symbolic.
+
+    :param model_path: The ONNX model file
+    :return: The input name with its dimensions, or `None` when it cannot be determined
+    """
+
+    try:
+        import onnx  # pyright: ignore[reportMissingImports]
+    except ImportError:
+        return None
+
+    try:
+        model = onnx.load_model(str(model_path), load_external_data=False)
+    except Exception:
+        # A model that cannot be parsed will fail later with a better error, but the caller
+        # (profile configuration, cache keys) must not die while only reading metadata.
+        return None
+
+    if len(model.graph.input) != 1:
+        return None
+
+    graph_input = model.graph.input[0]
+    dimensions = tuple(
+        dimension.dim_value if dimension.dim_value > 0 else None for dimension in graph_input.type.tensor_type.shape.dim
+    )
+    return graph_input.name, dimensions
+
+
+# (resolved path, size, mtime_ns): changes whenever the file is replaced or rewritten
+_FileStat = tuple[str, int, int]
+
+_HASH_CHUNK_SIZE = 1024 * 1024
+_external_data_cache: dict[_FileStat, tuple[Path, ...]] = {}
+_model_fingerprint_cache: dict[tuple[_FileStat, tuple[_FileStat, ...]], str] = {}
+
+
+def _hash_file(path: Path) -> str:
+    """
+    Stream a file through SHA-256.
+
+    :param path: The file to hash
+    :return: The lowercase hexadecimal digest
+    """
+
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_HASH_CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _get_external_data_files(model_path: Path) -> tuple[Path, ...]:
+    """
+    List the sidecar files that hold a model's external tensor data.
+
+    A graph exported with external data keeps only metadata in the `.onnx` file, so hashing
+    the main file alone would not notice changed weights.
+
+    :param model_path: The ONNX model file
+    :return: The existing external data files, sorted
+    """
+
+    stat = model_path.stat()
+    cache_key = (str(model_path.resolve()), stat.st_size, stat.st_mtime_ns)
+    cached = _external_data_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    locations: set[Path] = set()
+    try:
+        import onnx  # pyright: ignore[reportMissingImports]
+    except ImportError:
+        onnx = None  # type: ignore[assignment]
+
+    if onnx is not None:
+        try:
+            model = onnx.load_model(str(model_path), load_external_data=False)
+        except Exception:
+            model = None
+
+        if model is not None:
+            for initializer in model.graph.initializer:
+                if initializer.data_location != onnx.TensorProto.EXTERNAL:
+                    continue
+                for entry in initializer.external_data:
+                    if entry.key == "location" and entry.value:
+                        locations.add((model_path.parent / entry.value))
+
+    external_files = tuple(sorted(path for path in locations if path.is_file()))
+    _external_data_cache[cache_key] = external_files
+    return external_files
+
+
+def get_model_fingerprint(model_path: Path) -> str:
+    """
+    Fingerprint everything that makes an ONNX graph the graph it is.
+
+    This covers the bytes of the model file plus the bytes of any external tensor data, so
+    replacing the weights behind an unchanged pathname produces a different fingerprint.
+    Results are memoized on the file stats, so repeated calls stay cheap.
+
+    :param model_path: The ONNX model file
+    :return: The lowercase hexadecimal SHA-256 digest of the graph contents
+    """
+
+    model_path = Path(model_path)
+    stat = model_path.stat()
+    external_files = _get_external_data_files(model_path)
+    external_stats = tuple((str(path), path.stat().st_size, path.stat().st_mtime_ns) for path in external_files)
+    cache_key = ((str(model_path.resolve()), stat.st_size, stat.st_mtime_ns), external_stats)
+    cached = _model_fingerprint_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    digest = sha256()
+    digest.update(_hash_file(model_path).encode("ascii"))
+    for external_file in external_files:
+        digest.update(external_file.name.encode("utf-8"))
+        digest.update(_hash_file(external_file).encode("ascii"))
+
+    fingerprint = digest.hexdigest()
+    _model_fingerprint_cache[cache_key] = fingerprint
+    return fingerprint
+
+
+def get_tf32_tag() -> str:
+    """
+    Describe the effective TensorRT TF32 policy as a filesystem-safe cache tag.
+
+    TF32 is only controllable through the `NVIDIA_TF32_OVERRIDE` environment variable, which
+    TensorRT reads while it builds an engine, so the value belongs in every engine cache key.
+
+    :return: A short tag such as `tf32default`, `tf32off` or `tf321`
+    """
+
+    override = os.environ.get("NVIDIA_TF32_OVERRIDE")
+    if override is None or not override.strip():
+        return "tf32default"
+
+    normalized = override.strip().lower()
+    if normalized in {"0", "false", "off", "no"}:
+        return "tf32off"
+    return f"tf32{normalized}"
+
+
+def build_compilation_cache_key(
+    model_path: Path,
+    *,
+    device_id: int = 0,
+    data_type: MLDataType = MLDataType.FP16,
+    tile_size: int | None = None,
+    batch_size: int | None = None,
+    workspace_size: int | None = None,
+    enable_cuda_graph: bool = True,
+    with_nvrtx: bool = False,
+) -> str:
+    """
+    Build the cache key shared by every compilation cache entry of one graph.
+
+    The key has to cover everything that changes the compiled artifact: the graph contents
+    (not just its path), the requested precision, the device, the optimization profiles and
+    the build options. Anything missing here silently reuses an engine built for other
+    settings, which is how a TF32-off run can end up loading a TF32-on engine.
+
+    :param model_path: The ONNX model file
+    :param device_id: The GPU device ID the engine is built for
+    :param data_type: The requested precision
+    :param tile_size: The tile size baked into the optimization profiles
+    :param batch_size: The batch size baked into the optimization profiles
+    :param workspace_size: The workspace limit in bytes the build will use
+    :param enable_cuda_graph: Whether CUDA graph replay is requested
+    :param with_nvrtx: Whether the TRT-RTX execution provider is requested
+    :return: A filesystem-safe cache key
+    """
+
+    parts = [
+        f"nmodel_t{tile_size}b{batch_size}",
+        f"cd{data_type.name}",
+        f"d{device_id}",
+        f"rtx{int(with_nvrtx)}",
+        f"cg{int(enable_cuda_graph)}",
+        f"ws{'auto' if workspace_size is None else workspace_size}",
+        get_tf32_tag(),
+        f"g{get_model_fingerprint(model_path)[:16]}",
+        _get_trt_runtime_version_tag(),
+    ]
+    return "_".join(parts)
+
+
 def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, int] | None:
     try:
         import torch.cuda  # type: ignore
 
-        cu_major, _ = torch.cuda.get_device_capability()
+        # Both queries have to target the same device: the capability of the *current* device
+        # would answer for another GPU than the one the properties are read from
+        cu_major, _ = torch.cuda.get_device_capability(device_id)
         return torch.cuda.get_device_properties(device_id).total_memory, cu_major
     except (ImportError, AssertionError):
         return None
@@ -462,7 +716,29 @@ def prepare_model_runtime_builders(
     batch_size: int = 64,
     data_type: MLDataType = MLDataType.FP16,
     with_nvrtx: bool = False,
+    workspace_size: int | None = None,
+    enable_cuda_graph: bool = True,
+    strict_ep: bool = False,
 ) -> "InferenceSessionWithScale":
+    """Build an ONNX Runtime session, letting the TensorRT RTX builder compile the engine.
+
+    Unlike :func:`prepare_model_runtime`, this never forces a global FP16 optimization on the graph,
+    so a mixed precision export keeps its own per-operator types.
+
+    :param model_path: The ONNX model file
+    :param device_id: The GPU device ID to build for
+    :param is_verbose: Enable the detailed build logs of the execution providers
+    :param tile_size: The tile size to build the optimization profiles for
+    :param batch_size: The batch size to build the optimization profiles for
+    :param data_type: The requested build precision
+    :param with_nvrtx: Request the TRT-RTX execution provider
+    :param workspace_size: The workspace limit in bytes, or `None` to use 75% of the GPU memory
+    :param enable_cuda_graph: Enable CUDA graph replay for the TRT-RTX engine
+    :param strict_ep: Fail instead of falling back when the requested provider is unavailable
+    :return: The inference session with the detected scale factor attached
+    :raises RuntimeError: If `strict_ep` is set and the requested provider cannot be used
+    """
+
     # _preload_custom_extensions()
 
     ort = get_onnxruntime()
@@ -483,19 +759,51 @@ def prepare_model_runtime_builders(
     cache_onv_dir = data_dir / "openvino_cache"
     cache_onv_dir.mkdir(parents=True, exist_ok=True)
 
-    hashed_path = md5(str(model_path.resolve()).encode("utf-8")).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
-    runtime_version = _get_trt_runtime_version_tag()
-    cache_prefix = f"nmodel_t{tile_size}b{batch_size}cd{data_type.name}_{hashed_path}_{runtime_version}"
-
     torch_info = get_torch_memory_limit_and_rtx(device_id)
     memory_limit = int(torch_info[0] * 0.75) if torch_info else 2 * (1024**3)  # 2GB or 75% of GPU memory
+    if workspace_size is not None:
+        memory_limit = workspace_size
 
     cnsl = get_console()
 
     has_trt_rtx = torch_info[1] >= 8 if torch_info else False
     if with_nvrtx and not has_trt_rtx:
+        if strict_ep:
+            compute_capability = f"{torch_info[1]}.x" if torch_info else "unknown"
+            raise RuntimeError(
+                "TensorRT RTX was requested but it is not supported on this GPU "
+                f"(CUDA compute capability {compute_capability}, TRT-RTX needs 8.0 or newer). "
+                "Re-run without --with-nvrtx, or stop asking for a strict execution provider."
+            )
         cnsl.warning("TensorRT RTX is not supported on this GPU. Falling back to TensorRT.")
         with_nvrtx = False
+
+    # The optimization profiles are configured before any session exists, so the graph itself has
+    # to say which shapes it accepts; the image-time clamp in `resolve_model_input_sizes` runs too
+    # late to keep a contradictory profile from being built.
+    static_input = get_model_static_input(model_path)
+    if static_input is not None:
+        model_input, static_input_shape = static_input
+        model_channel_count = static_input_shape[1] if len(static_input_shape) > 1 else None
+        if not model_channel_count:
+            model_channel_count = 3
+    else:
+        static_input_shape = None
+        model_input, model_channel_count = get_model_information(model_path)
+    batch_size, tile_size = resolve_model_static_shapes(static_input_shape, batch_size=batch_size, tile_size=tile_size)
+
+    # The cache key covers the graph contents and every build option, so an engine compiled for
+    # another graph, precision, workspace or TF32 policy is never reused.
+    cache_prefix = build_compilation_cache_key(
+        model_path,
+        device_id=device_id,
+        data_type=data_type,
+        tile_size=tile_size,
+        batch_size=batch_size,
+        workspace_size=memory_limit,
+        enable_cuda_graph=enable_cuda_graph,
+        with_nvrtx=with_nvrtx,
+    )
 
     needs_trt_compat = torch_info[1] >= 12 if torch_info else False
 
@@ -522,7 +830,7 @@ def prepare_model_runtime_builders(
     }
     trtrtx_ep_config = {
         "device_id": str(device_id),
-        "enable_cuda_graph": "1",  # although by default this is already enabled
+        "enable_cuda_graph": "1" if enable_cuda_graph else "0",
         "nv_max_workspace_size": str(memory_limit),
         "nv_detailed_build_log": "1" if is_verbose else "0",
         "nv_runtime_cache_path": str(cache_rtx_dir),
@@ -556,7 +864,6 @@ def prepare_model_runtime_builders(
         "load_config": json.dumps(onv_json_ep_config),
     }
 
-    model_input, model_channel_count = get_model_information(model_path)
     if tile_size is not None:
         min_shapes = f"{model_input}:1x{model_channel_count}x{tile_size}x{tile_size}"
         max_shapes = f"{model_input}:{batch_size}x{model_channel_count}x{tile_size}x{tile_size}"
@@ -571,6 +878,7 @@ def prepare_model_runtime_builders(
 
     ep_devices = {ep_device.ep_name: ep_device for ep_device in ort.get_ep_devices()}
     has_good_ep_devices = False
+    has_nvrtx = False
     raw_providers = set(ort.get_available_providers())
     if sys.platform != "darwin":
         providers = []
@@ -632,6 +940,21 @@ def prepare_model_runtime_builders(
             "Ensure you have compatible hardware and the necessary dependencies installed."
         )
 
+    # Resolve what a strict run has to see in the finished session. TRT-RTX answers to two names
+    # depending on whether it is the built-in provider or the standalone plugin, so both count.
+    required_providers: set[str] = set()
+    if strict_ep:
+        if with_nvrtx:
+            required_providers = {"nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"}
+            if not has_nvrtx:
+                raise RuntimeError(
+                    "TensorRT RTX was requested but this ONNX Runtime exposes no RTX execution provider. "
+                    f"Available providers: {', '.join(sorted(raw_providers))}. "
+                    "Install the TRT-RTX plugin, or drop the strict execution provider check."
+                )
+        elif providers:
+            required_providers = {providers[0][0]}
+
     cnsl.info(f"Running with ONNX Runtime v{ort.version}")
     cnsl.info("Available providers:", raw_providers)
     cnsl.info("Available EP devices:", list(ep_devices.keys()))
@@ -674,9 +997,16 @@ def prepare_model_runtime_builders(
     end_time = time.time()
 
     elapsed = format_elapsed_time(end_time - st_time)
-    cnsl.info("Active providers:", session.get_providers())
+    active_providers = session.get_providers()
+    cnsl.info("Active providers:", active_providers)
     cnsl.info(f"Loaded model: {model_path.stem} (in {elapsed})")
-    scale_factor, use_halfp = get_model_scale_factor(session, tile_size=tile_size)
+    if required_providers and not required_providers.intersection(active_providers):
+        raise RuntimeError(
+            f"The {', '.join(sorted(required_providers))} execution provider was requested, but the session "
+            f"only reports {', '.join(active_providers) or 'no providers'}. "
+            "A fallback provider was chosen instead, so the run would not match the requested setup."
+        )
+    scale_factor, use_halfp = get_model_scale_factor(session, tile_size=tile_size, batch_size=batch_size)
     session.scale_factor = scale_factor
     session.use_halfp = use_halfp
     return session

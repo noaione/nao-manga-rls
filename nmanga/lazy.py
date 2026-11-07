@@ -49,6 +49,7 @@ __all__ = (
 
 Tensor = TypeVar("Tensor")
 __preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
+__telemetry_disabled__ = False
 
 
 class RearrangeCallable(Protocol):
@@ -119,10 +120,33 @@ def get_vapoursynth():
         raise ImportError("vapoursynth is required to do the following action. Please install vapoursynth.") from exc
 
 
+def _disable_ort_telemetry(ort_module: "type[ort]") -> None:  # type: ignore
+    """
+    Turn off the ONNX Runtime telemetry events exactly once per process.
+
+    Serializing telemetry costs time inside every session and, more importantly for a
+    reproducible benchmark, it is global state that is easier to rule out than to measure.
+    Older ONNX Runtime builds do not expose the switch, so it is optional.
+
+    :param ort_module: The imported :mod:`onnxruntime` module
+    """
+
+    global __telemetry_disabled__
+
+    if __telemetry_disabled__:
+        return
+
+    disable_telemetry = getattr(ort_module, "disable_telemetry_events", None)
+    if callable(disable_telemetry):
+        disable_telemetry()
+    __telemetry_disabled__ = True
+
+
 def get_onnxruntime() -> "type[ort]":  # type: ignore
     global __preloaded_ort__
 
     if __preloaded_ort__ is not None:
+        _disable_ort_telemetry(__preloaded_ort__)
         return __preloaded_ort__
 
     for sp in site.getsitepackages():
@@ -137,6 +161,9 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
         import tensorrt  # type: ignore # ruff: ignore[unused-import]
 
     import onnxruntime as ort  # type: ignore
+
+    # Keep this before any session/compiler exists, so it cannot be missed by a caller
+    _disable_ort_telemetry(ort)  # pyright: ignore[reportArgumentType]
 
     is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
 

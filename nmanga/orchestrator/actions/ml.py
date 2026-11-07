@@ -39,6 +39,8 @@ from ...common import RegexCollection
 from ...denoiser import (
     MLDataType,
     denoise_single_image_with_overlap,
+    get_model_fingerprint,
+    get_tf32_tag,
     prepare_model_runtime,
     prepare_model_runtime_builders,
 )
@@ -96,6 +98,12 @@ class ActionML(BaseAction):
     """Use TRT-RTX engine to do this ML action"""
     data_type: MLDataType | None = Field(None, title="The data type to use for TensorRT model")
     """The data type to use for TensorRT model"""
+    workspace_size: int | None = Field(None, ge=1, title="TensorRT Workspace Size")
+    """The TensorRT workspace limit in MiB, defaults to 75% of the total GPU memory"""
+    enable_cuda_graph: bool = Field(True, title="Enable CUDA Graph Replay")
+    """Whether to enable CUDA graph replay for the TRT-RTX engine"""
+    strict_ep: bool = Field(False, title="Fail if the execution provider is unavailable")
+    """Whether to fail instead of falling back when the requested execution provider is unavailable"""
     base_path: str = Field("output", title="Output Base Path")
     """The base path to save the resulting images to"""
 
@@ -144,17 +152,26 @@ class ActionML(BaseAction):
         """
         Make a cache key for the model session
 
+        The key covers the model contents (not just its path) and the compilation settings, so
+        swapping the weights behind an unchanged pathname, or changing the precision or TF32
+        policy, builds a fresh session instead of reusing one for other settings.
+
         :return: The cache key
         """
 
         fqdn_model = Path(self.model).resolve(True).as_posix()
         model_hash = sha256(fqdn_model.encode("utf-8")).hexdigest()
+        graph_hash = get_model_fingerprint(self.model)[:16]
 
         other_key = (
-            f"d{self.device_id}-b{self.batch_size}-t{self.tile_size}-p{self.precompiled}-d{self.data_type or 'None'}"
+            f"d{self.device_id}-b{self.batch_size}-t{self.tile_size}-p{self.precompiled}"
+            f"-d{self.data_type or 'None'}-g{graph_hash}-{get_tf32_tag()}"
+            f"-ws{self.workspace_size or 'auto'}-cg{int(self.enable_cuda_graph)}"
         )
         if self.rtx_ep:
             other_key += "-rtx"
+        if self.strict_ep:
+            other_key += "-strict"
         if self.precompiled:
             other_key += "-precomp"
 
@@ -193,6 +210,9 @@ class ActionML(BaseAction):
                 batch_size=self.batch_size,
                 data_type=cast(MLDataType, self.data_type),
                 with_nvrtx=self.rtx_ep,
+                workspace_size=None if self.workspace_size is None else self.workspace_size * 1024 * 1024,
+                enable_cuda_graph=self.enable_cuda_graph,
+                strict_ep=self.strict_ep,
             )
 
         context.ml_model_session[cache_key] = session
@@ -221,6 +241,9 @@ class ActionML(BaseAction):
             context.terminal.info(f"- Background Color: {self.background}")
             context.terminal.info(f"- Contrast Stretch: {self.contrast_strectch}")
             context.terminal.info(f"- Precompiled Model: {'Yes' if self.precompiled else 'No'}")
+            context.terminal.info(f"- TRT-RTX Engine: {'Yes' if self.rtx_ep else 'No'}")
+            context.terminal.info(f"- Workspace Size: {self.workspace_size or 'auto'} MiB")
+            context.terminal.info(f"- CUDA Graph: {'Yes' if self.enable_cuda_graph else 'No'}")
             if self.data_type is not None:
                 context.terminal.info(f"- Data Type: {self.data_type.value}")
             context.update_cwd(output_dir)

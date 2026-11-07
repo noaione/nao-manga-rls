@@ -128,6 +128,31 @@ console = term.get_console()
     show_default=True,
     help="Use RTX for inference",
 )
+@click.option(
+    "-ws",
+    "--workspace-size",
+    "workspace_size",
+    type=options.POSITIVE_INT,
+    default=None,
+    help="The TensorRT workspace limit in MiB, defaults to 75% of the total GPU memory",
+)
+@click.option(
+    "-cg",
+    "--cuda-graph/--no-cuda-graph",
+    "enable_cuda_graph",
+    default=True,
+    show_default=True,
+    help="Enable CUDA graph replay for the TensorRT RTX engine",
+)
+@click.option(
+    "-sep",
+    "--strict-ep",
+    "strict_ep",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Fail instead of falling back when the requested execution provider is unavailable",
+)
 @options.recursive
 @time_program
 @check_config_first
@@ -143,6 +168,9 @@ def upscale_trt(
     background: Literal["black", "white"],
     quant_size: str,
     with_nvidia_rtx: bool,
+    workspace_size: int | None,
+    enable_cuda_graph: bool,
+    strict_ep: bool,
     recursive: bool,
 ):
     """Upscale images using TensorRT models."""
@@ -192,6 +220,9 @@ def upscale_trt(
         batch_size=batch_size,
         data_type=ml_quant,
         with_nvrtx=with_nvidia_rtx,
+        workspace_size=None if workspace_size is None else workspace_size * 1024 * 1024,
+        enable_cuda_graph=enable_cuda_graph,
+        strict_ep=strict_ep,
     )
 
     if scale_factor := getattr(sess, "scale_factor", None):

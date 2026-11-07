@@ -38,7 +38,12 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..denoiser import denoise_single_image_with_overlap, prepare_model_runtime
+from ..denoiser import (
+    MLDataType,
+    denoise_single_image_with_overlap,
+    prepare_model_runtime,
+    prepare_model_runtime_builders,
+)
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, test_or_find_magick, test_or_find_w2x_trt
@@ -402,6 +407,48 @@ def identify_denoise_candidates(
     show_default=True,
     help="The background color to use for padding",
 )
+@click.option(
+    "-rtx",
+    "--with-nvrtx",
+    "with_nvidia_rtx",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Use the TensorRT RTX builder, which keeps the precision the model declares",
+)
+@click.option(
+    "-qs",
+    "--quant-size",
+    "quant_size",
+    type=click.Choice(["fp16", "fp32", "bf16"], case_sensitive=False),
+    default=None,
+    help="The quantization size to use for inference, only used with the TensorRT RTX builder",
+)
+@click.option(
+    "-ws",
+    "--workspace-size",
+    "workspace_size",
+    type=options.POSITIVE_INT,
+    default=None,
+    help="The TensorRT workspace limit in MiB, defaults to 75% of the total GPU memory",
+)
+@click.option(
+    "-cg",
+    "--cuda-graph/--no-cuda-graph",
+    "enable_cuda_graph",
+    default=True,
+    show_default=True,
+    help="Enable CUDA graph replay for the TensorRT RTX engine",
+)
+@click.option(
+    "-sep",
+    "--strict-ep",
+    "strict_ep",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Fail instead of falling back when the requested execution provider is unavailable",
+)
 @options.recursive
 @check_config_first
 @time_program
@@ -415,6 +462,11 @@ def denoiser_trt(
     tile_overlap: int,
     contrast_stretch: bool,
     background: Literal["black", "white"],
+    with_nvidia_rtx: bool,
+    quant_size: str | None,
+    workspace_size: int | None,
+    enable_cuda_graph: bool,
+    strict_ep: bool,
     recursive: bool,
 ):
     """
@@ -450,7 +502,27 @@ def denoiser_trt(
 
     # Try importing stuff here
     console.info(f"Loading model: {model_path.name}...")
-    sess = prepare_model_runtime(model_path, device_id=device_id, is_verbose=console.debugged)
+    # The legacy loader forces a global FP16 optimization onto the graph, which is wrong for a mixed
+    # precision export. Opting into any builder-only option switches to the builder that leaves the
+    # declared types alone and can select the TRT-RTX provider.
+    use_builder = (
+        with_nvidia_rtx or strict_ep or quant_size is not None or workspace_size is not None or not enable_cuda_graph
+    )
+    if use_builder:
+        sess = prepare_model_runtime_builders(
+            model_path,
+            device_id=device_id,
+            is_verbose=console.debugged,
+            tile_size=tile_size,
+            batch_size=batch_size,
+            data_type=MLDataType.from_str(quant_size) if quant_size is not None else MLDataType.FP16,
+            with_nvrtx=with_nvidia_rtx,
+            workspace_size=None if workspace_size is None else workspace_size * 1024 * 1024,
+            enable_cuda_graph=enable_cuda_graph,
+            strict_ep=strict_ep,
+        )
+    else:
+        sess = prepare_model_runtime(model_path, device_id=device_id, is_verbose=console.debugged)
     console.info(f"Using device ID: {device_id}")
 
     for path_real in candidates:

@@ -349,6 +349,12 @@ Rewritten every thing as a module with `nmanga` namespace.
 - Orchestrator volume `colors` - Accept `null` to mark the color pages as unknown, so color actions detect
   them on the fly instead of treating the volume as having no color pages at all
 - `nmanga lookup imagesize` - Lookup image sizes in an archive or folder
+- `nmanga upscale-trt`, `nmanga denoise-trt` and the orchestrator ML actions - Add `-ws/--workspace-size`,
+  `-cg/--cuda-graph` and `-sep/--strict-ep` so a TensorRT comparison can reproduce the workspace limit, the
+  CUDA graph setting and refuse a silent fallback to another execution provider
+  - `nmanga denoise-trt` also grows `-rtx/--with-nvrtx` and `-qs/--quant-size`; passing any of the new options
+    routes it through the TensorRT RTX builder instead of the legacy loader that forces FP16 onto the whole graph
+- Orchestrator `denoise`/`upscale` actions - Add `workspace_size`, `enable_cuda_graph` and `strict_ep` fields
 - Orchestrator `autolevel` action - The `v3` algorithm is now actually implemented, backed by the `nimages`
   VapourSynth plugin like `nmanga autolevel3`. It builds one clip per volume and levels the pages with the same
   per page decisions as `v2`; colour pages are levelled on their own planes with the levels found on their luma
@@ -471,3 +477,14 @@ Rewritten every thing as a module with `nmanga` namespace.
   keeping the previous source
 - `nmanga-gui` - Spell out the skipped pages of a hand picked chapter range (for example `001, 005-007`)
   instead of collapsing them into one start-to-end label
+- `nmanga upscale-trt` and `nmanga denoise-trt` - Build the TensorRT optimization profiles from the dimensions
+  the model declares, so a fixed `512x512` input no longer gets a contradictory default profile that only failed
+  at the first inference. A fixed batch size is adopted and a mismatching fixed tile size is rejected up-front
+- `nmanga upscale-trt`, `nmanga denoise-trt` and the orchestrator ML actions - Key the compiled engine cache (and
+  the in-memory session cache) on the model contents, the precision, the workspace, the CUDA graph setting and the
+  TF32 policy, instead of only the model pathname and runtime version. Changing the weights in place, or switching
+  TF32 off, now rebuilds the engine instead of reusing an unsuitable one
+- ONNX Runtime telemetry is disabled in the shared loader, before any session or engine builder exists
+- `nmanga upscale-trt`, `nmanga denoise-trt` and the orchestrator ML actions - Probe the model scale factor with the
+  batch size the engine was built for, so a fixed-batch graph is not probed with a batch it does not accept
+- Fix the TRT-RTX GPU capability check to query the requested device instead of the current one
