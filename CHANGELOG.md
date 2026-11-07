@@ -346,8 +346,10 @@ Rewritten every thing as a module with `nmanga` namespace.
   - The tiling is the validated JaNai one, not the ONNX one: the overlap is the total overlap between two tiles and
     partial edge tiles are replicate-padded before the prediction, so `--tile-size 256 --tile-overlap 32` is a
     224px stride and does not produce the same page as the ONNX tiler's 192px stride
-  - `--device auto|cpu|cuda:N`, optional `torch.compile` for the CUDA `fast` recipe (needs Triton), folder or
-    `--recursive` input and PNG output, with the detected architecture/scale/dtypes/recipe/tiling printed up front
+  - `--device auto|cpu|cuda:N`, optional `torch.compile` for the CUDA `fast` recipe, folder or `--recursive`
+    input and PNG output, with the detected architecture/scale/dtypes/recipe/tiling printed up front
+  - The `denoiser` extra now installs `triton-windows` on Windows, which `torch.compile` needs there and
+    which the torch wheel does not depend on; a compiler failure is reported with the underlying error
 - `nmanga torch to-onnx` - The ONNX export moved under the `torch` group, with the same options as before
 - The ONNX session builders, engine cache, tiling, ORT initialization and Windows ML discovery moved into a new
   `nmanga.ml` package. `nmanga.denoiser`, `nmanga.winml` and `nmanga.lazy.get_onnxruntime` stay importable as

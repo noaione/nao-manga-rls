@@ -61,6 +61,9 @@ denoiser = [
     "einops>=0.8.2",
     "resselt>=1.4.1",
     "safetensors>=0.5.3,<0.6",
+    # `torch infer --compile` needs Triton; the Windows wheel of it is not a torch dependency.
+    "triton==3.9.0; sys_platform == 'linux'",
+    "triton-windows==3.9.0.post30; sys_platform == 'win32'",
     "windowsml==2.5.96; sys_platform == 'win32'",
 ]
 denoiser-ort = [
