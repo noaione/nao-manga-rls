@@ -31,18 +31,15 @@ import site
 import sys
 from importlib import util as importutil
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import onnxruntime as ort
+from typing import Any
 
 __all__ = ("get_onnxruntime",)
 
-__preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
+__preloaded_ort__: Any = None
 __telemetry_disabled__ = False
 
 
-def _disable_ort_telemetry(ort_module: "type[ort]") -> None:  # type: ignore
+def _disable_ort_telemetry(ort_module: Any) -> None:
     """
     Turn off the ONNX Runtime telemetry events exactly once per process.
 
@@ -64,7 +61,7 @@ def _disable_ort_telemetry(ort_module: "type[ort]") -> None:  # type: ignore
     __telemetry_disabled__ = True
 
 
-def get_onnxruntime() -> "type[ort]":  # type: ignore
+def get_onnxruntime() -> Any:
     global __preloaded_ort__
 
     if __preloaded_ort__ is not None:
@@ -85,7 +82,7 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
     import onnxruntime as ort  # type: ignore
 
     # Keep this before any session/compiler exists, so it cannot be missed by a caller
-    _disable_ort_telemetry(ort)  # pyright: ignore[reportArgumentType]
+    _disable_ort_telemetry(ort)
 
     is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
     is_mlx_ep_available = importutil.find_spec("onnxruntime_ep_mlx")
