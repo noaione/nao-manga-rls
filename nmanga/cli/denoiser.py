@@ -449,6 +449,14 @@ def identify_denoise_candidates(
     show_default=True,
     help="Fail instead of falling back when the requested execution provider is unavailable",
 )
+@click.option(
+    "--no-cpu",
+    "no_cpu_fallback",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Disable CPU fallback for execution provider",
+)
 @options.recursive
 @check_config_first
 @time_program
@@ -467,6 +475,7 @@ def denoiser_trt(
     workspace_size: int | None,
     enable_cuda_graph: bool,
     strict_ep: bool,
+    no_cpu_fallback: bool,
     recursive: bool,
 ):
     """
@@ -520,6 +529,7 @@ def denoiser_trt(
             workspace_size=None if workspace_size is None else workspace_size * 1024 * 1024,
             enable_cuda_graph=enable_cuda_graph,
             strict_ep=strict_ep,
+            disable_cpu=no_cpu_fallback,
         )
     else:
         sess = prepare_model_runtime(model_path, device_id=device_id, is_verbose=console.debugged)

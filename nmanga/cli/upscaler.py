@@ -153,6 +153,14 @@ console = term.get_console()
     show_default=True,
     help="Fail instead of falling back when the requested execution provider is unavailable",
 )
+@click.option(
+    "--no-cpu",
+    "no_cpu_fallback",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Disable CPU fallback for execution provider",
+)
 @options.recursive
 @time_program
 @check_config_first
@@ -171,6 +179,7 @@ def upscale_trt(
     workspace_size: int | None,
     enable_cuda_graph: bool,
     strict_ep: bool,
+    no_cpu_fallback: bool,
     recursive: bool,
 ):
     """Upscale images using TensorRT models."""
@@ -223,6 +232,7 @@ def upscale_trt(
         workspace_size=None if workspace_size is None else workspace_size * 1024 * 1024,
         enable_cuda_graph=enable_cuda_graph,
         strict_ep=strict_ep,
+        disable_cpu=no_cpu_fallback,
     )
 
     if scale_factor := getattr(sess, "scale_factor", None):

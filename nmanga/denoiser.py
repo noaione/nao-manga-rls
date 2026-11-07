@@ -662,6 +662,7 @@ def prepare_model_runtime_builders(
     workspace_size: int | None = None,
     enable_cuda_graph: bool = True,
     strict_ep: bool = False,
+    disable_cpu: bool = False,
 ) -> "InferenceSessionWithScale":
     """Build an ONNX Runtime session, letting the TensorRT RTX builder compile the engine.
 
@@ -820,7 +821,9 @@ def prepare_model_runtime_builders(
     # list around instead of only the last device seen per name.
     all_ep_devices = ort.get_ep_devices()
     ep_devices = {ep_device.ep_name: ep_device for ep_device in all_ep_devices}
-    config_entry = {}
+    config_entry = {
+        "session.disable_cpu_ep_fallback": "1" if disable_cpu else "0",
+    }
     has_good_ep_devices = False
     has_nvrtx = False
     raw_providers = set(ort.get_available_providers())
@@ -833,6 +836,8 @@ def prepare_model_runtime_builders(
         has_nvrtx = False
         if "NvTensorRTRTXExecutionProvider" in ep_devices and with_nvrtx:
             ep_providers.append((ep_devices["NvTensorRTRTXExecutionProvider"], trtrtx_ep_config))
+            # disable CPU fallback
+            config_entry["session.disable_cpu_ep_fallback"] = "1"
             has_nvrtx = True
             has_good_ep_devices = True
         if "TensorrtExecutionProvider" in raw_providers and not has_nvrtx:
