@@ -22,33 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Custom solution to load WinML, compatible with Python 3.14
+# Compatibility facade for the WinML discovery that now lives in `nmanga.ml.winml`.
+#
+# The implementation is a single thin forward, so the platform guard and the lazily imported
+# `windowsml` package behave exactly as before. New code should import from `nmanga.ml.winml`.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from .ml.winml import get_winml_ep_libraries
 
 __all__ = ("get_winml_ep_libraries",)
-
-
-def get_winml_ep_libraries(exclusion_list: list[str] | None = None) -> list[tuple[str, Path]]:
-    if sys.platform != "win32":
-        return []
-
-    excluded = set(exclusion_list or [])
-
-    from windowsml import EpCatalog, EpReadyState  # pyright: ignore[reportMissingImports]
-
-    new_sets: list[tuple[str, Path]] = []
-    with EpCatalog() as catalog:
-        providers = catalog.find_all_providers()
-        for provider in providers:
-            if provider.name in excluded:
-                continue
-
-            # if not, let's play
-            provider.ensure_ready()
-            if provider.ready_state == EpReadyState.Ready:
-                new_sets.append((provider.name, Path(provider.library_path)))
-    return new_sets

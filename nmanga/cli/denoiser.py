@@ -38,12 +38,9 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..denoiser import (
-    MLDataType,
-    denoise_single_image_with_overlap,
-    prepare_model_runtime,
-    prepare_model_runtime_builders,
-)
+from ..ml.contracts import MLDataType
+from ..ml.onnx_backend import denoise_single_image_with_overlap
+from ..ml.onnx_session import prepare_model_runtime, prepare_model_runtime_builders
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler, test_or_find_magick, test_or_find_w2x_trt
@@ -511,7 +508,7 @@ def denoiser_trt(
 
     # Try importing stuff here
     console.info(f"Loading model: {model_path.name}...")
-    # The legacy loader forces a global FP16 optimization onto the graph, which is wrong for a mixed
+    # The default session builder forces a global FP16 optimization onto the graph, which is wrong for a mixed
     # precision export. Opting into any builder-only option switches to the builder that leaves the
     # declared types alone and can select the TRT-RTX provider.
     use_builder = (

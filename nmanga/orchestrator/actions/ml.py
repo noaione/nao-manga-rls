@@ -36,21 +36,17 @@ from typing_extensions import Self
 
 from ... import file_handler
 from ...common import RegexCollection
-from ...denoiser import (
-    MLDataType,
-    denoise_single_image_with_overlap,
-    get_model_fingerprint,
-    get_tf32_tag,
-    prepare_model_runtime,
-    prepare_model_runtime_builders,
-)
+from ...ml.contracts import MLDataType
+from ...ml.onnx_backend import denoise_single_image_with_overlap
+from ...ml.onnx_cache import get_model_fingerprint, get_tf32_tag
+from ...ml.onnx_session import prepare_model_runtime, prepare_model_runtime_builders
 from ...resizer import ResizeKernel, rescale_image
 from ..common import perform_skip_action
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 from .rescale import RescaleTarget
 
 if TYPE_CHECKING:
-    from ...denoiser import InferenceSessionWithScale
+    from ...ml.onnx_session import InferenceSessionWithScale
     from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = (
