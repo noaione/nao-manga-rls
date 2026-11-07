@@ -30,7 +30,7 @@ import gc
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .contracts import MLDataType, ModelInfo, TorchPreset, TorchRuntimeConfig
 from .model import load_checkpoint
@@ -129,6 +129,8 @@ class TorchRuntime:
     `torch.autocast`, always uses `torch.inference_mode()` with gradients disabled, and keeps
     TF32 disabled through `configure_torch_runtime`.
     """
+
+    _model: Any
 
     def __init__(
         self,

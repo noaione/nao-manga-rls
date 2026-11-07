@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import copy
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..contracts import ModelInfo
 
@@ -456,7 +456,8 @@ def _conv_first_in_channels(model: nn.Module, unshuffle: int, path: Path) -> int
     """Return the channel count entering the first convolution of the unshuffle path."""
     import torch
 
-    conv_first = model.conv_first
+    # torch's `Module.__getattr__` types every dynamic attribute as `Module | Tensor`.
+    conv_first = cast(Any, model.conv_first)
     conv = conv_first[1] if unshuffle > 1 else conv_first
     if not isinstance(conv, torch.nn.Conv2d):
         raise ValueError(
@@ -468,7 +469,9 @@ def _conv_first_in_channels(model: nn.Module, unshuffle: int, path: Path) -> int
 
 def cross_check(model: nn.Module, info: ModelInfo, path: Path) -> None:
     """Verify the normalized FDAT contract against the model resselt actually constructed."""
-    internal_scale = int(model.upsampler.MetaUpsample[2].item())
+    upsampler = cast(Any, model.upsampler)
+    internal_scale = int(upsampler.MetaUpsample[2].item())
+    upscale = int(cast(Any, model.upscale))
     pads = int(getattr(model, "pad", 0))
     expected_pad = info.unshuffle if info.unshuffle > 1 else 0
     conv_in = _conv_first_in_channels(model, info.unshuffle, path)
@@ -478,8 +481,8 @@ def cross_check(model: nn.Module, info: ModelInfo, path: Path) -> None:
         problems.append(f"conv_first takes {conv_in} channels, expected {expected_conv_in}")
     if pads != expected_pad:
         problems.append(f"check_img_size pads by {pads}, expected {expected_pad}")
-    if int(model.upscale) != info.scale:
-        problems.append(f"the model upscales by {int(model.upscale)}, including cropping, expected {info.scale}")
+    if upscale != info.scale:
+        problems.append(f"the model upscales by {upscale}, including cropping, expected {info.scale}")
     if internal_scale != info.scale * info.unshuffle:
         problems.append(
             f"the upsampler is built for {internal_scale}x, expected {info.scale * info.unshuffle}x "
