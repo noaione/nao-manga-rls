@@ -26,7 +26,6 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 from pathlib import Path
 from typing import Literal
@@ -35,7 +34,9 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..denoiser import MLDataType, denoise_single_image_with_overlap, prepare_model_runtime_builders
+from ..ml.contracts import MLDataType
+from ..ml.onnx_backend import denoise_single_image_with_overlap
+from ..ml.onnx_session import prepare_model_runtime_builders
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler
@@ -280,139 +281,3 @@ def upscale_trt(
     if recursive:
         console.info(f"Finished processing {len(candidates)} folders.")
     return 0
-
-
-@click.command(
-    "to-onnx",
-    help="Export torch model or safetensors model to ONNX format",
-    cls=NMangaCommandHandler,
-)
-@options.path_or_archive(disable_archive=False, disable_folder=False)
-@click.option(
-    "-qs",
-    "--quant-size",
-    "quant_size",
-    type=click.Choice(["fp32", "fp16", "bf16"], case_sensitive=True),
-    default="fp32",
-)
-@click.option(
-    "--dynamo",
-    "use_dynamo",
-    is_flag=True,
-    default=False,
-    show_default=True,
-    help="Use torch dynamo to optimize the model before exporting to ONNX",
-)
-@click.option(
-    "-op",
-    "--opset",
-    "opset_version",
-    type=options.POSITIVE_INT,
-    default=20,
-    show_default=True,
-    help="The ONNX opset version to use for exporting the model",
-)
-@time_program
-def export_to_onnx(
-    path_or_archive: Path,
-    quant_size: Literal["fp32", "fp16", "bf16"],
-    use_dynamo: bool,
-    opset_version: int,
-):
-    """Export torch model or safetensors model to ONNX format"""
-
-    file_candidates: list[Path] = []
-    if not path_or_archive.is_file():
-        for file in path_or_archive.glob("*"):
-            if file.suffix in [".pt", ".pth", ".safetensors"]:
-                file_candidates.append(file)
-    else:
-        if path_or_archive.suffix in [".pt", ".pth", ".safetensors"]:
-            file_candidates.append(path_or_archive)
-        else:
-            raise click.BadParameter(
-                f"{path_or_archive} is not a valid model file. Please provide a .pt, .pth or .safetensors file.",
-                param_hint="path_or_archive",
-            )
-
-    if not file_candidates:
-        raise click.BadParameter(
-            f"No valid model files found in {path_or_archive}. Please provide a .pt, .pth or .safetensors file.",
-            param_hint="path_or_archive",
-        )
-
-    try:
-        import torch  # pyright: ignore[reportMissingImports]
-    except ImportError as exc:
-        raise click.ClickException("PyTorch is not installed. Please install it to use this command.") from exc
-
-    dtypes_maps = {
-        "fp32": torch.float32,
-        "bf16": torch.bfloat16,
-        "fp16": torch.float16,
-    }
-
-    torch_dtype = dtypes_maps.get(quant_size)
-    if torch_dtype is None:
-        raise click.ClickException(f"Unsupported quantization size: {quant_size}")
-
-    safetensors_available = importlib.util.find_spec("safetensors")
-    if safetensors_available is None:
-        raise click.ClickException("safetensors is not installed. Please install it to use this command.")
-
-    # Monkeypatch typing.Self for resselt
-    if not hasattr(importlib.import_module("typing"), "Self"):
-        import typing
-
-        from typing_extensions import Self as TypingSelf
-
-        typing.Self = TypingSelf  # type: ignore
-
-    try:
-        from resselt import load_from_file  # pyright: ignore[reportMissingImports]
-        from resselt.factory.arch import ModelMetadata
-    except ImportError as exc:
-        raise click.ClickException("resselt is not installed. Please install it to use this command.") from exc
-
-    model_sfx = f"{quant_size}_op{opset_version}"
-    if use_dynamo:
-        model_sfx += "_dynamo"
-
-    for model_file in file_candidates:
-        # Export only in fp32 for now
-        final_name = f"{model_file.stem}_{model_sfx}.onnx"
-        model_dir = model_file.parent
-        onnx_path = model_dir / final_name
-        if onnx_path.exists():
-            console.info(f"ONNX model {onnx_path.name} already exists, skipping export.")
-            continue
-
-        console.info(f"Loading model file: {model_file.name}...")
-        model_torch: torch.nn.Module = load_from_file(str(model_file))
-        param_info = getattr(model_torch, "parameters_info", None)
-
-        input_channel = 3
-        if isinstance(param_info, ModelMetadata):
-            input_channel = param_info.in_channels
-
-        model_torch = model_torch.to("cpu", dtype=torch_dtype)
-        autocast_ctx = torch.autocast(device_type="cpu", dtype=torch_dtype, enabled=True)
-        input_tensor = torch.rand((1, input_channel, 32, 32))
-
-        with autocast_ctx:
-            torch.onnx.export(
-                model_torch,
-                (input_tensor,),
-                str(onnx_path),
-                external_data=False,
-                opset_version=opset_version,
-                input_names=["input"],
-                output_names=["output"],
-                dynamo=use_dynamo,
-                dynamic_axes={
-                    "input": {0: "batch_size", 2: "width", 3: "height"},
-                    "output": {0: "batch_size", 2: "width", 3: "height"},
-                },
-            )
-
-        console.info(f"Exported {model_file.name} to {onnx_path.name}")

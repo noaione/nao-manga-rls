@@ -13,14 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from nmanga.denoiser import (
-    MLDataType,
-    build_compilation_cache_key,
-    get_model_fingerprint,
-    get_model_static_input,
-    get_tf32_tag,
-    resolve_model_static_shapes,
-)
+from nmanga.ml.contracts import MLDataType
+from nmanga.ml.onnx_cache import build_compilation_cache_key, get_model_fingerprint, get_tf32_tag
+from nmanga.ml.onnx_session import get_model_static_input, resolve_model_static_shapes
 
 GRAPH = {"ir_version": 8, "producer_name": "nmanga-test", "graph": {"node": [], "name": "g"}}
 
@@ -205,3 +200,19 @@ def test_unparsable_graph_reports_no_static_input(tmp_path: Path):
     model = _write_graph(tmp_path / "broken.onnx")
 
     assert get_model_static_input(model) is None
+
+
+# --------------------------------------------------------------------------------------
+# The compatibility facade still exposes the exact canonical objects
+# --------------------------------------------------------------------------------------
+
+
+def test_compat_denoiser_imports_are_the_canonical_objects():
+    from nmanga import denoiser
+
+    assert denoiser.MLDataType is MLDataType
+    assert denoiser.build_compilation_cache_key is build_compilation_cache_key
+    assert denoiser.get_model_fingerprint is get_model_fingerprint
+    assert denoiser.get_model_static_input is get_model_static_input
+    assert denoiser.get_tf32_tag is get_tf32_tag
+    assert denoiser.resolve_model_static_shapes is resolve_model_static_shapes

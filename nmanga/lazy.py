@@ -1,7 +1,7 @@
 """
 MIT License
 
-Copyright (c) 2022-present noaione, anon
+Copyright (c) 2022-present noaione
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,21 +23,18 @@ SOFTWARE.
 """
 
 # Lazy loader
+#
+# The non-ML helpers live here. The ONNX Runtime initialization moved to `nmanga.ml.ort`; it is
+# re-exported as a thin forward (and the initialization state through `__getattr__`) so the old
+# entry point keeps working without duplicating the state, the registration or the cache.
 
 from __future__ import annotations
 
-import ctypes
 import functools
-import site
-import sys
-from importlib import util as importutil
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
+from typing import Any, Protocol, TypeVar, overload
 
-from .winml import get_winml_ep_libraries
-
-if TYPE_CHECKING:
-    import onnxruntime as ort
+from .ml import ort as _ort
+from .ml.ort import get_onnxruntime
 
 __all__ = (
     "get_einops_rearrange",
@@ -50,8 +47,18 @@ __all__ = (
 )
 
 Tensor = TypeVar("Tensor")
-__preloaded_ort__: "ort" | None = None  # pyright: ignore[reportInvalidTypeForm]
-__telemetry_disabled__ = False
+
+# Attributes that used to be defined here but are now owned by `nmanga.ml.ort`. Reading them
+# through the module `__getattr__` keeps one initialization state per process instead of a
+# second copy that silently diverges from the loader that actually builds the sessions.
+_FORWARDED_ORT_NAMES = frozenset({"__preloaded_ort__", "__telemetry_disabled__", "_disable_ort_telemetry"})
+
+
+def __getattr__(name: str) -> object:
+    """Forward the moved ONNX Runtime initialization entries to :mod:`nmanga.ml.ort`."""
+    if name in _FORWARDED_ORT_NAMES:
+        return getattr(_ort, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class RearrangeCallable(Protocol):
@@ -120,89 +127,3 @@ def get_vapoursynth():
         return vs
     except ImportError as exc:
         raise ImportError("vapoursynth is required to do the following action. Please install vapoursynth.") from exc
-
-
-def _disable_ort_telemetry(ort_module: "type[ort]") -> None:  # type: ignore
-    """
-    Turn off the ONNX Runtime telemetry events exactly once per process.
-
-    Serializing telemetry costs time inside every session and, more importantly for a
-    reproducible benchmark, it is global state that is easier to rule out than to measure.
-    Older ONNX Runtime builds do not expose the switch, so it is optional.
-
-    :param ort_module: The imported :mod:`onnxruntime` module
-    """
-
-    global __telemetry_disabled__
-
-    if __telemetry_disabled__:
-        return
-
-    disable_telemetry = getattr(ort_module, "disable_telemetry_events", None)
-    if callable(disable_telemetry):
-        disable_telemetry()
-    __telemetry_disabled__ = True
-
-
-def get_onnxruntime() -> "type[ort]":  # type: ignore
-    global __preloaded_ort__
-
-    if __preloaded_ort__ is not None:
-        _disable_ort_telemetry(__preloaded_ort__)
-        return __preloaded_ort__
-
-    for sp in site.getsitepackages():
-        ort_dll = Path(sp) / "onnxruntime" / "capi" / "onnxruntime.dll"
-        if ort_dll.exists() and sys.platform == "win32":
-            ctypes.WinDLL(str(ort_dll))
-            break
-
-    # Preload TensorRT if available
-    is_tensorrt_available = importutil.find_spec("tensorrt")
-    if is_tensorrt_available is not None:
-        import tensorrt  # type: ignore # ruff: ignore[unused-import]
-
-    import onnxruntime as ort  # type: ignore
-
-    # Keep this before any session/compiler exists, so it cannot be missed by a caller
-    _disable_ort_telemetry(ort)  # pyright: ignore[reportArgumentType]
-
-    is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
-    is_mlx_ep_available = importutil.find_spec("onnxruntime_ep_mlx")
-    is_openvino_ep_available = importutil.find_spec("onnxruntime_ep_openvino")
-    is_webgpu_ep_available = importutil.find_spec("onnxruntime_ep_webgpu")
-
-    if sys.platform != "darwin":
-        ort.preload_dlls()
-
-    excluded = []
-    if is_trt_ep_available is not None:
-        import onnxruntime_ep_nv_tensorrt_rtx as trt_rtx_ep  # type: ignore
-
-        rtx_name = trt_rtx_ep.get_ep_name()
-        ort.register_execution_provider_library(rtx_name, trt_rtx_ep.get_library_path())  # type: ignore
-        excluded.append(rtx_name)
-    if is_mlx_ep_available is not None:
-        # MLX is an Apple Silicon plugin EP, it has to be registered before any session is built
-        import onnxruntime_ep_mlx  # type: ignore
-
-        ort.register_execution_provider_library(onnxruntime_ep_mlx.EP_NAME, onnxruntime_ep_mlx.library_path())
-    if is_openvino_ep_available is not None:
-        import onnxruntime_ep_openvino as openvino_ep  # type: ignore
-
-        ov_name = openvino_ep.get_ep_name()
-        ort.register_execution_provider_library(ov_name, openvino_ep.get_library_path())  # type: ignore
-        excluded.append(ov_name)
-    if is_webgpu_ep_available is not None:
-        import onnxruntime_ep_webgpu as webgpu_ep  # type: ignore
-
-        wgpu_name = webgpu_ep.get_ep_name()
-        ort.register_execution_provider_library(wgpu_name, webgpu_ep.get_library_path())  # type: ignore
-        excluded.append(wgpu_name)
-
-    winml_libs = get_winml_ep_libraries(excluded)
-    for name, path in winml_libs:
-        ort.register_execution_provider_library(name, str(path))
-    __preloaded_ort__ = ort
-
-    return ort  # type: ignore

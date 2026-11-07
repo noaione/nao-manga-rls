@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, cast
 
 from PIL import Image, ImageChops
 
-from .lazy import get_einops_rearrange, get_numpy, get_onnxruntime, get_torch
+from .lazy import get_einops_rearrange, get_numpy, get_torch
+from .ml.ort import get_onnxruntime
 
 if TYPE_CHECKING:
     from numpy import ndarray

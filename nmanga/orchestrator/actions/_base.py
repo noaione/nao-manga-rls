@@ -38,7 +38,7 @@ from ..dsl import Context
 from ..rules import RuleModel
 
 if TYPE_CHECKING:
-    from ...denoiser import InferenceSessionWithScale
+    from ...ml.onnx_session import InferenceSessionWithScale
     from ...term import Console
     from ..models import OrchestratorConfig, SkipActionConfig, VolumeConfig
 
