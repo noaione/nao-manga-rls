@@ -34,6 +34,8 @@ from importlib import util as importutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
+from .winml import get_winml_ep_libraries
+
 if TYPE_CHECKING:
     import onnxruntime as ort
 
@@ -172,10 +174,12 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
     if sys.platform != "darwin":
         ort.preload_dlls()
 
+    excluded = []
     if is_trt_ep_available is not None:
-        import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
+        import onnxruntime_ep_nv_tensorrt_rtx as trt_rtx_ep  # type: ignore
 
-        ort.register_execution_provider_library(trt_ep.get_ep_name(), trt_ep.get_library_path())  # type: ignore
+        ort.register_execution_provider_library(trt_rtx_ep.get_ep_name(), trt_rtx_ep.get_library_path())  # type: ignore
+        excluded.append(trt_rtx_ep.get_ep_name())
     if is_mlx_ep_available is not None:
         # MLX is an Apple Silicon plugin EP, it has to be registered before any session is built
         import onnxruntime_ep_mlx  # type: ignore
@@ -186,6 +190,11 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
         import onnxruntime_ep_openvino as openvino_ep  # type: ignore
 
         ort.register_execution_provider_library(openvino_ep.get_ep_name(), openvino_ep.get_library_path())  # type: ignore
+        excluded.append(openvino_ep.get_ep_name())
+
+    winml_libs = get_winml_ep_libraries(excluded)
+    for name, path in winml_libs:
+        ort.register_execution_provider_library(name, str(path))
     __preloaded_ort__ = ort
 
     return ort  # type: ignore

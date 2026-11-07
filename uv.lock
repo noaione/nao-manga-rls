@@ -852,14 +852,9 @@ denoiser = [
     { name = "onnx" },
     { name = "onnxscript" },
     { name = "resselt" },
-    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
-    { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" }, marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
-    { name = "winrt-runtime", marker = "sys_platform == 'win32'" },
-    { name = "winrt-windows-applicationmodel", marker = "sys_platform == 'win32'" },
-    { name = "winrt-windows-foundation", marker = "sys_platform == 'win32'" },
-    { name = "winrt-windows-foundation-collections", marker = "sys_platform == 'win32'" },
-    { name = "winrt-windows-management-deployment", marker = "sys_platform == 'win32'" },
-    { name = "winrt-windows-system", marker = "sys_platform == 'win32'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" }, marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
+    { name = "windowsml", marker = "sys_platform == 'win32'" },
 ]
 denoiser-intel = [
     { name = "onnxruntime-ep-openvino", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
@@ -871,7 +866,8 @@ denoiser-nvidia = [
     { name = "onnxruntime-ep-nv-tensorrt-rtx-cu13", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "onnxruntime-gpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "tensorrt-cu13", marker = "(python_full_version < '3.14' and sys_platform == 'linux') or (python_full_version < '3.14' and sys_platform == 'win32')" },
-    { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" } },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
+    { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" }, marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
 ]
 denoiser-ort = [
     { name = "onnxruntime" },
@@ -938,12 +934,7 @@ requires-dist = [
     { name = "vapoursynth-nimages", marker = "extra == 'vapoursynth'", specifier = "==0.2.1", index = "https://pypi.serik.at/simple/" },
     { name = "vsrepo", marker = "extra == 'vapoursynth'" },
     { name = "wand", specifier = "==0.7.2" },
-    { name = "winrt-runtime", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = "==3.2.1" },
-    { name = "winrt-windows-applicationmodel", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
-    { name = "winrt-windows-foundation", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
-    { name = "winrt-windows-foundation-collections", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
-    { name = "winrt-windows-management-deployment", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
-    { name = "winrt-windows-system", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = ">=3.2.1" },
+    { name = "windowsml", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = "==2.5.96" },
 ]
 provides-extras = ["dev", "gui", "denoiser", "denoiser-ort", "denoiser-nvidia", "denoiser-intel", "denoiser-mlx", "vapoursynth", "epub-render"]
 
@@ -1741,8 +1732,8 @@ dependencies = [
     { name = "einops" },
     { name = "numpy" },
     { name = "safetensors" },
-    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
-    { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" }, marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" }, marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b7/a7/7967f73cf12179035810df12b10174ac7c70e1766a9ad9b4d30c9a732499/resselt-1.4.1.tar.gz", hash = "sha256:9d33b0a095bde3ccc5696a6d5b5d09496f4ab923900023ea0845fa41338e195e", size = 178701, upload-time = "2026-06-05T21:25:59.525Z" }
 wheels = [
@@ -1970,21 +1961,26 @@ wheels = [
 name = "torch"
 version = "2.15.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "extra != 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort'",
+    "sys_platform != 'linux' and sys_platform != 'win32' and extra != 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia' and extra != 'extra-6-nmanga-denoiser-ort'",
+    "extra != 'extra-6-nmanga-denoiser-nvidia' and extra != 'extra-6-nmanga-denoiser-ort'",
+]
 dependencies = [
     { name = "cuda-bindings", marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
-    { name = "filelock", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
-    { name = "fsspec", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
-    { name = "jinja2", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
-    { name = "networkx", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "filelock", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "fsspec", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "jinja2", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "networkx", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
     { name = "nvidia-cudnn-cu13", marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-cusparselt-cu13", marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-nccl-cu13", marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-nvshmem-cu13", marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
-    { name = "setuptools", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
-    { name = "sympy", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "setuptools", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "sympy", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
     { name = "triton", marker = "(sys_platform == 'linux' and extra != 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
-    { name = "typing-extensions", marker = "extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
+    { name = "typing-extensions", marker = "(sys_platform != 'linux' and sys_platform != 'win32') or extra == 'extra-6-nmanga-denoiser-mlx' or extra != 'extra-6-nmanga-denoiser-nvidia' or extra == 'extra-6-nmanga-denoiser-ort'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/87/fa/efeb85d3ba1d8ef497664db5358ac72a7d1d0f1d8a8ad487cba89753f279/torch-2.15.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:fbefd73b521d3c75c5a1d7c77056b2c6339b81468d14d4e33c55f525418a5855", size = 138556890, upload-time = "2026-10-28T15:16:45.195Z" },
@@ -2007,23 +2003,22 @@ version = "2.15.0+cu132"
 source = { registry = "https://download.pytorch.org/whl/cu132" }
 resolution-markers = [
     "sys_platform == 'linux' or sys_platform == 'win32'",
-    "sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 dependencies = [
     { name = "cuda-bindings", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
-    { name = "filelock", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
-    { name = "fsspec", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
-    { name = "jinja2", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
-    { name = "networkx", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
+    { name = "filelock", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
+    { name = "fsspec", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
+    { name = "jinja2", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
+    { name = "networkx", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-cudnn-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-cusparselt-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-nccl-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "nvidia-nvshmem-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
-    { name = "setuptools", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
-    { name = "sympy", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
+    { name = "setuptools", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
+    { name = "sympy", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
     { name = "triton", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
-    { name = "typing-extensions", marker = "extra == 'extra-6-nmanga-denoiser-nvidia'" },
+    { name = "typing-extensions", marker = "(sys_platform == 'linux' and extra == 'extra-6-nmanga-denoiser-nvidia') or (sys_platform == 'win32' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-mlx' and extra == 'extra-6-nmanga-denoiser-nvidia') or (extra == 'extra-6-nmanga-denoiser-nvidia' and extra == 'extra-6-nmanga-denoiser-ort')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cu132/torch-2.15.0%2Bcu132-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:022983253b6eac844f370225c61b00b5b2b4cac46b4c7a78caabccf90fafb7e7", upload-time = "2026-10-28T13:25:11Z" },
@@ -2222,105 +2217,12 @@ wheels = [
 ]
 
 [[package]]
-name = "winrt-runtime"
-version = "3.2.1"
+name = "windowsml"
+version = "2.5.96"
 source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/16/dd/acdd527c1d890c8f852cc2af644aa6c160974e66631289420aa871b05e65/winrt_runtime-3.2.1.tar.gz", hash = "sha256:c8dca19e12b234ae6c3dadf1a4d0761b51e708457492c13beb666556958801ea", size = 21721, upload-time = "2025-06-06T14:40:27.593Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/d4/1a555d8bdcb8b920f8e896232c82901cc0cda6d3e4f92842199ae7dff70a/winrt_runtime-3.2.1-cp313-cp313-win32.whl", hash = "sha256:44e2733bc709b76c554aee6c7fe079443b8306b2e661e82eecfebe8b9d71e4d1", size = 210022, upload-time = "2025-06-06T06:44:11.767Z" },
-    { url = "https://files.pythonhosted.org/packages/aa/24/2b6e536ca7745d788dfd17a2ec376fa03a8c7116dc638bb39b035635484f/winrt_runtime-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:3c1fdcaeedeb2920dc3b9039db64089a6093cad2be56a3e64acc938849245a6d", size = 241349, upload-time = "2025-06-06T06:44:12.661Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/7f/6d72973279e2929b2a71ed94198ad4a5d63ee2936e91a11860bf7b431410/winrt_runtime-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:28f3dab083412625ff4d2b46e81246932e6bebddf67bea7f05e01712f54e6159", size = 415126, upload-time = "2025-06-06T06:44:13.702Z" },
-    { url = "https://files.pythonhosted.org/packages/c8/87/88bd98419a9da77a68e030593fee41702925a7ad8a8aec366945258cbb31/winrt_runtime-3.2.1-cp314-cp314-win32.whl", hash = "sha256:9b6298375468ac2f6815d0c008a059fc16508c8f587e824c7936ed9216480dad", size = 210257, upload-time = "2025-09-20T07:06:41.054Z" },
-    { url = "https://files.pythonhosted.org/packages/87/85/e5c2a10d287edd9d3ee8dc24bf7d7f335636b92bf47119768b7dd2fd1669/winrt_runtime-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:e36e587ab5fd681ee472cd9a5995743f75107a1a84d749c64f7e490bc86bc814", size = 241873, upload-time = "2025-09-20T07:06:42.059Z" },
-    { url = "https://files.pythonhosted.org/packages/52/2a/eb9e78397132175f70dd51dfa4f93e489c17d6b313ae9dce60369b8d84a7/winrt_runtime-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:35d6241a2ebd5598e4788e69768b8890ee1eee401a819865767a1fbdd3e9a650", size = 416222, upload-time = "2025-09-20T07:06:43.376Z" },
-]
-
-[[package]]
-name = "winrt-windows-applicationmodel"
-version = "3.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "winrt-runtime" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/a6/86bb35f1aa1295d59b7fac47ce41eeaaa217b19e31c5f55e264df07fd3fe/winrt_windows_applicationmodel-3.2.1.tar.gz", hash = "sha256:085cd61caaf0c6bbb54b28f791568be3c16c172f690a311d00e21a97cf4579f4", size = 30487, upload-time = "2025-06-06T14:40:34.848Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/13/7b3240993cc07745ec0d6bf6cd27f50fa2498b64098cba8bd1e838eedc9f/winrt_windows_applicationmodel-3.2.1-cp313-cp313-win32.whl", hash = "sha256:785b72354e95dec5dbf369f0f732fb166ddb38db783954526a4c921d2a7114dd", size = 160310, upload-time = "2025-06-06T06:45:48.124Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/bf/ee12f6fd29840d7db3c2827dc5033cf80d1d803bcc7faee9d3da26164753/winrt_windows_applicationmodel-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:bc849feca3d428aee5d54cecdb580e4a2cc38cc897fae83e8c88ba9e673b00cd", size = 162360, upload-time = "2025-06-06T06:45:49.018Z" },
-    { url = "https://files.pythonhosted.org/packages/e6/86/a26d9251dea76f692210373316e207d62641718a3fd95f0b11f1071ff15e/winrt_windows_applicationmodel-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:62e9079aac2f0e40abb255bb598e286c50cc4e8fbc933d0f6837cef7d9287b42", size = 163358, upload-time = "2025-06-06T06:45:49.95Z" },
-    { url = "https://files.pythonhosted.org/packages/7e/d2/0f01301e86c77726cf04710fb37d10d4690cf7e3d5327836ce2d064fabf1/winrt_windows_applicationmodel-3.2.1-cp314-cp314-win32.whl", hash = "sha256:c51b0954a3bb19bc0965d2cb3008ae4089089485e5eb7a50106bb48a9cae443e", size = 164490, upload-time = "2025-09-20T07:07:02.177Z" },
-    { url = "https://files.pythonhosted.org/packages/ff/71/930e2d1e1f889c37c24d3b07e11266f40c27efc58b3727c4e928317f40a2/winrt_windows_applicationmodel-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:bad67a448ad84c33a3cd1ce0bd102c98c407631da0a6f8038096f9b5d33259d5", size = 167767, upload-time = "2025-09-20T07:07:03.366Z" },
-    { url = "https://files.pythonhosted.org/packages/d6/58/359477a6b0d9d3a1dac43ff5dd3022ba4734405187acc84d9e28acdc844e/winrt_windows_applicationmodel-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:8098ff5c12aa7fdbf14adbdfa7236acb82939508778f5582e30da41576cdb46d", size = 172097, upload-time = "2025-09-20T07:07:04.291Z" },
-]
-
-[[package]]
-name = "winrt-windows-foundation"
-version = "3.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "winrt-runtime" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/55/098ce7ea0679efcc1298b269c48768f010b6c68f90c588f654ec874c8a74/winrt_windows_foundation-3.2.1.tar.gz", hash = "sha256:ad2f1fcaa6c34672df45527d7c533731fdf65b67c4638c2b4aca949f6eec0656", size = 30485, upload-time = "2025-06-06T14:41:53.344Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7b/71/5e87131e4aecc8546c76b9e190bfe4e1292d028bda3f9dd03b005d19c76c/winrt_windows_foundation-3.2.1-cp313-cp313-win32.whl", hash = "sha256:3998dc58ed50ecbdbabace1cdef3a12920b725e32a5806d648ad3f4829d5ba46", size = 112184, upload-time = "2025-06-06T07:11:04.459Z" },
-    { url = "https://files.pythonhosted.org/packages/ba/7f/8d5108461351d4f6017f550af8874e90c14007f9122fa2eab9f9e0e9b4e1/winrt_windows_foundation-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:6e98617c1e46665c7a56ce3f5d28e252798416d1ebfee3201267a644a4e3c479", size = 118672, upload-time = "2025-06-06T07:11:05.55Z" },
-    { url = "https://files.pythonhosted.org/packages/44/f5/2edf70922a3d03500dab17121b90d368979bd30016f6dbca0d043f0c71f1/winrt_windows_foundation-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:2a8c1204db5c352f6a563130a5a41d25b887aff7897bb677d4ff0b660315aad4", size = 109673, upload-time = "2025-06-06T07:11:06.398Z" },
-    { url = "https://files.pythonhosted.org/packages/e3/0a/d77346e39fe0c81f718cde49f83fe77c368c0e14c6418f72dfa1e7ef22d0/winrt_windows_foundation-3.2.1-cp314-cp314-win32.whl", hash = "sha256:35e973ab3c77c2a943e139302256c040e017fd6ff1a75911c102964603bba1da", size = 114590, upload-time = "2025-09-20T07:11:49.97Z" },
-    { url = "https://files.pythonhosted.org/packages/a1/56/4d2b545bea0f34f68df6d4d4ca22950ff8a935497811dccdc0ca58737a05/winrt_windows_foundation-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:a22a7ebcec0d262e60119cff728f32962a02df60471ded8b2735a655eccc0ef5", size = 122148, upload-time = "2025-09-20T07:11:50.826Z" },
-    { url = "https://files.pythonhosted.org/packages/ed/ed/b9d3a11cac73444c0a3703200161cd7267dab5ab85fd00e1f965526e74a8/winrt_windows_foundation-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:3be7fbae829b98a6a946db4fbaf356b11db1fbcbb5d4f37e7a73ac6b25de8b87", size = 114360, upload-time = "2025-09-20T07:11:51.626Z" },
-]
-
-[[package]]
-name = "winrt-windows-foundation-collections"
-version = "3.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "winrt-runtime" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ef/62/d21e3f1eeb8d47077887bbf0c3882c49277a84d8f98f7c12bda64d498a07/winrt_windows_foundation_collections-3.2.1.tar.gz", hash = "sha256:0eff1ad0d8d763ad17e9e7bbd0c26a62b27215016393c05b09b046d6503ae6d5", size = 16043, upload-time = "2025-06-06T14:41:53.983Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/cd/99ef050d80bea2922fa1ded93e5c250732634095d8bd3595dd808083e5ca/winrt_windows_foundation_collections-3.2.1-cp313-cp313-win32.whl", hash = "sha256:4267a711b63476d36d39227883aeb3fb19ac92b88a9fc9973e66fbce1fd4aed9", size = 60063, upload-time = "2025-06-06T07:11:18.65Z" },
-    { url = "https://files.pythonhosted.org/packages/94/93/4f75fd6a4c96f1e9bee198c5dc9a9b57e87a9c38117e1b5e423401886353/winrt_windows_foundation_collections-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:5e12a6e75036ee90484c33e204b85fb6785fcc9e7c8066ad65097301f48cdd10", size = 69057, upload-time = "2025-06-06T07:11:19.446Z" },
-    { url = "https://files.pythonhosted.org/packages/40/76/de47ccc390017ec5575e7e7fd9f659ee3747c52049cdb2969b1b538ce947/winrt_windows_foundation_collections-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:34b556255562f1b36d07fba933c2bcd9f0db167fa96727a6cbb4717b152ad7a2", size = 58792, upload-time = "2025-06-06T07:11:20.24Z" },
-    { url = "https://files.pythonhosted.org/packages/e1/47/b3301d964422d4611c181348149a7c5956a2a76e6339de451a000d4ae8e7/winrt_windows_foundation_collections-3.2.1-cp314-cp314-win32.whl", hash = "sha256:33188ed2d63e844c8adfbb82d1d3d461d64aaf78d225ce9c5930421b413c45ab", size = 62211, upload-time = "2025-09-20T07:11:52.411Z" },
-    { url = "https://files.pythonhosted.org/packages/20/59/5f2c940ff606297129e93ebd6030c813e6a43a786de7fc33ccb268e0b06b/winrt_windows_foundation_collections-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:d4cfece7e9c0ead2941e55a1da82f20d2b9c8003bb7a8853bb7f999b539f80a4", size = 70399, upload-time = "2025-09-20T07:11:53.254Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/2d/2c8eb89062c71d4be73d618457ed68e7e2ba29a660ac26349d44fc121cbf/winrt_windows_foundation_collections-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:3884146fea13727510458f6a14040b7632d5d90127028b9bfd503c6c655d0c01", size = 61392, upload-time = "2025-09-20T07:11:53.993Z" },
-]
-
-[[package]]
-name = "winrt-windows-management-deployment"
-version = "3.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "winrt-runtime" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/74/6000c3e31c80185e18ab590a7f979f61c5c71aaaf61c67f2c37386d25c53/winrt_windows_management_deployment-3.2.1.tar.gz", hash = "sha256:9e2b9e08c55e321a0c31bbce6047f1038b0e1c1ce36204f5fb725778c33f5b81", size = 29650, upload-time = "2025-06-06T14:42:18.882Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/5e/c6cedc3372426b39245ba3520b40b69a8c15d8675ece4d5cc86fb1b8d019/winrt_windows_management_deployment-3.2.1-cp313-cp313-win32.whl", hash = "sha256:926a6d5a24600c94975483f5bc992b816dcdf4460c4fb955686e25368c635afc", size = 152745, upload-time = "2025-06-06T07:19:27.698Z" },
-    { url = "https://files.pythonhosted.org/packages/f4/c2/31a38a12a613fa9020c22e4acaec7dbfd232be3f4e9490d15ac930c8ddf6/winrt_windows_management_deployment-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:26cf8df85ba94ff10c771af9c5293696d8e31a87f5bcbb00883afeb2b431efa2", size = 174234, upload-time = "2025-06-06T07:19:29.183Z" },
-    { url = "https://files.pythonhosted.org/packages/26/27/c8b2926d268484c3e749f3e99b89a0ccc03d548c90fce8b388079d098c79/winrt_windows_management_deployment-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:afd9c7c2defecb2f5eb2bfaf6751e5aa80bb96aeb65a81ca3710f91a624c003d", size = 158080, upload-time = "2025-06-06T07:19:30.407Z" },
-    { url = "https://files.pythonhosted.org/packages/a8/33/94a1e5fed09550e1d200e28922c2666501acf4ce715f6ce7d08632375976/winrt_windows_management_deployment-3.2.1-cp314-cp314-win32.whl", hash = "sha256:1b8d50598b0c3fd5580b4bcb9383007a248fc49f6c8863ed2093b0db577574cb", size = 155730, upload-time = "2025-09-20T07:13:26.681Z" },
-    { url = "https://files.pythonhosted.org/packages/d7/34/9a2205298282e4635bf2f065fa39b98fec48ce67c297de8c9b81822d57d1/winrt_windows_management_deployment-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:fbf20fa4becf20edb9980bfb9e4f45dfd323d57e4819c49c40a65fde82a1bb24", size = 176999, upload-time = "2025-09-20T07:13:27.613Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/c4/5bc3d686a3bf831e2ce7dbccf2cd329a46aa7755b37c1a0f71d1b7107be3/winrt_windows_management_deployment-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:ba9477e3b5024e74d60432b488f625628c7c35c2409d10cd9324a5770a4e8a18", size = 166450, upload-time = "2025-09-20T07:13:28.585Z" },
-]
-
-[[package]]
-name = "winrt-windows-system"
-version = "3.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "winrt-runtime" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/55/00/7fd3d80d670dff63c7023d05456af3f6660fd2ca6dbaab8ee00b2acaaba0/winrt_windows_system-3.2.1.tar.gz", hash = "sha256:7d4a20bbee26e822b6299ee1b04b1c660f8a1fc685ff63b0472179f9e6b9cc1e", size = 38009, upload-time = "2025-06-06T14:43:24.547Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/cb/a321ff3f261a23923997640b667085e8f10c0bfeb7b746771c05aee099eb/winrt_windows_system-3.2.1-cp313-cp313-win32.whl", hash = "sha256:5ed1f2d944dee5a03fd11bca40bc1fa588fc20e44a46d1aa53259488f55d2258", size = 216625, upload-time = "2025-06-06T14:02:21.437Z" },
-    { url = "https://files.pythonhosted.org/packages/83/f0/92dffcbbce0749e79cb6e544e094abc683da0cfaecd9d7d5383790d49668/winrt_windows_system-3.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:15d313f75cdc1e3b0fdf241941d0a9d142358d1fb2921e721a20e26382e43efc", size = 229013, upload-time = "2025-06-06T14:02:22.306Z" },
-    { url = "https://files.pythonhosted.org/packages/98/36/9682f9e1a619b0e71b44e888b7807fbc2794b05cea9765a4c5379aca15a7/winrt_windows_system-3.2.1-cp313-cp313-win_arm64.whl", hash = "sha256:aa84fb0c94195843a80a0be5fcb3aae30c454336e7ae64c1bbe565decb96c8ab", size = 230494, upload-time = "2025-06-06T14:02:23.195Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/cc/d3c867f2cc24b25cdf30dff97b85252d26a6f93dc90323e95adbbe69cf0f/winrt_windows_system-3.2.1-cp314-cp314-win32.whl", hash = "sha256:99cf1c4a369155f659f4405d93c72e51b0bc35089840d632040b1b28596252bf", size = 220708, upload-time = "2025-09-20T07:17:19.628Z" },
-    { url = "https://files.pythonhosted.org/packages/5a/01/6aa283271375bbd773015195c5c0fdaf3cbf78a9c4cd89ed3bb19e80d38e/winrt_windows_system-3.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:579f69ae1be85b81aaed238d45cacdc41e7f4c9fc86c906260c423c24136c6e9", size = 236244, upload-time = "2025-09-20T07:17:20.84Z" },
-    { url = "https://files.pythonhosted.org/packages/d5/97/9a829a462775ff8dbefc2b36b8012c9e1db535efd6e486641979b39d890c/winrt_windows_system-3.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:bf69fa6b453a31c5ac41556f21b3a4d944f2b460e57aab4a58b366a411ca89b3", size = 242032, upload-time = "2025-09-20T07:17:22.05Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/b3/d86d8fadb310ecbbfbd98746dc2f5c405ab6b609208f7d25bbcf079e6cac/windowsml-2.5.96-py3-none-win_amd64.whl", hash = "sha256:3ac86cee803b45df34e9666715b0fa609860368315adb92fb3661314f2496600", size = 443379, upload-time = "2026-10-26T22:57:52.346Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/84/1b1737344b8a5a66c166a3c662138eaa4f969d656c56d84cef8c08db3121/windowsml-2.5.96-py3-none-win_arm64.whl", hash = "sha256:c34a0783e28065e18e926bd99e8718c25e23bc42240178464ef9d671d5fbe6c2", size = 444179, upload-time = "2026-10-26T22:57:53.635Z" },
 ]
 
 [[package]]

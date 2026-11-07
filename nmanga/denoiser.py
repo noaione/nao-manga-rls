@@ -25,7 +25,6 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import ctypes
 import importlib
 import json
 import logging
@@ -35,7 +34,6 @@ import time
 import warnings
 from enum import Enum
 from hashlib import md5, sha256
-from importlib import metadata
 from importlib import util as importutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
@@ -45,7 +43,6 @@ from PIL import Image
 from .common import format_elapsed_time
 from .lazy import get_einops_rearrange, get_numpy, get_onnxruntime
 from .term import get_console
-from .winml import get_winml_ep_libraries
 
 if TYPE_CHECKING:
     import onnxruntime as ort
@@ -65,7 +62,6 @@ __all__ = (
     "get_model_information",
     "get_model_static_input",
     "get_tf32_tag",
-    "hook_onnx_extensions",
     "prepare_model_runtime",
     "prepare_model_runtime_builders",
     "resolve_model_static_shapes",
@@ -112,61 +108,6 @@ def get_data_dir() -> Path:
         cache_dir = Path.home() / ".cache" / "nmanga"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
-
-
-def _preload_winml_and_register() -> None:
-    global __winml_registered__
-
-    if __winml_registered__:
-        return
-    if sys.platform != "win32":
-        __winml_registered__ = True  # Mark as registered to avoid trying again on non-Windows platforms
-        return
-
-    # Unlink to avoid issues with old versions of msvcp140.dll being loaded by winrt-runtime package
-    try:
-        site_packages_path = Path(str(metadata.distribution("winrt-runtime").locate_file("")))
-        dll_path = site_packages_path / "winrt" / "msvcp140.dll"
-        if dll_path.exists():
-            dll_path.unlink()
-    except metadata.PackageNotFoundError:
-        pass
-
-    ort = get_onnxruntime()
-
-    SKIP_ME = ["NvTensorRTRTXExecutionProvider"]
-    winml_libraries = get_winml_ep_libraries()
-    for lib_name, lib_path in winml_libraries:
-        if lib_name in SKIP_ME:
-            continue
-        ort.register_execution_provider_library(lib_name, str(lib_path))
-
-    __winml_registered__ = True
-
-
-def _preload_custom_extensions() -> None:
-    global __nmanga_trt_extension_hooked__
-
-    if __nmanga_trt_extension_hooked__:
-        return
-
-    # Check from environment
-    if "NMANGA_TRT_EXTENSIONS_DIR" in os.environ:
-        target_dir = Path(os.environ["NMANGA_TRT_EXTENSIONS_DIR"])
-        if not target_dir.exists() or not target_dir.is_dir():
-            return
-
-        # find any DLL and so files
-        for file in target_dir.glob("*.dll"):
-            ctypes.CDLL(file, mode=ctypes.RTLD_GLOBAL)
-        for file in target_dir.glob("*.so"):
-            ctypes.CDLL(file, mode=ctypes.RTLD_GLOBAL)
-    __nmanga_trt_extension_hooked__ = True
-
-
-def hook_onnx_extensions():
-    _preload_winml_and_register()
-    _preload_custom_extensions()
 
 
 def get_model_scale_factor(
@@ -748,8 +689,6 @@ def prepare_model_runtime_builders(
     verb_level = 0 if is_verbose else 3
     ort.set_default_logger_severity(verb_level)
     ort.set_default_logger_verbosity(verb_level)
-
-    _preload_winml_and_register()
 
     data_dir = get_data_dir()
     cache_dir = data_dir / "trt_engines"

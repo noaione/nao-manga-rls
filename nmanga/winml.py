@@ -26,184 +26,33 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import ctypes
-import platform
 import sys
 from pathlib import Path
-from typing import Optional
 
-__all__ = (
-    "find_metapackage",
-    "get_winml_ep_libraries",
-)
-
-# Enums
-WinMLEpReadyState_Ready = 0
-WinMLEpReadyState_NotReady = 1
-WinMLEpReadyState_NotPresent = 2
-
-WinMLEpCertification_Unknown = 0
-WinMLEpCertification_Certified = 1
-WinMLEpCertification_Uncertified = 2
-
-# Keep DLL handles alive so the loader doesn't unmap them from under ORT
-_preloaded_dlls: list[ctypes.CDLL] = []
-
-
-class WinMLEpInfo(ctypes.Structure):
-    _fields_ = [
-        ("name", ctypes.c_char_p),
-        ("version", ctypes.c_char_p),
-        ("packageFamilyName", ctypes.c_char_p),
-        ("libraryPath", ctypes.c_char_p),
-        ("packageRootPath", ctypes.c_char_p),
-        ("readyState", ctypes.c_int),
-        ("certification", ctypes.c_int),
-    ]
+__all__ = ("get_winml_ep_libraries",)
 
 
 def win():
     return sys.platform == "win32"
 
 
-def find_metapackage() -> Optional[Path]:
-    if not win():
-        return None
-
-    from winrt.windows.applicationmodel import Package  # type: ignore
-    from winrt.windows.management.deployment import PackageManager  # type: ignore
-    from winrt.windows.system import ProcessorArchitecture  # type: ignore
-
-    matching_arch = None
-    match platform.machine().upper():
-        case "AMD64":
-            matching_arch = ProcessorArchitecture.X64
-        case "i386":
-            matching_arch = ProcessorArchitecture.X86
-        case "ARM64":
-            matching_arch = ProcessorArchitecture.ARM64
-        case "ARM":
-            matching_arch = ProcessorArchitecture.ARM
-
-    if not matching_arch:
-        return None
-
-    pm = PackageManager()
-    packages = pm.find_packages_by_user_security_id("")
-    candidates: list[Package] = []
-    for pkg in packages:
-        if "WindowsAppRuntime.2" in pkg.display_name and pkg.id.architecture == matching_arch:
-            candidates.append(pkg)
-
-    candidates.sort(
-        key=lambda p: (
-            p.id.version.major,
-            p.id.version.minor,
-            p.id.version.build,
-            p.id.version.revision,
-        ),
-        reverse=True,
-    )
-
-    for pkg in candidates:
-        full_path = Path(pkg.installed_path)
-        ai_ml_dll = full_path / "Microsoft.Windows.AI.MachineLearning.dll"
-        if ai_ml_dll.exists():
-            return full_path
-
-
-def get_winml_ep_libraries() -> list[tuple[str, Path]]:
+def get_winml_ep_libraries(exclusion_list: list[str] | None = None) -> list[tuple[str, Path]]:
     if not win():
         return []
 
-    import ctypes.wintypes
+    excluded = set(exclusion_list or [])
 
-    wasdk_path = find_metapackage()
-    if not wasdk_path:
-        return []
+    from windowsml import EpCatalog, EpReadyState
 
-    try:
-        winml = ctypes.WinDLL(wasdk_path / "Microsoft.Windows.AI.MachineLearning.dll")  # type: ignore
-    except OSError:
-        return []
+    new_sets: list[tuple[str, Path]] = []
+    with EpCatalog() as catalog:
+        providers = catalog.find_all_providers()
+        for provider in providers:
+            if provider.name in excluded:
+                continue
 
-    WinMLEpCatalogCreate = winml.WinMLEpCatalogCreate
-    WinMLEpCatalogCreate.restype = ctypes.HRESULT  # type: ignore
-    WinMLEpCatalogCreate.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
-
-    WinMLEpCatalogRelease = winml.WinMLEpCatalogRelease
-    WinMLEpCatalogRelease.restype = None
-    WinMLEpCatalogRelease.argtypes = [ctypes.c_void_p]
-
-    WinMLEpCatalogEnumProviders = winml.WinMLEpCatalogEnumProviders
-    WinMLEpCatalogEnumProviders.restype = ctypes.HRESULT  # type: ignore
-    WinMLEpCatalogEnumProviders.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-
-    WinMLEpEnsureReady = winml.WinMLEpEnsureReady
-    WinMLEpEnsureReady.restype = ctypes.HRESULT  # type: ignore
-    WinMLEpEnsureReady.argtypes = [ctypes.c_void_p]
-    WinMLEpGetReadyState = winml.WinMLEpGetReadyState
-    WinMLEpGetReadyState.restype = ctypes.HRESULT  # type: ignore
-    WinMLEpGetReadyState.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int)]
-
-    WinMLEpGetLibraryPathSize = winml.WinMLEpGetLibraryPathSize
-    WinMLEpGetLibraryPathSize.restype = ctypes.HRESULT  # type: ignore
-    WinMLEpGetLibraryPathSize.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
-
-    WinMLEpGetLibraryPath = winml.WinMLEpGetLibraryPath
-    WinMLEpGetLibraryPath.restype = ctypes.HRESULT  # type: ignore
-    WinMLEpGetLibraryPath.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_size_t,
-        ctypes.c_char_p,
-        ctypes.POINTER(ctypes.c_size_t),
-    ]
-
-    ENUM_CALLBACK = ctypes.WINFUNCTYPE(  # type: ignore
-        ctypes.wintypes.BOOL,
-        ctypes.c_void_p,  # WinMLEpHandle ep
-        ctypes.POINTER(WinMLEpInfo),  # const WinMLEpInfo* info
-        ctypes.c_void_p,  # void* context
-    )
-
-    catalog = ctypes.c_void_p()
-    if WinMLEpCatalogCreate(ctypes.byref(catalog)) != 0:
-        return []
-
-    registered: list[tuple[str, Path]] = []
-
-    def _ep_callback(ep_handle, info_ptr, _ctx):
-        info = info_ptr.contents
-
-        if info.certification != WinMLEpCertification_Certified:
-            return True
-        if info.readyState == WinMLEpReadyState_NotPresent:
-            return True
-        if WinMLEpEnsureReady(ep_handle) != 0:
-            return True
-
-        ready_state = ctypes.c_int()
-        WinMLEpGetReadyState(ep_handle, ctypes.byref(ready_state))
-
-        path_size = ctypes.c_size_t()
-        if WinMLEpGetLibraryPathSize(ep_handle, ctypes.byref(path_size)) != 0 or path_size.value == 0:
-            return True
-
-        path_buf = ctypes.create_string_buffer(path_size.value)
-        used = ctypes.c_size_t()
-        if WinMLEpGetLibraryPath(ep_handle, path_size.value, path_buf, ctypes.byref(used)) != 0:
-            return True
-
-        name = info.name.decode() if info.name else None
-        path = path_buf.value.decode()
-
-        if name and path:
-            full_path = Path(path)
-            registered.append((name, full_path))
-        return True
-
-    try:
-        WinMLEpCatalogEnumProviders(catalog, ENUM_CALLBACK(_ep_callback), None)
-    finally:
-        WinMLEpCatalogRelease(catalog)
-    return registered
+            # if not, let's play
+            provider.ensure_ready()
+            if provider.ready_state == EpReadyState.Ready:
+                new_sets.append((provider.name, Path(provider.library_path)))
+    return new_sets
