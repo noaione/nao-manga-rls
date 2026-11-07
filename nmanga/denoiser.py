@@ -627,7 +627,7 @@ def _compile_nvrtx_model_for_ep(
     model_comp = _get_nvrtx_compiled_model_path(model_path, data_dir, cache_key)
     model_comp.parent.mkdir(parents=True, exist_ok=True)
     if model_comp.exists():
-        cnsl.info(f"Found pre-compiled model {model_path.stem} for TRT-RTX engine")
+        cnsl.info(f"Found pre-compiled model {model_path.stem} for TRT-RTX EP engine")
         return model_comp
 
     sess_opt = ort.SessionOptions()
@@ -641,7 +641,7 @@ def _compile_nvrtx_model_for_ep(
         embed_compiled_data_into_model=not is_large_size,
         graph_optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED,
     )
-    cnsl.info(f"Pre-compiling model {model_path.stem} for TRT-RTX engine")
+    cnsl.info(f"Pre-compiling model {model_path.stem} for TRT-RTX EP engine")
     st_time = time.time()
     compiler.compile_to_file(str(model_comp))
     et_time = time.time()
@@ -770,7 +770,6 @@ def prepare_model_runtime_builders(
         "trt_engine_hw_compatible": needs_trt_compat,
     }
     trtrtx_ep_config = {
-        "device_id": str(device_id),
         "enable_cuda_graph": "1" if enable_cuda_graph else "0",
         "nv_max_workspace_size": str(memory_limit),
         "nv_detailed_build_log": "1" if is_verbose else "0",
@@ -828,14 +827,8 @@ def prepare_model_runtime_builders(
         providers = []
         ep_providers = []
         has_nvrtx = False
-        if "NvTensorRTRTXExecutionProvider" in raw_providers and with_nvrtx:
-            providers.append(("NvTensorRTRTXExecutionProvider", trtrtx_ep_config))
-            has_nvrtx = True
-        elif "nv_tensorrt_rtx" in raw_providers and with_nvrtx:
-            providers.append(("nv_tensorrt_rtx", trtrtx_ep_config))
-            has_nvrtx = True
-        elif "nv_tensorrt_rtx" in ep_devices and with_nvrtx:
-            ep_providers.append((ep_devices["nv_tensorrt_rtx"], trtrtx_ep_config))
+        if "NvTensorRTRTXExecutionProvider" in ep_devices and with_nvrtx:
+            ep_providers.append((ep_devices["NvTensorRTRTXExecutionProvider"], trtrtx_ep_config))
             has_nvrtx = True
             has_good_ep_devices = True
         if "TensorrtExecutionProvider" in raw_providers and not has_nvrtx:
@@ -908,7 +901,7 @@ def prepare_model_runtime_builders(
     required_providers: set[str] = set()
     if strict_ep:
         if with_nvrtx:
-            required_providers = {"nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"}
+            required_providers = {"NvTensorRTRTXExecutionProvider"}
             if not has_nvrtx:
                 raise RuntimeError(
                     "TensorRT RTX was requested but this ONNX Runtime exposes no RTX execution provider. "
@@ -930,28 +923,20 @@ def prepare_model_runtime_builders(
 
     # Check if nvrtx exist, if yes we should recompile
     selected_model_path = model_path
-    has_nvrtx_compiled_already = False
-    for ep_name, ep_config in providers:
-        if ep_name in ["nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"]:
-            selected_model_path = _compile_nvrtx_model(model_path, data_dir, cache_prefix, ep_name, ep_config)
-            has_nvrtx_compiled_already = True
-            break
 
     if has_good_ep_devices:
         providers = None  # Use EP devices for NvRTX
 
-    if not has_nvrtx_compiled_already:
-        for ep_devices, ep_config in ep_providers:
-            if ep_devices.ep_name in ["nv_tensorrt_rtx", "NvTensorRTRTXExecutionProvider"]:
-                selected_model_path = _compile_nvrtx_model_for_ep(
-                    model_path,
-                    data_dir,
-                    cache_prefix,
-                    ep_devices,
-                    ep_config,
-                )
-                has_nvrtx_compiled_already = True
-                break
+    for ep_devices, ep_config in ep_providers:
+        if ep_devices.ep_name == "NvTensorRTRTXExecutionProvider":
+            selected_model_path = _compile_nvrtx_model_for_ep(
+                model_path,
+                data_dir,
+                cache_prefix,
+                ep_devices,
+                ep_config,
+            )
+            break
 
     session = cast(
         "InferenceSessionWithScale",
