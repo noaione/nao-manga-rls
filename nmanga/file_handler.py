@@ -25,7 +25,6 @@ SOFTWARE.
 from __future__ import annotations
 
 import random
-import sys
 import tarfile
 import tempfile
 import zipfile
@@ -33,10 +32,9 @@ from copy import deepcopy
 from enum import Enum
 from io import BytesIO
 from mimetypes import types_map
-from os import PathLike
 from pathlib import Path
 from string import ascii_letters, digits
-from typing import IO, Generator, TypeAlias
+from typing import Generator, TypeAlias
 
 import ftfy
 import py7zr
@@ -100,48 +98,6 @@ class WrappedRarFile(rarfile.RarFile):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
-
-
-class UnicodeZipFile(zipfile.ZipFile):
-    def __init__(
-        self,
-        file: str | PathLike | IO[bytes],
-        mode: str = "r",
-        compression: int = zipfile.ZIP_STORED,
-        allowZip64: bool = True,  # ruff: ignore[invalid-argument-name]
-        compresslevel: int | None = None,
-        *,
-        strict_timestamps: bool = True,
-        metadata_encoding: str | None = None,
-    ):
-        # Check if python 3.10 or below which does not support metadata_encoding
-        if sys.version_info < (3, 11):
-            self.metadata_encoding = metadata_encoding
-            if self.metadata_encoding and mode != "r":
-                raise NotImplementedError("metadata_encoding is only supported in read mode")
-            super().__init__(file, mode, compression, allowZip64, compresslevel, strict_timestamps=strict_timestamps)  # type: ignore
-        else:
-            super().__init__(
-                file,
-                mode,  # type: ignore
-                compression,
-                allowZip64,
-                compresslevel=compresslevel,
-                strict_timestamps=strict_timestamps,
-                metadata_encoding=metadata_encoding,
-            )  # type: ignore
-
-        # Post init we modify filelist
-        self.metadata_encoding = self.metadata_encoding or metadata_encoding
-        if self.metadata_encoding:
-            for info in self.filelist:
-                if info.flag_bits & 0x800:
-                    continue  # Already UTF-8, don't care
-                # Encode back in cp437 then decode in UTF-8
-                if self.metadata_encoding.lower() == "cp437":
-                    # Skip
-                    continue
-                info.filename = info.filename.encode("cp437").decode(self.metadata_encoding)
 
 
 def is_image(file_name: str) -> bool:
@@ -226,7 +182,7 @@ def collect_image_archive(file: Path):
         return
 
     if is_cbz(file):
-        with UnicodeZipFile(str(file), metadata_encoding="utf-8") as cbz_file:  # Use utf-8 metadata
+        with zipfile.ZipFile(str(file), metadata_encoding="utf-8") as cbz_file:  # Use utf-8 metadata
             yield from collect_image_from_cbz(cbz_file)
     elif is_rar(file):
         with WrappedRarFile(str(file)) as rar_file:
@@ -416,7 +372,7 @@ class MangaArchive:
             return self.__accessor
         if self.__path.is_file():
             if is_cbz(self.__path):
-                self.__accessor = UnicodeZipFile(str(self.__path), metadata_encoding="utf-8")  # Use utf-8 metadata
+                self.__accessor = zipfile.ZipFile(str(self.__path), metadata_encoding="utf-8")  # Use utf-8 metadata
             elif is_rar(self.__path):
                 self.__accessor = rarfile.RarFile(str(self.__path))  # type: ignore
             elif is_7zarchive(self.__path):

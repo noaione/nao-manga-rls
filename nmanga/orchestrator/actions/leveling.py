@@ -29,7 +29,7 @@ import shutil
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from PIL import Image
 from pydantic import ConfigDict, Field
@@ -44,6 +44,7 @@ from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
+    from ...vapour import AutolevelOptions
     from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = (
@@ -410,7 +411,7 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
         if to_process:
             chain = vs_autolevel_clip(
                 to_process,
-                options=self,  # pyright: ignore[reportArgumentType]
+                options=cast("AutolevelOptions", self),
                 prefetch=self.prefetch,
                 debug=context.terminal.debugged,
                 core=vs.core,

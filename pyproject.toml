@@ -236,8 +236,8 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 "pipelines/*" = ["T", "I", "subprocess-without-shell-equals-true", "D"]
 "tools/*.py" = ["undocumented-public-module", "print", "missing-required-import"]
 
-[tool.pyright]
-exclude = [
+[tool.pyrefly]
+project-excludes = [
     ".vscode/*",
     "tests/*",
     "_templates/**/*",
@@ -246,8 +246,9 @@ exclude = [
     ".venv",
     "venv",
     "env",
-    "**/Lib/**",
-    "**/node_modules/**",
+    "**/Lib/**/*",
+    "**/node_modules/**/*",
     "**/__pycache__",
-    "**/.*"
+    "**/.*",
 ]
+infer-with-first-use = false

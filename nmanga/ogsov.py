@@ -64,6 +64,7 @@ class OGSOV(MangaColorInference):
 
         np = get_numpy()
         torch = get_torch()
+
         from scipy.stats import kurtosis, skew
 
         self.__np = np
@@ -544,10 +545,14 @@ class OGSOX(MangaColorInference):
             batched_image_array = rearrange(batched_image_array, "n h w c -> n c h w")
 
             # make the prediction
-            combined_predictions: list["ndarray"] = self.model_session.run(
-                output_names=["final_output"],
-                input_feed={"input_features": batched_image_array},
-            )  # type: ignore
+            # ONNX Runtime returns a sequence of outputs, which is only ever indexed here.
+            combined_predictions = cast(
+                "list[ndarray]",
+                self.model_session.run(
+                    output_names=["final_output"],
+                    input_feed={"input_features": batched_image_array},
+                ),
+            )
 
             # get the predicted values
             predicted_value: float = float(combined_predictions[0].item())

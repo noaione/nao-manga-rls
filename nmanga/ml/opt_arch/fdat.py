@@ -442,7 +442,7 @@ def unshuffle_of(model: nn.Module, path: Path) -> int:
                 f"first layer is {type(first).__name__} for {path.name}; the fast-preset adapter expects "
                 "a pixel-unshuffle first layer, so this resselt structure is unsupported."
             )
-        return int(first.downscale_factor)
+        return int(first.downscale_factor)  # pyrefly: ignore[unnecessary-type-conversion]
     if isinstance(conv_first, torch.nn.Conv2d):
         return 1
     raise ValueError(
@@ -464,7 +464,7 @@ def _conv_first_in_channels(model: nn.Module, unshuffle: int, path: Path) -> int
             f"resselt built {type(model).__name__} with a {type(conv).__name__} after its "
             f"pixel-unshuffle layer for {path.name}; the normalized FDAT contract cannot be checked."
         )
-    return int(conv.in_channels)
+    return int(conv.in_channels)  # pyrefly: ignore[unnecessary-type-conversion]
 
 
 def cross_check(model: nn.Module, info: ModelInfo, path: Path) -> None:
