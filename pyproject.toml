@@ -50,6 +50,8 @@ dev = [
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "ruff==0.17.4",
+    "scipy-stubs==1.18.1.1",
+    "types-defusedxml==0.7.0.20260504"
 ]
 gui = ["PySide6>=6.7"]
 denoiser = [
