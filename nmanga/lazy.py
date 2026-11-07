@@ -184,7 +184,6 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
         # MLX is an Apple Silicon plugin EP, it has to be registered before any session is built
         import onnxruntime_ep_mlx  # type: ignore
 
-        onnxruntime_ep_mlx.register_execution_provider_library()  # type: ignore
         ort.register_execution_provider_library(onnxruntime_ep_mlx.EP_NAME, onnxruntime_ep_mlx.library_path())
     if is_openvino_ep_available is not None:
         import onnxruntime_ep_openvino as openvino_ep  # type: ignore
