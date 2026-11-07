@@ -44,7 +44,8 @@ The base install only has what the image and archive commands need. Everything e
 The denoise and `upscale-trt` commands need the `denoiser` extra plus one execution provider.
 The `torch infer` and `torch to-onnx` commands only need the `denoiser` extra: they load the
 checkpoint with `resselt` and run it with PyTorch, so no ONNX Runtime provider is involved.
-`torch infer --compile` additionally needs a working Triton installation and CUDA.
+`torch infer --compile` additionally needs CUDA and Triton, which the `denoiser` extra provides on
+Windows (elsewhere the torch wheel pulls it in).
 
 | Extra | What it adds |
 | --- | --- |

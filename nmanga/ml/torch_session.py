@@ -200,14 +200,14 @@ class TorchRuntime:
                 self.compiled = True
                 self._warm(settings.tiling.tile_size)
             except Exception as exc:
-                # Inductor needs a working Triton on Windows/Linux; without it the failure only
-                # surfaces on the first tile. Release the model and report something actionable.
+                # Inductor needs a working Triton and a C toolchain; without them the failure only
+                # surfaces on the first tile. Release the model and report the compiler error.
                 self.close()
                 raise RuntimeError(
                     f"torch.compile failed while compiling and warming the first tile: "
                     f"{type(exc).__name__}: {exc}. torch.compile with mode={_COMPILE_MODE!r} needs "
-                    "a working Triton installation on this platform; install it, or re-run without "
-                    "--compile to use the validated eager recipe."
+                    "a working Triton installation and C toolchain on this platform; fix that, or "
+                    "re-run without --compile to use the validated eager recipe."
                 ) from exc
             self.compile_seconds = time.perf_counter() - compile_start
         elif resolved.type == "cuda":
