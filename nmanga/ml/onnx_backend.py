@@ -61,7 +61,7 @@ def denoise_single_image(
     if not isinstance(scale_factor, int):
         raise ValueError("Model scale factor is not set. Ensure the model was prepared correctly.")
     input_channel_count: int = model.get_inputs()[0].shape[1]
-    is_grayscale = bool(input_channel_count == 1)
+    is_grayscale = input_channel_count == 1
     # Some models declare fixed input dimensions, only feed them what they accept.
     batch_size = resolve_model_input_sizes(model, batch_size=batch_size, tile_size=tile_size)
 
@@ -73,8 +73,8 @@ def denoise_single_image(
     tile_count_height = int(np.ceil((image_height / tile_size)))
     tile_count_width = int(np.ceil((image_width / tile_size)))
 
-    padded_height = int(tile_count_height * tile_size)
-    padded_width = int(tile_count_width * tile_size)
+    padded_height = tile_count_height * tile_size
+    padded_width = tile_count_width * tile_size
     # Create a new image with the instructed background and paste the old one into it.
     # A white background helps with contrast stretching (can lead to reversing CMYK shift).
     background_tuple = (0, 0, 0) if background == "black" else (255, 255, 255)

@@ -273,7 +273,7 @@ class TorchRuntime:
         from ..lazy import get_torch
 
         torch = get_torch()
-        size = max(1, int(tile_size))
+        size = max(1, tile_size)
         sample = torch.zeros(1, self.info.in_channels, size, size, dtype=torch.float32)
         started = time.perf_counter()
         self.predict(sample)
@@ -336,7 +336,7 @@ class TorchRuntime:
             )
         if tensor.shape[1] != self.info.in_channels:
             raise ValueError(f"TorchRuntime.predict expects {self.info.in_channels} channels, got {tensor.shape[1]}.")
-        height, width = int(tensor.shape[-2]), int(tensor.shape[-1])
+        height, width = tensor.shape[-2], tensor.shape[-1]
         if height < 1 or width < 1:
             raise ValueError(f"TorchRuntime.predict expects a non-empty tile, got {height}x{width}.")
         staged = tensor.to(device=self.device, dtype=torch.float32, memory_format=self._memory_format)

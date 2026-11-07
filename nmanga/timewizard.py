@@ -65,7 +65,7 @@ def modify_filetimestamp(file_path: Path, epoch: int) -> None:
     if not IS_WINDOWS_CTIME_SUPPORTED:
         return
 
-    timestamp = int((epoch * 10000000) + 116444736000000000)
+    timestamp = (epoch * 10000000) + 116444736000000000
     ctime = FILETIME(timestamp & 0xFFFFFFFF, timestamp >> 32)
 
     handle = kernel32.CreateFileW(str(file_path), 256, 0, None, 3, 128, None)

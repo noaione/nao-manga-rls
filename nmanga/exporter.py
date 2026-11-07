@@ -24,7 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from mimetypes import guess_type
 from pathlib import Path
@@ -240,7 +240,7 @@ class EPUBMangaExporter(ArchiveMangaExporter):
         self._meta_injected = True
 
     def _initialize_opf(self):
-        current_date = datetime.utcnow().timestamp()
+        current_date = datetime.now(UTC).timestamp()
         identifier = self._manga_title.lower() + f"-{int(current_date)}"
 
         fixed_content_opf = EPUB_CONTENT.format(

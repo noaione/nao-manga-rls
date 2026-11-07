@@ -74,7 +74,7 @@ def _test_exec(
 
         if proc.returncode != 0:
             if callable(extra_check):
-                return bool(extra_check(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8")))
+                return extra_check(proc.stdout.read().decode("utf-8"), proc.stderr.read().decode("utf-8"))
             return False
         return True
     except sp.TimeoutExpired:

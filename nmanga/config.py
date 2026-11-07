@@ -223,7 +223,7 @@ class ConfigHandler:
 
         config.experimentals = _ConfigExperiments(png_tag=png_tag)
 
-        is_first_time = bool(json_data.get("_is_first_time", False))
+        is_first_time = json_data.get("_is_first_time", False)
         self._is_first_time_warn = is_first_time
 
         return config

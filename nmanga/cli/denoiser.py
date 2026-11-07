@@ -161,7 +161,7 @@ def denoiser(
     precision_enum = get_precision_enum(precision)
 
     base_params = [
-        str(w2x_trt_exe),
+        w2x_trt_exe,
         "--model",
         "cunet/art",
         "--scale",

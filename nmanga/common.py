@@ -223,7 +223,7 @@ def format_daiz_like_numbering(
     number: int | float, digit: int = 3, use_minus: bool = True, separator: str = conf.defaults.ch_special_tag
 ):
     if isinstance(number, int):
-        return f"{int(number):0{digit}d}"
+        return f"{number:0{digit}d}"
     base, floating = str(number).split(".")
     floating = int(floating)
     if floating - 4 >= 1 and use_minus:

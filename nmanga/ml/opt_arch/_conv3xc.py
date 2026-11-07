@@ -126,7 +126,7 @@ def fuse_inference_conv(module: Any, *, where: str, info: ModelInfo) -> nn.Conv2
             f"{tuple(conv.padding)}, expected a 3x3 border-padded convolution.",
             info,
         )
-    if tuple(int(axis) for axis in conv.stride) != (module.stride, module.stride):
+    if conv.stride != (module.stride, module.stride):
         raise _structure_error(
             f"{where}.eval_conv has stride {tuple(conv.stride)} but the module declares {module.stride}.", info
         )
