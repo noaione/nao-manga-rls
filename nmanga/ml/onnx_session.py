@@ -22,11 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# The ONNX side of the package: model metadata, static shapes, optimization profiles, the
-# TensorRT / TensorRT RTX / OpenVINO provider configuration and the session builders themselves.
-#
-# Everything in here reaches ONNX Runtime through :func:`nmanga.ml.ort.get_onnxruntime`, so the
-# DLL preloading, telemetry switch and plugin registration happen exactly once per process.
+# ONNX session builders and provider configuration.
 
 from __future__ import annotations
 

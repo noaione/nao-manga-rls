@@ -22,14 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# PIL <-> tensor conversion for the PyTorch inference backend.
-#
-# The model contract is always RGB FP32 NCHW in [0, 1], independent of the source mode: a
-# grayscale page is expanded to RGB for inference and converted back afterwards. The palette
-# choice is deliberate: a palette source is decoded to RGB (or RGBA when it carries
-# transparency) and the prediction is returned in that decoded mode, not requantized back onto
-# the original 256 entry palette. The model changes colours, so requantizing would throw the
-# prediction away and leave PIL picking an approximate palette entry per pixel.
+# PIL <-> tensor conversion for the PyTorch backend.
 
 from __future__ import annotations
 

@@ -14,7 +14,7 @@ torch = pytest.importorskip("torch")
 
 from nmanga.ml.contracts import ModelInfo  # ruff: ignore[module-import-not-at-top-of-file] - after importorskip
 from nmanga.ml.model import load_checkpoint  # ruff: ignore[module-import-not-at-top-of-file]
-from nmanga.ml.optimize import build_fast_model, supports_fast_preset  # ruff: ignore[module-import-not-at-top-of-file]
+from nmanga.ml.opt_arch import build_fast_model, supports_fast_preset  # ruff: ignore[module-import-not-at-top-of-file]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = Path(os.environ.get("NMANGA_TEST_MODELS", REPO_ROOT.parent / "umzi-bench" / "models"))
@@ -32,7 +32,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def test_importing_the_module_stays_lightweight():
-    script = "import sys, nmanga.ml.optimize; print('torch' in sys.modules, 'resselt' in sys.modules)"
+    script = "import sys, nmanga.ml.opt_arch; print('torch' in sys.modules, 'resselt' in sys.modules)"
     result = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,

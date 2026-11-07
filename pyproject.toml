@@ -114,6 +114,7 @@ packages = [
     "nmanga.cli",
     "nmanga.gui",
     "nmanga.ml",
+    "nmanga.ml.opt_arch",
     "nmanga.term",
     "nmanga.templates",
     "nmanga.orchestrator",

@@ -2,6 +2,7 @@
 MIT License
 
 Copyright (c) 2022-present noaione
+Copyright (c) 2025-present anon
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,25 +23,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# resselt checkpoint loading, metadata normalization and provenance.
-#
-# resselt owns architecture detection, construction and the state dict load. This module only
-# turns what resselt reports into the normalized `ModelInfo` contract, cross-checks the parts of
-# an FDAT checkpoint the normalized contract depends on, and records where the numbers came from.
-#
-# Nothing here may import torch or resselt at module import time: `nmanga.ml.model` is imported
-# by code paths (`nmanga --help`, the CLI option parsing) that must stay lightweight.
+# resselt checkpoint loading and `ModelInfo` normalization.
 
 from __future__ import annotations
 
 import hashlib
-import math
 import operator
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .contracts import MLDataType, ModelInfo
+from .opt_arch import adapter_for
 
 if TYPE_CHECKING:
     from torch import nn
@@ -48,7 +42,7 @@ if TYPE_CHECKING:
 __all__ = ("CHECKPOINT_SUFFIX", "LOADER_NAME", "load_checkpoint", "read_model_info")
 
 CHECKPOINT_SUFFIX = ".safetensors"
-"""The checkpoint format `nmanga torch-infer` accepts; resselt loads it natively."""
+"""The checkpoint format `nmanga torch infer` accepts; resselt loads it natively."""
 
 LOADER_NAME = "resselt"
 """The library that detects, constructs and loads the architecture."""
@@ -61,23 +55,7 @@ _FLOAT_DTYPES = {
 }
 """safetensors dtype tag -> the short name recorded in `ModelInfo.stored_dtypes`."""
 
-_FDAT_METADATA_KEY = "upsampler.MetaUpsample"
-"""The FDAT upsampler buffer resselt reads to rebuild the architecture arguments."""
-
-_FDAT_UNSHUFFLE_CONV = "conv_first.1.weight"
-"""The FDAT pixel-unshuffle convolution: present only when the model unshuffles pixels."""
-
 _SHA256_CHUNK = 1024 * 1024
-
-
-def _ensure_typing_self() -> None:
-    """Provide `typing.Self` for resselt on interpreters that predate it (3.10 and older)."""
-    import typing
-
-    if not hasattr(typing, "Self"):
-        from typing_extensions import Self
-
-        typing.Self = Self  # type: ignore[attr-defined]
 
 
 def _loader_version() -> str | None:
@@ -105,7 +83,8 @@ def _validate_checkpoint_path(model_path: str | Path) -> Path:
 
 
 def _read_header(path: Path) -> dict[str, tuple[str, tuple[int, ...]]]:
-    """Read every tensor name in a safetensors checkpoint with its stored dtype and shape.
+    """
+    Read every tensor name in a safetensors checkpoint with its stored dtype and shape.
 
     Only the header is read; no tensor data and no model graph is created.
     """
@@ -119,16 +98,9 @@ def _read_header(path: Path) -> dict[str, tuple[str, tuple[int, ...]]]:
     return header
 
 
-def _read_integer_tensor(path: Path, key: str) -> tuple[int, ...]:
-    """Read one small integer tensor out of a checkpoint without constructing the model."""
-    from safetensors import safe_open
-
-    with safe_open(str(path), framework="numpy") as handle:
-        return tuple(int(value) for value in handle.get_tensor(key).tolist())
-
-
 def _stored_float_dtypes(header: dict[str, tuple[str, tuple[int, ...]]]) -> tuple[str, ...]:
-    """Collect the dtypes actually stored in the checkpoint's floating-point tensors.
+    """
+    Collect the dtypes actually stored in the checkpoint's floating-point tensors.
 
     The filenames of the supplied checkpoints claim ``fp16``/``bf16`` while their tensors store
     FP32, so the reported precision comes from the tensors and never from the file name or the
@@ -167,7 +139,8 @@ def _normalize_channels(value: object, label: str, path: Path) -> int:
 
 
 def _normalize_scale(value: object, path: Path) -> int:
-    """Validate the effective upscale factor, accepting resselt's ``int`` or sequence type.
+    """
+    Validate the effective upscale factor, accepting resselt's ``int`` or sequence type.
 
     resselt's metadata type allows a sequence of per-axis factors. Only an isotropic integer
     scale fits the NCHW tensor contract, and a sequence is never cast to ``int`` blindly.
@@ -201,73 +174,6 @@ def _normalize_scale(value: object, path: Path) -> int:
     return factors[0]
 
 
-def _fdat_unshuffle(model: nn.Module, path: Path) -> int:
-    """Read the pixel-unshuffle factor out of resselt's constructed FDAT model."""
-    import torch
-
-    conv_first = getattr(model, "conv_first", None)
-    if isinstance(conv_first, torch.nn.Sequential) and len(conv_first) > 0:
-        first = conv_first[0]
-        if not isinstance(first, torch.nn.PixelUnshuffle):
-            raise ValueError(
-                f"resselt built {type(model).__name__} with conv_first={type(conv_first).__name__} whose "
-                f"first layer is {type(first).__name__} for {path.name}; the fast-preset adapter expects "
-                "a pixel-unshuffle first layer, so this resselt structure is unsupported."
-            )
-        return int(first.downscale_factor)
-    if isinstance(conv_first, torch.nn.Conv2d):
-        return 1
-    raise ValueError(
-        f"resselt built {type(model).__name__} without a recognisable conv_first "
-        f"({type(conv_first).__name__}) for {path.name}; the normalized FDAT contract cannot be "
-        "cross-checked against this resselt structure."
-    )
-
-
-def _fdat_conv_first_in_channels(model: nn.Module, unshuffle: int, path: Path) -> int:
-    """Return the channel count entering the first convolution of the unshuffle path."""
-    import torch
-
-    conv_first = model.conv_first
-    if unshuffle > 1:
-        conv = conv_first[1]
-    else:
-        conv = conv_first
-    if not isinstance(conv, torch.nn.Conv2d):
-        raise ValueError(
-            f"resselt built {type(model).__name__} with a {type(conv).__name__} after its "
-            f"pixel-unshuffle layer for {path.name}; the normalized FDAT contract cannot be checked."
-        )
-    return int(conv.in_channels)
-
-
-def _cross_check_fdat(model: nn.Module, info: ModelInfo, path: Path) -> None:
-    """Verify the normalized FDAT contract against the model resselt actually constructed."""
-    internal_scale = int(model.upsampler.MetaUpsample[2].item())
-    pads = int(getattr(model, "pad", 0))
-    expected_pad = info.unshuffle if info.unshuffle > 1 else 0
-    conv_in = _fdat_conv_first_in_channels(model, info.unshuffle, path)
-    expected_conv_in = info.in_channels * info.unshuffle**2
-    problems: list[str] = []
-    if conv_in != expected_conv_in:
-        problems.append(f"conv_first takes {conv_in} channels, expected {expected_conv_in}")
-    if pads != expected_pad:
-        problems.append(f"check_img_size pads by {pads}, expected {expected_pad}")
-    if int(model.upscale) != info.scale:
-        problems.append(f"the model upscales by {int(model.upscale)}, including cropping, expected {info.scale}")
-    if internal_scale != info.scale * info.unshuffle:
-        problems.append(
-            f"the upsampler is built for {internal_scale}x, expected {info.scale * info.unshuffle}x "
-            f"({info.scale}x effective over a {info.unshuffle}x unshuffle)"
-        )
-    if problems:
-        raise ValueError(
-            f"resselt reported FDAT metadata for {path.name} that does not match the constructed model: "
-            + "; ".join(problems)
-            + ". The installed resselt structure is not the one this backend was validated against."
-        )
-
-
 def _normalize_metadata(
     model: nn.Module,
     *,
@@ -293,8 +199,8 @@ def _normalize_metadata(
     in_channels = _normalize_channels(metadata.in_channels, "in_channels", checkpoint)
     out_channels = _normalize_channels(metadata.out_channels, "out_channels", checkpoint)
     scale = _normalize_scale(metadata.upscale, checkpoint)
-    is_fdat = architecture.strip().upper() == "FDAT"
-    unshuffle = _fdat_unshuffle(model, checkpoint) if is_fdat else 1
+    adapter = adapter_for(architecture)
+    unshuffle = adapter.unshuffle_of(model, checkpoint) if adapter is not None else 1
     info = ModelInfo(
         architecture=architecture.strip(),
         scale=scale,
@@ -306,14 +212,13 @@ def _normalize_metadata(
         loader=LOADER_NAME,
         loader_version=loader_version,
     )
-    if is_fdat:
-        _cross_check_fdat(model, info, checkpoint)
+    if adapter is not None:
+        adapter.cross_check(model, info, checkpoint)
     return info
 
 
 def _detect_architecture(header: dict[str, tuple[str, tuple[int, ...]]]) -> str | None:
     """Ask resselt which architecture claims these tensors, without constructing the model."""
-    _ensure_typing_self()
     from resselt.archs import internal_registry
 
     # resselt's detectors only test key membership; the values are never inspected.
@@ -328,69 +233,13 @@ def _detect_architecture(header: dict[str, tuple[str, tuple[int, ...]]]) -> str 
     return None
 
 
-def _info_from_fdat_header(
-    path: Path,
-    header: dict[str, tuple[str, tuple[int, ...]]],
-    *,
-    architecture: str,
-    stored_dtypes: tuple[str, ...],
-    checkpoint_sha256: str,
-    loader_version: str | None,
-) -> ModelInfo | None:
-    """Normalize FDAT metadata straight from the safetensors header, without loading the model.
-
-    The rules mirror resselt's FDAT loader: the upsampler buffer carries the internal scale and
-    the external channels, while the first convolution says whether pixels are unshuffled. A
-    structure that does not fit these rules returns ``None`` so the caller can fall back to a real
-    load and resselt's own error.
-    """
-    if _FDAT_METADATA_KEY not in header:
-        return None
-    meta = _read_integer_tensor(path, _FDAT_METADATA_KEY)
-    if len(meta) != 7:
-        return None
-    _version, _upsampler_index, internal_scale, _embed_dim, out_channels, _mid_dim, _group = meta
-    if internal_scale < 1 or out_channels < 1:
-        return None
-    if _FDAT_UNSHUFFLE_CONV in header:
-        conv_in = header[_FDAT_UNSHUFFLE_CONV][1][1]
-        if conv_in <= 0 or conv_in % out_channels:
-            return None
-        unshuffle = math.isqrt(conv_in // out_channels)
-    else:
-        conv_first = header.get("conv_first.weight")
-        if conv_first is None or conv_first[1][1] <= 0:
-            return None
-        unshuffle = 1
-        conv_in = conv_first[1][1]
-    if unshuffle < 1 or conv_in != out_channels * unshuffle**2:
-        return None
-    in_channels = conv_in // unshuffle**2
-    if internal_scale % unshuffle:
-        return None
-    scale = internal_scale // unshuffle
-    if scale < 1:
-        return None
-    return ModelInfo(
-        architecture=architecture,
-        scale=scale,
-        in_channels=in_channels,
-        out_channels=out_channels,
-        unshuffle=unshuffle,
-        stored_dtypes=stored_dtypes,
-        checkpoint_sha256=checkpoint_sha256,
-        loader=LOADER_NAME,
-        loader_version=loader_version,
-    )
-
-
 def read_model_info(model_path: str | Path) -> ModelInfo:
     """
     Describe a checkpoint without running it.
 
-    The stored dtypes, tensor names and shapes come from the safetensors header, and the FDAT
-    metadata is read from that header as well, so the model is not constructed for the supported
-    architecture family. Any other architecture is described by loading it through resselt.
+    The stored dtypes, tensor names and shapes come from the safetensors header, and an
+    architecture with a header adapter is described from that header as well, so the model is not
+    constructed for it. Any other architecture is described by loading it through resselt.
 
     Parameters
     ----------
@@ -406,7 +255,6 @@ def read_model_info(model_path: str | Path) -> ModelInfo:
     ------
     ValueError
         If the checkpoint is missing, is not a `.safetensors` file, or resselt cannot describe it.
-
     """
     path = _validate_checkpoint_path(model_path)
     header = _read_header(path)
@@ -414,17 +262,19 @@ def read_model_info(model_path: str | Path) -> ModelInfo:
     checkpoint_sha256 = _sha256(path)
     loader_version = _loader_version()
     architecture = _detect_architecture(header)
-    if architecture is not None and architecture.strip().upper() == "FDAT":
-        info = _info_from_fdat_header(
-            path,
-            header,
-            architecture=architecture,
-            stored_dtypes=stored_dtypes,
-            checkpoint_sha256=checkpoint_sha256,
-            loader_version=loader_version,
-        )
-        if info is not None:
-            return info
+    if architecture is not None:
+        adapter = adapter_for(architecture)
+        if adapter is not None:
+            info = adapter.info_from_header(
+                path,
+                header,
+                architecture=architecture,
+                stored_dtypes=stored_dtypes,
+                checkpoint_sha256=checkpoint_sha256,
+                loader_version=loader_version,
+            )
+            if info is not None:
+                return info
     _model, info = load_checkpoint(path)
     return info
 
@@ -455,10 +305,8 @@ def load_checkpoint(model_path: str | Path) -> tuple[nn.Module, ModelInfo]:
     ValueError
         If the checkpoint is missing, is not a safetensors file, or its metadata cannot be
         normalized into the tensor contract.
-
     """
     path = _validate_checkpoint_path(model_path)
-    _ensure_typing_self()
     from ..lazy import get_torch
 
     get_torch()
@@ -469,6 +317,7 @@ def load_checkpoint(model_path: str | Path) -> tuple[nn.Module, ModelInfo]:
             "resselt is required to load PyTorch checkpoints. Install the PyTorch extras with "
             "`pip install nmanga[denoiser]`."
         ) from exc
+
     header = _read_header(path)
     stored_dtypes = _stored_float_dtypes(header)
     checkpoint_sha256 = _sha256(path)

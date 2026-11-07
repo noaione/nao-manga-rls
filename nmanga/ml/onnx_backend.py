@@ -23,13 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# The ONNX inference entry points, moved out of `nmanga.denoiser` without any change to their
-# image algorithm: the same padding, overlap, batching, normalization and image-mode behavior.
-# This tiler is tied to an ONNX Runtime session interface.
-#
-# This is one backend doing one job: `nmanga.ml.tiling` is the PyTorch tiler with the same goal
-# and its own overlap contract, and `nmanga.ml.images` is the shared PIL conversion helper. This
-# module must not be routed through by the PyTorch runtime.
+# The ONNX inference entry points.
 
 from __future__ import annotations
 
