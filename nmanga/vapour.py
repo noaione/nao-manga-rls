@@ -958,7 +958,7 @@ def vs_png_writer(
     vs = get_vapoursynth()
     if core is None:
         core = vs.core
-    options = {"depth": depth} if depth is not None else {}
+    options: dict[str, Any] = {"depth": depth} if depth is not None else {}
     return core.imgseqs.PNGWrite(
         clip,
         output_dir=str(output_dir),

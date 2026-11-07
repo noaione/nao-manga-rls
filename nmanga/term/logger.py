@@ -202,12 +202,12 @@ class Console(ConsoleInterface):
 
     def __beautiful_status(self, message: str, **kwargs_spinner_style):
         if not self._status:
-            default = {}
+            default: dict[str, Any] = {}
             if self.is_advanced():
                 default = {"spinner": "dots"}
             else:
                 default = {"spinner": "line", "refresh_per_second": 6}
-            st_args = {**default, **kwargs_spinner_style}
+            st_args: dict[str, Any] = {**default, **kwargs_spinner_style}
 
             self._status = self.console.status(message, **st_args)
             self._status.start()
@@ -358,7 +358,7 @@ class Console(ConsoleInterface):
     def choice(
         self,
         message: str | None = ...,
-        choices: list[str] = ...,
+        choices: list[str] | None = ...,
         default: str | None = ...,
     ) -> str: ...
 
@@ -392,7 +392,7 @@ class Console(ConsoleInterface):
     def _internal_validation(self, text_input: str, validation: ValidateFunc):
         try:
             is_valid = validation(text_input)
-            return bool(is_valid)  # Coerce None to bool to avoid error
+            return bool(is_valid)  # pyrefly: ignore[unnecessary-type-conversion] # Coerce None to bool to avoid error
         except Exception:
             return False
 

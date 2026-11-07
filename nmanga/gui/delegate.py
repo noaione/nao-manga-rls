@@ -26,6 +26,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
@@ -95,12 +97,13 @@ class PageItemDelegate(QStyledItemDelegate):
     ) -> None:
         """Paint the tint, thumbnail, page badge, and chapter footer of one page."""
         painter.save()
-        rect = option.rect.adjusted(2, 2, -2, -2)
+        # The PySide6 stubs declare `rect` and `state` as `...`, so their types have to be restored.
+        rect = cast(QRect, option.rect).adjusted(2, 2, -2, -2)
 
         raw_position = index.data(CHAPTER_INDEX_ROLE)
         position = raw_position if isinstance(raw_position, int) else -1
         color = chapter_color(position)
-        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        selected = bool(cast(QStyle.StateFlag, option.state) & QStyle.StateFlag.State_Selected)
 
         tint = QColor(color)
         tint.setAlpha(46 if position >= 0 else 18)

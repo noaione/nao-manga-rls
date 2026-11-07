@@ -60,11 +60,12 @@ def main() -> int:
 
     from .window import MainWindow
 
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
+    instance = QApplication.instance()
+    # A bare `QCoreApplication` cannot carry the display name, so a reused instance is only
+    # accepted when it is the `QApplication` this entry point creates.
+    app = instance if isinstance(instance, QApplication) else QApplication(sys.argv)
     app.setApplicationName("nmanga")
-    app.setApplicationDisplayName("nmanga manual split")  # pyright: ignore[reportAttributeAccessIssue]
+    app.setApplicationDisplayName("nmanga manual split")
     app.setOrganizationName("noaione")
 
     window = MainWindow()

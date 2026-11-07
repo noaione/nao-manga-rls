@@ -247,7 +247,7 @@ def find_local_peak_legacy(
     img_array = np.array(gray_img)  # pyright: ignore[reportOptionalMemberAccess]
     hist, binedges = np.histogram(img_array, bins=256, range=(0, 255))  # pyright: ignore[reportOptionalMemberAccess]
 
-    width = np.arange(start=1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess, reportCallIssue]
+    width = np.arange(1, stop=upper_limit, step=1)  # pyright: ignore[reportOptionalMemberAccess]
     result = scisignal.find_peaks_cwt(hist, widths=width)  # pyright: ignore[reportOptionalMemberAccess]
 
     if not isinstance(img_path, Image.Image):
@@ -381,8 +381,8 @@ def posterize_image_by_bits(
 
     colors: int = 2**num_bits
 
-    def _method_even(x: Image.ImagePointTransform) -> float:
-        return round(x * (colors - 1) / 255) * 255 / (colors - 1)  # pyright: ignore[reportArgumentType]
+    def _method_even(x: float) -> float:
+        return round(x * (colors - 1) / 255) * 255 / (colors - 1)
 
     # Posterize without fucking up luminance
     if method == PosterizePointMethod.LLOYD:
