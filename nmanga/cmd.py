@@ -60,7 +60,8 @@ from .cli.renamer import shift_renamer
 from .cli.rescaler import rescale2, rescale_image
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
-from .cli.upscaler import export_to_onnx, upscale_trt
+from .cli.torch import torch_group
+from .cli.upscaler import upscale_trt
 from .term import detect_shell, get_console
 from .term.shell import (
     install_completion_for_bash,
@@ -178,7 +179,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="ML Processing",
     help="Commands for processing images using Machine Learning models",
-    commands=["denoise", "denoise-trt", "upscale-trt", "to-onnx"],
+    commands=["denoise", "denoise-trt", "upscale-trt", "torch"],
 )
 @click.command_panel(
     name="Archive Processing",
@@ -329,7 +330,7 @@ main.add_command(analyze_shades)
 main.add_command(denoiser)
 main.add_command(denoiser_trt)
 main.add_command(upscale_trt)
-main.add_command(export_to_onnx)
+main.add_command(torch_group)
 main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 main.add_command(orchestractor)

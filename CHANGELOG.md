@@ -338,6 +338,22 @@ Rewritten every thing as a module with `nmanga` namespace.
 
 ## Unversioned
 **New Features**
+- `nmanga torch infer` - Run a checkpoint model directly with PyTorch. `resselt` detects the architecture and
+  loads the weights, so no ONNX Runtime session or TensorRT engine is involved
+  - `--preset fast` applies the adapted lean FDAT rewrites (in-place GELU, lean spatial attention, lean FFN and
+    lean DAT block) to an independent copy of the model, `--preset original` runs the untouched model. FP32 only,
+    batch 1, no autocast; the stored checkpoint dtypes are read from the tensors, not from the filename
+  - The tiling is the validated JaNai one, not the ONNX one: the overlap is the total overlap between two tiles and
+    partial edge tiles are replicate-padded before the prediction, so `--tile-size 256 --tile-overlap 32` is a
+    224px stride and does not produce the same page as the ONNX tiler's 192px stride
+  - `--device auto|cpu|cuda:N`, optional `torch.compile` for the CUDA `fast` recipe (needs Triton), folder or
+    `--recursive` input and PNG output, with the detected architecture/scale/dtypes/recipe/tiling printed up front
+- `nmanga torch to-onnx` - The ONNX export moved under the `torch` group, with the same options as before
+- The ONNX session builders, engine cache, tiling, ORT initialization and Windows ML discovery moved into a new
+  `nmanga.ml` package. `nmanga.denoiser`, `nmanga.winml` and `nmanga.lazy.get_onnxruntime` stay importable as
+  thin forwards over it, and share one ONNX Runtime instance and initialization state
+- `safetensors` is an explicit `denoiser` dependency now, since the PyTorch backend reads checkpoint headers
+  directly to report the stored dtypes
 - `nmanga orchestra` - Create/run a JSON file that will run multiple functions in nmanga together
 - `nmanga orchestra run-target` - Run the whole action chain on a single target directory, without having to
   list it in the configuration `volumes`
