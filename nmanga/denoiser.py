@@ -592,7 +592,9 @@ def get_torch_memory_limit_and_rtx(device_id: int) -> tuple[int, int] | None:
         # would answer for another GPU than the one the properties are read from
         cu_major, _ = torch.cuda.get_device_capability(device_id)
         return torch.cuda.get_device_properties(device_id).total_memory, cu_major
-    except (ImportError, AssertionError):
+    except (ImportError, AssertionError, RuntimeError):
+        # CPU-only torch, or a CUDA build on a machine without a usable NVIDIA driver (the
+        # AMD/Intel extras install the CPU wheel), so fall back to the default workspace.
         return None
 
 
@@ -876,7 +878,10 @@ def prepare_model_runtime_builders(
         trtrtx_ep_config["nv_profile_max_shapes"] = max_shapes
         trtrtx_ep_config["nv_profile_opt_shapes"] = opt_shapes
 
-    ep_devices = {ep_device.ep_name: ep_device for ep_device in ort.get_ep_devices()}
+    # Several devices can share one EP name (OpenVINO exposes a CPU, a GPU and a NPU), so keep the
+    # list around instead of only the last device seen per name.
+    all_ep_devices = ort.get_ep_devices()
+    ep_devices = {ep_device.ep_name: ep_device for ep_device in all_ep_devices}
     has_good_ep_devices = False
     has_nvrtx = False
     raw_providers = set(ort.get_available_providers())
@@ -914,13 +919,32 @@ def prepare_model_runtime_builders(
                     "prefer_nhwc": True,
                 },
             ))
-        if "OpenVINOExecutionProvider" in raw_providers:
-            providers.append(("OpenVINOExecutionProvider", onv_ep_config))
-        elif "OpenVINOExecutionProvider" in ep_devices:
-            ep_providers.append((ep_devices["OpenVINOExecutionProvider"], onv_ep_config))
+        ov_plugin_devices = [
+            dev
+            for dev in all_ep_devices
+            if dev.ep_name == "OpenVINOExecutionProvider" and dev.ep_metadata.get("ov_device")
+        ]
+        if ov_plugin_devices and not providers and not ep_providers:
+            # Nothing else was picked, so use the plugin's device API: the device itself is what
+            # selects CPU, GPU or NPU. Keep the old `HETERO:GPU,CPU` preference, minus the hetero.
+            by_ov_device = {dev.ep_metadata["ov_device"]: dev for dev in ov_plugin_devices}
+            chosen_ov_device = by_ov_device.get("GPU")
+            if chosen_ov_device is None:
+                chosen_ov_device = by_ov_device.get("CPU", ov_plugin_devices[0])
+            ep_providers.append((chosen_ov_device, {}))
+            has_good_ep_devices = True
+        elif ov_plugin_devices or "OpenVINOExecutionProvider" in raw_providers:
+            # A plugin device cannot be mixed with a provider list, so when an accelerator already
+            # comes first (CUDA or TensorRT RTX) add OpenVINO as a name only fallback. The in-tree
+            # options only apply to a runtime that ships the provider itself.
+            providers.append(("OpenVINOExecutionProvider", {} if ov_plugin_devices else onv_ep_config))
     else:
         ep_providers = []
-        providers = [
+        providers = []
+        if "MLXExecutionProvider" in raw_providers:
+            # Apple Silicon only; unsupported nodes fall through to CoreML and then the CPU
+            providers.append(("MLXExecutionProvider", {}))
+        providers.append(
             (
                 "CoreMLExecutionProvider",
                 {
@@ -932,7 +956,7 @@ def prepare_model_runtime_builders(
                     "SpecializationStrategy": "FastPrediction",
                 },
             ),
-        ]
+        )
 
     if not providers and not ep_providers:
         raise RuntimeError(

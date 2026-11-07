@@ -448,6 +448,26 @@ Rewritten every thing as a module with `nmanga` namespace.
   - Alternatively, use `compress_level` in the `pack` orchestrator action
 - Move from standard `click` to `rich-click` for better CLI experience
 - Make threaded worker run function serially when threads is set to 1 to avoid overhead
+- Split the machine learning extras by hardware vendor. `denoiser` keeps the vendor neutral stack (torch,
+  ONNX, einops), and one of the `denoiser-*` extras adds the execution provider
+  - `denoiser-ort` - the stock `onnxruntime` wheel: CoreML on macOS and a CPU provider everywhere else.
+    This is the runtime the plugin EP extras load into
+  - `denoiser-nvidia` - `onnxruntime-gpu`, the TensorRT RTX plugin and `tensorrt-cu13`, with the `+cu132`
+    torch wheel. It replaces the stock runtime instead of extending it, so it is declared as conflicting
+    with `denoiser-ort` and `denoiser-mlx` and `uv sync --all-extras` is now an error; CI installs
+    `denoiser-ort`
+  - `denoiser-intel` - the `onnxruntime-ep-openvino` plugin next to either runtime, so it can be combined
+    with `denoiser-ort` or `denoiser-nvidia`. It works on 3.14, unlike the old `onnxruntime-openvino` fork
+    it replaces
+  - `denoiser-mlx` - the `onnxruntime-ep-mlx` plugin for Apple Silicon (macOS 14+)
+  - There is no `denoiser-amd` extra yet: support is expected to arrive through Windows ML instead
+  - The out-of-tree plugin EPs (TensorRT RTX, MLX, OpenVINO) are registered with ONNX Runtime in the shared
+    loader, before any session or engine builder exists
+  - OpenVINO picks the CPU/GPU/NPU device the plugin exposes instead of the in-tree `HETERO:GPU,CPU` option
+  - With an accelerator already ahead of it (CUDA or TensorRT RTX) OpenVINO is added as a name only
+    fallback instead of a provider device, so asking for both keeps CUDA as the primary provider
+- `numpy` and `scipy` are regular dependencies now, so the `autostuff` extra is gone and the machine
+  learning extras no longer have to restate `numpy`
 
 **Fixes**
 - Orchestrator `posterize` action - `bpc: auto` could not be used at all: the `ge`/`le` range on the field was
@@ -488,3 +508,5 @@ Rewritten every thing as a module with `nmanga` namespace.
 - `nmanga upscale-trt`, `nmanga denoise-trt` and the orchestrator ML actions - Probe the model scale factor with the
   batch size the engine was built for, so a fixed-batch graph is not probed with a batch it does not accept
 - Fix the TRT-RTX GPU capability check to query the requested device instead of the current one
+- The GPU memory probe no longer raises when torch has no usable CUDA device (CPU-only wheels, or a CUDA
+  build on a machine without the NVIDIA driver), so the AMD/Intel extras fall back to the default workspace

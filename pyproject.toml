@@ -26,9 +26,9 @@ classifiers = [
 dependencies = [
     "rich==15.0.0",
     "inquirer==3.4.1",
-    "click==8.5.0",
+    "click==8.5.1",
     "ftfy==6.3.1",
-    "pydantic==2.14.1",
+    "pydantic==2.14.3",
     "typing-extensions==4.16.0",
     "Pillow==13.0.0",
     "lxml==6.1.3",
@@ -42,39 +42,56 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "pikepdf==10.17.0",
     "natsort==8.4.0",
+    "numpy>=2.5.4",
+    "scipy>=1.18.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.3",
+    "ruff==0.17.4",
 ]
 gui = ["PySide6>=6.7"]
-autostuff = [
-    "numpy>=2.5.4",
-    "scipy>=1.18.1",
-]
 denoiser = [
-    "numpy>=2.5.4",
-    "onnx>=1.22.0",
-    "onnxruntime==1.30.0; sys_platform == 'darwin'",
-    "onnxruntime-ep-nv-tensorrt-rtx-cu13==0.4.0; sys_platform == 'linux' or sys_platform == 'win32'",
-    "onnxruntime-gpu==1.30.0; sys_platform == 'linux' or sys_platform == 'win32'",
+    # Vendor neutral part of the machine learning stack: the ONNX tooling and torch, but no
+    # execution provider and no torch wheel flavour. Pair it with one of the `denoiser-*` extras.
+    "torch>=2.15.0",
+    "onnx>=1.23.2",
     "onnxscript>=0.7.2",
-    "tensorrt-cu13==10.16.1.11; (sys_platform == 'linux' or sys_platform == 'win32') and python_version <= '3.13'",
-    "torch>=2.14.0",
     "einops>=0.8.2",
     "resselt>=1.4.1",
-    "winrt-runtime>=3.2.1; sys_platform == 'win32'",
+    "winrt-runtime==3.2.1; sys_platform == 'win32'",
     "winrt-windows-applicationmodel>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-foundation>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-foundation-collections>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-management-deployment>=3.2.1; sys_platform == 'win32'",
     "winrt-windows-system>=3.2.1; sys_platform == 'win32'",
 ]
+denoiser-ort = [
+    # The stock ONNX Runtime wheel: CoreML on macOS, a CPU provider everywhere else. This is the
+    # runtime the plugin EP extras (denoiser-intel, denoiser-mlx) load into.
+    "onnxruntime==1.31.1",
+]
+denoiser-nvidia = [
+    # CUDA, TensorRT and TensorRT RTX. This is the only extra that pulls a CUDA build of torch,
+    # and it replaces the stock runtime instead of extending it.
+    "torch>=2.15.0",
+    "onnxruntime-gpu==1.31.1; sys_platform == 'linux' or sys_platform == 'win32'",
+    "onnxruntime-ep-nv-tensorrt-rtx-cu13==0.5.0; sys_platform == 'linux' or sys_platform == 'win32'",
+    "tensorrt-cu13==10.16.1.11; (sys_platform == 'linux' or sys_platform == 'win32') and python_version <= '3.13'",
+]
+denoiser-intel = [
+    # OpenVINO plugin EP. It loads into either runtime, so it can be combined with denoiser-ort or
+    # denoiser-nvidia. The plugin only ships x86_64 wheels.
+    "onnxruntime-ep-openvino==1.8.1; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
+]
+denoiser-mlx = [
+    # Apple Silicon MLX plugin EP (macOS 14+) on top of denoiser-ort.
+    "onnxruntime-ep-mlx==0.31.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 vapoursynth = [
-    "vapoursynth==81",
+    "vapoursynth==82",
     "vapoursynth-imageseqs==0.4.2",
     "vapoursynth-nimages==0.2.1",
     "vsrepo"
@@ -108,11 +125,21 @@ override-dependencies = ["onnxruntime-windowsml; sys_platform == 'never'"]
 dependency-metadata = [
     { name = "tensorrt-cu13-libs", version = "10.16.1.11", requires-dist = [] },
 ]
+# `denoiser-nvidia` swaps the ONNX Runtime distribution for the CUDA build, so it cannot be
+# combined with the extras that need the stock runtime. `denoiser-intel` only adds a plugin and
+# works with either of them.
+conflicts = [
+    [{ extra = "denoiser-nvidia" }, { extra = "denoiser-ort" }],
+    [{ extra = "denoiser-nvidia" }, { extra = "denoiser-mlx" }],
+]
 
 [tool.uv.sources]
+# Only the NVIDIA extra switches the torch wheel: an extra gated source has to be declared by that
+# extra too. pip ignores this table, so a `pip install nmanga[denoiser,denoiser-nvidia]` gets the
+# PyPI torch wheel (the CPU build on Windows) unless `--extra-index-url
+# https://download.pytorch.org/whl/cu132` is added as well.
 torch = [
-    { index = "pytorch-cu132", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-    { index = "pypi", marker = "sys_platform == 'darwin'" }
+    { index = "pytorch-cu132", marker = "sys_platform == 'linux' or sys_platform == 'win32'", extra = "denoiser-nvidia" },
 ]
 vapoursynth-nimages = { index = "serikat-pypi" }
 

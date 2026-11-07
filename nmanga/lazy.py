@@ -166,6 +166,8 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
     _disable_ort_telemetry(ort)  # pyright: ignore[reportArgumentType]
 
     is_trt_ep_available = importutil.find_spec("onnxruntime_ep_nv_tensorrt_rtx")
+    is_mlx_ep_available = importutil.find_spec("onnxruntime_ep_mlx")
+    is_openvino_ep_available = importutil.find_spec("onnxruntime_ep_openvino")
 
     if sys.platform != "darwin":
         ort.preload_dlls()
@@ -174,6 +176,16 @@ def get_onnxruntime() -> "type[ort]":  # type: ignore
         import onnxruntime_ep_nv_tensorrt_rtx as trt_ep  # type: ignore
 
         ort.register_execution_provider_library(trt_ep.get_ep_name(), trt_ep.get_library_path())  # type: ignore
+    if is_mlx_ep_available is not None:
+        # MLX is an Apple Silicon plugin EP, it has to be registered before any session is built
+        import onnxruntime_ep_mlx  # type: ignore
+
+        onnxruntime_ep_mlx.register_execution_provider_library()  # type: ignore
+        ort.register_execution_provider_library(onnxruntime_ep_mlx.EP_NAME, onnxruntime_ep_mlx.library_path())
+    if is_openvino_ep_available is not None:
+        import onnxruntime_ep_openvino as openvino_ep  # type: ignore
+
+        ort.register_execution_provider_library(openvino_ep.get_ep_name(), openvino_ep.get_library_path())  # type: ignore
     __preloaded_ort__ = ort
 
     return ort  # type: ignore

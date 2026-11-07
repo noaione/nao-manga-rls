@@ -26,7 +26,10 @@ jobs:
         run: uv python install
 
       - name: Install the project
-        run: uv sync --locked --all-extras --dev
+        run: >
+          uv sync --locked --dev
+          --extra denoiser --extra denoiser-ort
+          --extra gui --extra vapoursynth --extra epub-render
 
       - name: Install Qt runtime libraries
         run: |
