@@ -27,7 +27,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 
 from PySide6.QtCore import Qt, Signal
@@ -300,7 +300,7 @@ class ChapterEditorPanel(QWidget):
 
     # -- internals ------------------------------------------------------------
     @contextmanager
-    def _bulk(self) -> Iterator[None]:
+    def _bulk(self) -> Generator[None]:
         """Suppress change notifications while several rows are touched at once."""
         self._suspend += 1
         try:

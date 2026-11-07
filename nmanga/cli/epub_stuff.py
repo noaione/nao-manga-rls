@@ -406,7 +406,7 @@ def epub_diff(
             strict_metadata=strict_metadata,
             context=context_lines,
         )
-    except (ValueError, UnicodeError) as exc:
+    except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
 
     if result.pages:

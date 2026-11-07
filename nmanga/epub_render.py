@@ -31,8 +31,7 @@ import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, TypedDict
-from urllib.parse import unquote, urldefrag, urlparse, urlsplit
-from urllib.request import url2pathname
+from urllib.parse import unquote, urldefrag, urlsplit
 
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET  # ruff: ignore[camelcase-imported-as-acronym]
@@ -363,11 +362,34 @@ def copy_image_only_page(src_image_path: Path, dest_output: Path, img_counter: i
     return dest_image_path
 
 
-def get_src_image_path(box: BoundingBoxImage) -> Path:
-    parsed_src = urlparse(box["src"])
-    parsed_path = url2pathname(parsed_src.path)
+def _image_src_to_path(src: str) -> Path:
+    """
+    Turn the URL a browser reports for an image into a local filesystem path.
 
-    return Path(parsed_path).resolve()
+    Chromium resolves `img.currentSrc` against the `file://` document it loaded, so the reported
+    URL is normally absolute and `Path.from_uri` is the direct conversion - including the UNC
+    form that the deprecated `url2pathname` used to mangle. A relative `src` is not a URI at all,
+    so the decoded URL path is used instead.
+
+    Parameters
+    ----------
+    src : str
+        The `src` the browser reported for the image element.
+
+    Returns
+    -------
+    Path
+        The local path, before it is resolved against the working directory.
+    """
+    try:
+        return Path.from_uri(src)
+    except ValueError:
+        return Path(unquote(urlsplit(src).path))
+
+
+def get_src_image_path(box: BoundingBoxImage) -> Path:
+    """Resolve the absolute path of the image the browser reported for a page."""
+    return _image_src_to_path(box["src"]).resolve()
 
 
 def get_base_image_scale(
