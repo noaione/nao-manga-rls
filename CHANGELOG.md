@@ -4,6 +4,7 @@
 
 **New Features**
 - `nmanga ort infer` - `--tta` averages every batch over its 8 flips/rotations (test-time augmentation, about 8x slower). The orchestrator `denoise`/`upscale` actions expose it as `tta`
+- `nmanga ort to-fp16` - Convert an ONNX model to fp16, this will also run inference to validate the conversion.
 
 **Changes**
 - `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)

@@ -399,3 +399,62 @@ def infer(
     if recursive:
         console.info(f"Finished processing {len(candidates)} folders.")
     return 0
+
+
+@ort_group.command(
+    name="to-fp16",
+    help="Re-export a FP32 model to FP16",
+    cls=NMangaCommandHandler,
+)
+@options.path_or_archive(disable_archive=False, disable_folder=False)
+@click.option(
+    "-t",
+    "--tile-size",
+    "tile_size",
+    type=options.POSITIVE_INT,
+    default=128,
+    show_default=True,
+    help="The tile size to use for processing images, higher values use more VRAM",
+)
+def into_fp16(path_or_archive: Path, tile_size: int):
+    """Re-export a FP32 model to FP16"""
+
+    file_candidates: list[Path] = []
+    if not path_or_archive.is_file():
+        for file in path_or_archive.glob("*"):
+            if file.suffix in (".onnx"):
+                file_candidates.append(file)
+    elif path_or_archive.suffix in (".onnx"):
+        file_candidates.append(path_or_archive)
+    else:
+        raise click.BadParameter(
+            f"{path_or_archive} is not a valid model file. Please provide a .pt, .pth or .safetensors file.",
+            param_hint="path_or_archive",
+        )
+
+    try:
+        import numpy as np
+        import onnx
+        import onnxruntime as ort
+        from onnxconverter_common.float16 import convert_float_to_float16
+    except ImportError as exc:
+        raise click.ClickException("Some packages are not installed. Please install it to use this command.") from exc
+
+    providers = ["CPUExecutionProvider"]
+    pix = np.random.default_rng(0).random((1, 3, tile_size, tile_size), dtype=np.float32)
+    for onnx_file in file_candidates:
+        dest = onnx_file.with_name(f"{onnx_file.stem}_fp16.onnx")
+        console.info(f"Converting {onnx_file.name} to {dest.name}...")
+        onnx.save(convert_float_to_float16(onnx.load(onnx_file)), dest)
+
+        full = ort.InferenceSession(onnx_file, providers=providers)
+        ref = np.asarray(full.run(None, {full.get_inputs()[0].name: pix})[0])
+        half = ort.InferenceSession(dest, providers=providers)
+        out = np.asarray(half.run(None, {half.get_inputs()[0].name: pix.astype(np.float16)})[0])
+        if not np.isfinite(out).all():
+            dest.unlink()
+            console.warning(f"{dest.name}: NaN/inf in output, skipping")
+            continue
+        console.info(f"Converted {onnx_file.name} to {dest.name}")
+        console.info(f"Max abs diff vs fp32: {np.abs(out.astype(np.float32) - ref).max():.5f}")
+    return 0

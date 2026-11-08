@@ -850,6 +850,7 @@ dependencies = [
 denoiser = [
     { name = "einops" },
     { name = "onnx" },
+    { name = "onnxconverter-common" },
     { name = "onnxscript" },
     { name = "resselt" },
     { name = "safetensors" },
@@ -912,6 +913,7 @@ requires-dist = [
     { name = "natsort", specifier = "==8.4.0" },
     { name = "numpy", specifier = ">=2.5.4" },
     { name = "onnx", marker = "extra == 'denoiser'", specifier = ">=1.23.2" },
+    { name = "onnxconverter-common", marker = "extra == 'denoiser'", specifier = "==1.16.0" },
     { name = "onnxruntime", marker = "extra == 'denoiser-ort'", specifier = "==1.31.1" },
     { name = "onnxruntime-ep-mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'denoiser-mlx'", specifier = "==0.31.0" },
     { name = "onnxruntime-ep-nv-tensorrt-rtx-cu13", marker = "(sys_platform == 'linux' and extra == 'denoiser-nvidia') or (sys_platform == 'win32' and extra == 'denoiser-nvidia')", specifier = "==0.5.0" },
@@ -1199,6 +1201,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/35/e6/672fefb2f108d077f58181a7babf4c0f8d1182a30353ffc9c79c63afc5ee/onnx_ir-0.2.1.tar.gz", hash = "sha256:8b8b10a93f43e65962104de6070c43c5dacb0e3cdfefc7c8059dd83c9db64f35", size = 144279, upload-time = "2026-04-20T20:21:47.735Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/aa/f7a53321c60b9ad9ee184b6018292ed6b5389947592a2c8c09c736bb7f9e/onnx_ir-0.2.1-py3-none-any.whl", hash = "sha256:c7285da889312f91882de2092e298a9eeeefbfc1d1951c49d983992967eb09a7", size = 166792, upload-time = "2026-04-20T20:21:46.357Z" },
+]
+
+[[package]]
+name = "onnxconverter-common"
+version = "1.16.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "onnx" },
+    { name = "packaging" },
+    { name = "protobuf" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4a/67/8dca1868a6e226f8d3f7d666cb6a48b79a60aad5267b16b24627cd8d9eb8/onnxconverter_common-1.16.0-py2.py3-none-any.whl", hash = "sha256:df39ee96f17fff119dff10dd245467651b60b9e8a96020eb93402239794852f7", size = 89511, upload-time = "2025-08-28T19:37:46.988Z" },
 ]
 
 [[package]]
