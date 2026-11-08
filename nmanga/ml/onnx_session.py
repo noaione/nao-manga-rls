@@ -617,7 +617,7 @@ def prepare_model_runtime_builders(
     # list around instead of only the last device seen per name.
     all_ep_devices = ort.get_ep_devices()
     ep_devices = {ep_device.ep_name: ep_device for ep_device in all_ep_devices}
-    config_entry = {
+    config_entry: dict[str, str] = {
         "session.disable_cpu_ep_fallback": "1" if disable_cpu else "0",
     }
     has_good_ep_devices = False
@@ -680,20 +680,19 @@ def prepare_model_runtime_builders(
             # Apple Silicon only; unsupported nodes fall through to CoreML and then the CPU
             providers.append(("MLXExecutionProvider", {}))
             config_entry["ep.mlx.enable_compile"] = "1"
-        else:
-            providers.append(
-                (
-                    "CoreMLExecutionProvider",
-                    {
-                        "ModelFormat": "MLProgram",
-                        "MLComputeUnits": "ALL",
-                        "RequireStaticInputShapes": "1",
-                        "EnableOnSubgraphs": "1",
-                        "ModelCacheDirectory": str(cache_dir),
-                        "SpecializationStrategy": "FastPrediction",
-                    },
-                ),
-            )
+        providers.append(
+            (
+                "CoreMLExecutionProvider",
+                {
+                    "ModelFormat": "MLProgram",
+                    "MLComputeUnits": "CPUAndGPU",
+                    "RequireStaticInputShapes": "1",
+                    "EnableOnSubgraphs": "1",
+                    "ModelCacheDirectory": str(cache_dir),
+                    "SpecializationStrategy": "FastPrediction",
+                },
+            ),
+        )
 
     if not providers and not ep_providers:
         if "WebGpuExecutionProvider" not in ep_devices:
