@@ -48,7 +48,7 @@ console = term.get_console()
 SAVE_CHOICE = term.ConsoleChoice("save_data", "Save")
 CANCEL_CHOICE = term.ConsoleChoice("cancel_data", "Cancel")
 
-# --- Defaults --- #
+# MARK: Defaults
 
 _default_bracket_index = ["round", "square", "curly"]
 
@@ -230,7 +230,7 @@ def _loop_defaults_sections(config: config.Config) -> config.Config:  # pragma: 
         console.enter()
 
 
-# --- Executables --- #
+# MARK: Executables
 
 
 def _check_executables_inquire_validation(
@@ -310,7 +310,7 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
         console.enter()
 
 
-# --- Experimentals --- #
+# MARK: Experimentals
 
 
 def _loop_experimental_disable_enable(experiment: str, current: bool) -> bool:  # pragma: no cover
@@ -353,7 +353,7 @@ def _loop_experimental_sections(config: config.Config):  # pragma: no cover
         console.enter()
 
 
-# --- Main --- #
+# MARK: Main
 
 
 def _loop_main_sections(config: config.Config) -> tuple[bool, config.Config]:  # pragma: no cover
