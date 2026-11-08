@@ -103,6 +103,7 @@ def list_backends(show_raw_providers: bool):
     # on an installation without ONNX Runtime, which is an optional extra.
     from ..ml.ort import get_onnxruntime
 
+    console.info("Loading ONNX Runtime...")
     try:
         ort = get_onnxruntime()
     except ImportError as exc:
@@ -110,12 +111,11 @@ def list_backends(show_raw_providers: bool):
             "ONNX Runtime is not installed. Install the `denoiser*` extra to use this command."
         ) from exc
 
+    console.info(f"ONNX Runtime {ort.version}")
     available_providers = sorted(ort.get_available_providers())
     raw_devices = ort.get_ep_devices() if hasattr(ort, "get_ep_devices") else []
     ep_device_names = sorted({device.ep_name for device in raw_devices})
     statuses = detect_backend_status(available_providers, ep_device_names)
-
-    console.info(f"ONNX Runtime {ort.version}")
 
     table = Table(box=None, pad_edge=False, show_header=True)
     table.add_column("backend", style="bold cyan", no_wrap=True)
