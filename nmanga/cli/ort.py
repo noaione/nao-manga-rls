@@ -22,18 +22,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Upscale images using a tiled approach with overlapping seams to prevent artifacts.
+# ONNX Runtime commands: run an ONNX graph over a folder of images.
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from typing import Literal
 
 import rich_click as click
 from PIL import Image
+from rich.table import Table
 
 from .. import file_handler, term
+from ..ml.backends import (
+    AUTO_BACKEND_PRIORITY,
+    InferenceBackend,
+    describe_backends,
+    detect_backend_status,
+)
 from ..ml.contracts import MLDataType
 from ..ml.onnx_backend import denoise_single_image_with_overlap
 from ..ml.onnx_session import prepare_model_runtime_builders
@@ -45,8 +51,102 @@ from .base import NMangaCommandHandler
 Image.MAX_IMAGE_PIXELS = 4 * ((1024**3) // 3)
 console = term.get_console()
 
+__all__ = ("ort_group",)
 
-@click.command("upscale-trt", help="(Experimental) Upscale images using TensorRT models.", cls=NMangaCommandHandler)
+
+class BackendParamType(click.ParamType):
+    """The inference backend, named after nmanga's vocabulary instead of the raw ORT providers."""
+
+    name = "backend"
+
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str | None:
+        return "[{}]".format("|".join(backend.value for backend in InferenceBackend))
+
+    def convert(self, value, param, ctx) -> InferenceBackend:
+        if isinstance(value, InferenceBackend):
+            return value
+        try:
+            return InferenceBackend.from_str(str(value))
+        except ValueError as exc:
+            self.fail(str(exc), param, ctx)
+
+
+BACKEND = BackendParamType()
+
+
+@click.group(
+    name="ort",
+    help="(Experimental) Run ONNX models with ONNX Runtime, on the backend of your choice",
+    epilog="Supported backends:\n\n" + describe_backends(),
+)
+def ort_group():
+    """Machine Learning commands that run on ONNX Runtime."""
+    pass
+
+
+@ort_group.command(
+    name="backends",
+    help="Show which inference backends this machine can actually run.",
+    cls=NMangaCommandHandler,
+)
+@click.option(
+    "--raw",
+    "show_raw_providers",
+    is_flag=True,
+    default=False,
+    help="Also list the raw ONNX Runtime provider and plugin device names",
+)
+def list_backends(show_raw_providers: bool):
+    """Show which inference backends this machine can actually run."""
+
+    # Imported here so `nmanga --help`, and every command that never touches a model, keep working
+    # on an installation without ONNX Runtime, which is an optional extra.
+    from ..ml.ort import get_onnxruntime
+
+    try:
+        ort = get_onnxruntime()
+    except ImportError as exc:
+        raise click.ClickException(
+            "ONNX Runtime is not installed. Install the `denoiser*` extra to use this command."
+        ) from exc
+
+    available_providers = sorted(ort.get_available_providers())
+    raw_devices = ort.get_ep_devices() if hasattr(ort, "get_ep_devices") else []
+    ep_device_names = sorted({device.ep_name for device in raw_devices})
+    statuses = detect_backend_status(available_providers, ep_device_names)
+
+    console.info(f"ONNX Runtime {ort.version}")
+
+    table = Table(box=None, pad_edge=False, show_header=True)
+    table.add_column("backend", style="bold cyan", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("provider", style="dim")
+    for status in statuses:
+        table.add_row(
+            status.backend.value,
+            "[green]available[/green]" if status.is_available else "[dim]not available[/dim]",
+            status.provider or "",
+        )
+    console.console.print(table)
+
+    by_backend = {status.backend: status for status in statuses}
+    automatic = next((backend for backend in AUTO_BACKEND_PRIORITY if by_backend[backend].is_available), None)
+    if automatic is None:
+        console.warning("`auto` has no backend to use on this machine.")
+    else:
+        console.info(f"`auto` would use: {automatic.value} ({automatic.label})")
+
+    if show_raw_providers:
+        console.info(f"Provider names: {', '.join(available_providers) or 'none'}")
+        console.info(f"Plugin devices: {', '.join(ep_device_names) or 'none'}")
+    return 0
+
+
+@ort_group.command(
+    name="infer",
+    help="(Experimental) Denoise or upscale images by running an ONNX model over them.",
+    cls=NMangaCommandHandler,
+)
 @options.path_or_archive(disable_archive=True)
 @options.dest_output()
 @click.option(
@@ -55,7 +155,7 @@ console = term.get_console()
     "model_path",
     type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
     required=True,
-    help="The ONNX model file to use for denoising",
+    help="The ONNX model file to run, a x1 model denoises and a x2/x4 model upscales",
 )
 @click.option(
     "-d",
@@ -65,6 +165,15 @@ console = term.get_console()
     default=0,
     show_default=True,
     help="The GPU device ID to use for processing",
+)
+@click.option(
+    "-be",
+    "--backend",
+    "backend",
+    type=BACKEND,
+    default=InferenceBackend.AUTO,
+    show_default=True,
+    help="The inference backend to use, naming one makes it mandatory (see `nmanga ort --help`)",
 )
 @click.option(
     "-b",
@@ -118,16 +227,7 @@ console = term.get_console()
     type=click.Choice(["fp16", "fp32", "bf16"], case_sensitive=False),
     default="fp16",
     show_default=True,
-    help="The quantization size to use for inference",
-)
-@click.option(
-    "-rtx",
-    "--with-nvrtx",
-    "with_nvidia_rtx",
-    is_flag=True,
-    default=False,
-    show_default=True,
-    help="Use RTX for inference",
+    help="The precision to build the engine for",
 )
 @click.option(
     "-ws",
@@ -152,7 +252,7 @@ console = term.get_console()
     is_flag=True,
     default=False,
     show_default=True,
-    help="Fail instead of falling back when the requested execution provider is unavailable",
+    help="Fail when `auto` cannot use the backend it picked, instead of running on whatever loaded",
 )
 @click.option(
     "--no-cpu",
@@ -163,27 +263,27 @@ console = term.get_console()
     help="Disable CPU fallback for execution provider",
 )
 @options.recursive
-@time_program
 @check_config_first
-def upscale_trt(
+@time_program
+def infer(
     path_or_archive: Path,
     dest_output: Path,
     model_path: Path,
     device_id: int,
+    backend: InferenceBackend,
     batch_size: int,
     tile_size: int,
     tile_overlap: int,
     contrast_stretch: bool,
     background: Literal["black", "white"],
     quant_size: str,
-    with_nvidia_rtx: bool,
     workspace_size: int | None,
     enable_cuda_graph: bool,
     strict_ep: bool,
     no_cpu_fallback: bool,
     recursive: bool,
 ):
-    """Upscale images using TensorRT models."""
+    """Denoise or upscale images by running an ONNX model over them."""
 
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -203,60 +303,64 @@ def upscale_trt(
         console.info(f"Recursively collecting folder in {path_or_archive}...")
         for comic in file_handler.collect_all_comics(path_or_archive, dir_only=True):
             candidates.append(comic)
-        console.info(f"Found {len(candidates)} archives/folders to upscale.")
+        console.info(f"Found {len(candidates)} folders to process.")
 
     if not candidates and recursive:
-        console.warning("No valid folders found to upscale.")
+        console.warning("No valid folders found to process.")
         return 1
 
     console.info(f"Output folder: {dest_output.resolve()} (recursive? {recursive!r})")
-
-    is_tensorrt_available = importlib.util.find_spec("tensorrt")
-
-    # Try importing stuff here
-    ml_quant = MLDataType.from_str(quant_size)
     console.info(f"Loading model: {model_path.name}...")
     console.info(f"Using device ID: {device_id}")
-    if is_tensorrt_available is not None:
-        console.info(
-            f"Building/loading TensorRT Engine for {model_path.name}. "
-            + "If it is building, you may need to wait up to 20-25 minutes for the first time."
-        )
-    sess = prepare_model_runtime_builders(
-        model_path,
-        device_id=device_id,
-        is_verbose=console.debugged,
-        tile_size=tile_size,
-        batch_size=batch_size,
-        data_type=ml_quant,
-        with_nvrtx=with_nvidia_rtx,
-        workspace_size=None if workspace_size is None else workspace_size * 1024 * 1024,
-        enable_cuda_graph=enable_cuda_graph,
-        strict_ep=strict_ep,
-        disable_cpu=no_cpu_fallback,
-    )
 
-    if scale_factor := getattr(sess, "scale_factor", None):
+    if backend in (InferenceBackend.AUTO, InferenceBackend.TRT, InferenceBackend.TRT_RTX):
+        console.info(
+            f"Building/loading the engine for {model_path.name}. "
+            "If it is building, the first run may take up to 20-25 minutes."
+        )
+
+    try:
+        session = prepare_model_runtime_builders(
+            model_path,
+            device_id=device_id,
+            is_verbose=console.debugged,
+            tile_size=tile_size,
+            batch_size=batch_size,
+            data_type=MLDataType.from_str(quant_size),
+            backend=backend,
+            workspace_size=None if workspace_size is None else workspace_size * 1024 * 1024,
+            enable_cuda_graph=enable_cuda_graph,
+            strict_ep=strict_ep,
+            disable_cpu=no_cpu_fallback,
+        )
+    except (ImportError, RuntimeError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    # One command covers both jobs: a x1 model removes noise, anything bigger enlarges the page.
+    scale_factor = getattr(session, "scale_factor", None) or 1
+    action = "Upscaling" if scale_factor > 1 else "Denoising"
+    if scale_factor > 1:
         console.info(f"Detected model scale factor: x{scale_factor}")
 
-    console.info("Model loaded successfully. Starting upscaling process...")
+    console.info(f"Model loaded successfully. Starting the {action.lower()} process...")
 
     for candidate in candidates:
         if recursive:
             console.info(f"Processing: {candidate}")
+
         all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(candidate)]
         total_files = len(all_files)
         if total_files <= 0:
             console.warning(f"No images found in {candidate}, skipping.")
             continue
 
-        real_output = dest_output
-        if recursive:
-            real_output = dest_output / candidate.name
+        # Keep the recursive folder identity instead of only its leaf name, so two same-named
+        # nested folders cannot write into the same output directory.
+        real_output = dest_output / candidate.relative_to(path_or_archive) if recursive else dest_output
         real_output.mkdir(parents=True, exist_ok=True)
 
         progress = console.make_progress()
-        task = console.make_task(progress, "Upscaling images...", total=total_files)
+        task = console.make_task(progress, f"{action} images...", total=total_files)
 
         for image_file in all_files:
             output_path = real_output / f"{image_file.stem}.png"
@@ -264,20 +368,24 @@ def upscale_trt(
             img_file = Image.open(image_file)
             output_image = denoise_single_image_with_overlap(
                 img_file,
-                sess,
+                session,
                 batch_size=batch_size,
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
                 background=background,
                 tile_overlap=tile_overlap,
-                use_fp32=not sess.use_halfp,
+                use_fp32=not session.use_halfp,
             )
+            try:
+                output_image.save(output_path, format="PNG")
+            finally:
+                img_file.close()
+                output_image.close()
 
-            output_image.save(output_path, format="PNG")
-            img_file.close()
-            output_image.close()
             progress.advance(task)
-        console.stop_progress(progress, f"Upscaled all {total_files} images to {real_output}")
+
+        console.stop_progress(progress, f"{action} finished for all {total_files} images to {real_output}")
+
     if recursive:
         console.info(f"Finished processing {len(candidates)} folders.")
     return 0

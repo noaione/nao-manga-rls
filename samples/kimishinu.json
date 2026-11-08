@@ -473,7 +473,7 @@
             "batch_size": 64,
             "tile_size": 128,
             "device_id": 0,
-            "precompiled": true
+            "backend": "trt"
         },
         {
             "kind": "autolevel",

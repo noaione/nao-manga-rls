@@ -419,15 +419,6 @@ pingo_path = click.option(
     panel="Executable Path",
     show_default=True,
 )
-w2x_trt_path = click.option(
-    "-w2exe",
-    "--w2x-trt-exec",
-    "w2x_trt_path",
-    default=config.executables.w2x_trt_path,
-    help="Path to the waifu2x-tensorrt executable",
-    panel="Executable Path",
-    show_default=True,
-)
 cjpegli_path = click.option(
     "-cje",
     "--cjpegli-exec",

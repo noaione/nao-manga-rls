@@ -48,7 +48,6 @@ def _run_python(code: str) -> str:
 
 def test_denoiser_facade_forwards_the_canonical_objects():
     assert nmanga.denoiser.MLDataType is nmanga.ml.contracts.MLDataType
-    assert nmanga.denoiser.prepare_model_runtime is nmanga.ml.onnx_session.prepare_model_runtime
     assert nmanga.denoiser.prepare_model_runtime_builders is nmanga.ml.onnx_session.prepare_model_runtime_builders
     assert nmanga.denoiser.get_model_information is nmanga.ml.onnx_session.get_model_information
     assert nmanga.denoiser.get_model_static_input is nmanga.ml.onnx_session.get_model_static_input

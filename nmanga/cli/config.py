@@ -38,7 +38,6 @@ from .base import (
     test_or_find_exiftool,
     test_or_find_magick,
     test_or_find_pingo,
-    test_or_find_w2x_trt,
 )
 
 __all__ = ("cli_config",)
@@ -278,7 +277,6 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
                 term.ConsoleChoice("magick_path", "Configure `magick` path"),
                 term.ConsoleChoice("cjpegli_path", "Configure `cjpegli` path"),
                 term.ConsoleChoice("cjxl_path", "Configure `cjxl` path"),
-                term.ConsoleChoice("w2x_trt_path", "Configure `waifu2x-tensorrt` path"),
                 SAVE_CHOICE,
             ],
         )
@@ -306,12 +304,6 @@ def _loop_executables_sections(config: config.Config):  # pragma: no cover
             result = _loop_executables_check_single("cjxl", config.executables.cjxl_path, test_or_find_cjxl)
             if result is not None:
                 config.executables.cjxl_path = result
-        elif option == "w2x_trt_path":
-            result = _loop_executables_check_single(
-                "waifu2x-tensorrt", config.executables.w2x_trt_path or "", test_or_find_w2x_trt
-            )
-            if result is not None:
-                config.executables.w2x_trt_path = result
         else:
             console.warning("Invalid option selected")
             console.sleep(2)

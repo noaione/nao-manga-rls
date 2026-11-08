@@ -209,7 +209,7 @@ def infer(
         accepted = " or ".join(CHECKPOINT_SUFFIXES)
         raise click.BadParameter(
             f"{model_path.name} is not a {accepted} checkpoint. "
-            "`torch infer` runs checkpoint models with PyTorch, use `upscale-trt` for ONNX graphs.",
+            "`torch infer` runs checkpoint models with PyTorch, use `nmanga ort infer` for ONNX graphs.",
             param_hint="model_path",
         )
 

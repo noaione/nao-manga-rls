@@ -81,7 +81,7 @@ def _validate_checkpoint_path(model_path: str | Path) -> Path:
         raise ValueError(
             f"Unsupported checkpoint format {path.suffix or '(none)'!r}: {path.name} is not a "
             f"{accepted} file. PyTorch inference loads resselt checkpoints; an ONNX or "
-            f"TensorRT model needs the existing `upscale-trt` command instead."
+            f"TensorRT model needs the `nmanga ort infer` command instead."
         )
     return path
 

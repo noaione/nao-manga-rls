@@ -56,7 +56,6 @@ __all__ = (
     "test_or_find_exiftool",
     "test_or_find_magick",
     "test_or_find_pingo",
-    "test_or_find_w2x_trt",
 )
 
 
@@ -151,18 +150,6 @@ def test_or_find_cjxl(cjxl: str, force_search: bool = True) -> str | None:
         return cjxl or (None if not force_search else _find_exec_path("cjxl", ["-h"]))
     except OSError:
         return None if not force_search else _find_exec_path("cjxl", ["-h"])
-
-
-def test_or_find_w2x_trt(w2x_trt_path: str | None, force_search: bool = True) -> str | None:
-    if not w2x_trt_path:
-        return None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"])
-    try:
-        success = _test_exec([w2x_trt_path, "-h"])
-        if not success:
-            return None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"])
-        return w2x_trt_path or (None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"]))
-    except OSError:
-        return None if not force_search else _find_exec_path("waifu2x-tensorrt", ["-h"])
 
 
 def _is_pingo_validity_check(stdout: str, stderr: str) -> bool:

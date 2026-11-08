@@ -33,7 +33,6 @@ class _ConfigExecutableT(TypedDict, total=False):
     exiftool_path: str
     cjpegli_path: str
     cjxl_path: str
-    w2x_trt_path: str | None
 
 
 class _ConfigExperimentsT(TypedDict, total=False):

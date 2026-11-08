@@ -325,7 +325,7 @@
         },
         "ActionDenoise": {
             "additionalProperties": false,
-            "description": "Action to denoise all images in a volume with denoise-trt",
+            "description": "Action to denoise all images in a volume with `nmanga ort infer`",
             "properties": {
                 "conditions": {
                     "anyOf": [
@@ -405,26 +405,14 @@
                     "title": "Contrast Stretch After Denoising",
                     "type": "boolean"
                 },
-                "precompiled": {
-                    "default": false,
-                    "title": "Is precompiled TensorRT model",
-                    "type": "boolean"
-                },
-                "rtx_ep": {
-                    "default": false,
-                    "title": "Use TRT-RTX Engine",
-                    "type": "boolean"
+                "backend": {
+                    "$ref": "#/$defs/InferenceBackend",
+                    "default": "auto",
+                    "title": "Inference Backend"
                 },
                 "data_type": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/MLDataType"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
+                    "$ref": "#/$defs/MLDataType",
+                    "default": "fp16",
                     "title": "The data type to use for TensorRT model"
                 },
                 "workspace_size": {
@@ -1449,7 +1437,7 @@
         },
         "ActionUpscale": {
             "additionalProperties": false,
-            "description": "Action to upscale all images in a volume with upscale-trt",
+            "description": "Action to upscale all images in a volume with `nmanga ort infer`",
             "properties": {
                 "conditions": {
                     "anyOf": [
@@ -1529,26 +1517,14 @@
                     "title": "Contrast Stretch After Denoising",
                     "type": "boolean"
                 },
-                "precompiled": {
-                    "default": false,
-                    "title": "Is precompiled TensorRT model",
-                    "type": "boolean"
-                },
-                "rtx_ep": {
-                    "default": false,
-                    "title": "Use TRT-RTX Engine",
-                    "type": "boolean"
+                "backend": {
+                    "$ref": "#/$defs/InferenceBackend",
+                    "default": "auto",
+                    "title": "Inference Backend"
                 },
                 "data_type": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/MLDataType"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "default": null,
+                    "$ref": "#/$defs/MLDataType",
+                    "default": "fp16",
                     "title": "The data type to use for TensorRT model"
                 },
                 "workspace_size": {
@@ -1795,6 +1771,23 @@
                 "epub"
             ],
             "title": "ExporterType",
+            "type": "string"
+        },
+        "InferenceBackend": {
+            "description": "The inference backends that can be requested by name.\n\nEvery value is a nmanga name, never an ONNX Runtime provider name: the mapping to the\nprovider (or plugin device) each one needs lives in :data:`_BACKEND_SPECS`.",
+            "enum": [
+                "auto",
+                "trt-rtx",
+                "trt",
+                "cuda",
+                "amdgpu",
+                "migraphx",
+                "openvino",
+                "coreml",
+                "mlx",
+                "webgpu"
+            ],
+            "title": "InferenceBackend",
             "type": "string"
         },
         "MLDataType": {

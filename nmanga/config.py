@@ -66,7 +66,6 @@ class _ConfigExecutable:
     exiftool_path: str = field(default="exiftool")
     cjpegli_path: str = field(default="cjpegli")
     cjxl_path: str = field(default="cjxl")
-    w2x_trt_path: str | None = field(default=None)
 
     def to_dict(self) -> _ConfigExecutableT:
         return {
@@ -75,7 +74,6 @@ class _ConfigExecutable:
             "exiftool_path": self.exiftool_path,
             "cjpegli_path": self.cjpegli_path,
             "cjxl_path": self.cjxl_path,
-            "w2x_trt_path": self.w2x_trt_path,
         }
 
 

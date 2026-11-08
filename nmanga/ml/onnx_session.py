@@ -35,10 +35,11 @@ import warnings
 from hashlib import md5
 from importlib import util as importutil
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ..common import format_elapsed_time
 from ..term import get_console
+from .backends import AUTO_BACKEND_PRIORITY, InferenceBackend, get_backend_spec
 from .contracts import MLDataType
 from .onnx_cache import build_compilation_cache_key, get_data_dir
 from .ort import get_onnxruntime
@@ -58,7 +59,6 @@ __all__ = (
     "get_model_scale_factor",
     "get_model_static_input",
     "get_torch_memory_limit_and_rtx",
-    "prepare_model_runtime",
     "prepare_model_runtime_builders",
     "resolve_model_input_sizes",
     "resolve_model_static_shapes",
@@ -206,65 +206,6 @@ def resolve_model_static_shapes(
             f"Re-run with the tile size set to {fixed_tile_size}."
         )
     return batch_size, tile_size
-
-
-def prepare_model_runtime(
-    model_path: Path,
-    *,
-    device_id: int = 0,
-    is_verbose: bool = False,
-) -> "InferenceSessionWithScale":
-    # _preload_custom_extensions()
-
-    ort = get_onnxruntime()
-
-    if sys.platform == "darwin":
-        CACHE_DIR = Path.home() / ".cache" / "nmanga-denoiser"
-        providers = [
-            (
-                "CoreMLExecutionProvider",
-                {
-                    "ModelFormat": "MLProgram",
-                    "MLComputeUnits": "ALL",
-                    "RequireStaticInputShapes": "1",
-                    "EnableOnSubgraphs": "1",
-                    "ModelCacheDirectory": str(CACHE_DIR),
-                    "SpecializationStrategy": "FastPrediction",
-                },
-            )
-        ]
-    else:
-        available_providers = set(ort.get_available_providers())
-        providers = []
-        if "TensorrtExecutionProvider" in available_providers:
-            providers.append((
-                "TensorrtExecutionProvider",
-                {
-                    "device_id": device_id,
-                    "trt_fp16_enable": True,
-                    "trt_sparsity_enable": True,
-                },
-            ))
-        if "CUDAExecutionProvider" in available_providers:
-            providers.append(("CUDAExecutionProvider", {"device_id": device_id}))
-        if not providers:
-            raise RuntimeError(
-                "No suitable ONNX Runtime GPU execution providers found. "
-                "Install the denoiser extra with onnxruntime-gpu CUDA/cuDNN support."
-            )
-
-    verb_level = 0 if is_verbose else 3
-    ort.set_default_logger_severity(verb_level)
-    ort.set_default_logger_verbosity(verb_level)
-
-    sess_opt = ort.SessionOptions()
-    session = cast(
-        "InferenceSessionWithScale", ort.InferenceSession(model_path, sess_options=sess_opt, providers=providers)
-    )
-    scale_factor, use_halfp = get_model_scale_factor(session, tile_size=None)
-    session.scale_factor = scale_factor
-    session.use_halfp = use_halfp
-    return session
 
 
 def get_model_information(model_path: Path) -> tuple[str, int]:
@@ -454,16 +395,16 @@ def prepare_model_runtime_builders(
     tile_size: int | None = None,
     batch_size: int = 64,
     data_type: MLDataType = MLDataType.FP16,
-    with_nvrtx: bool = False,
+    backend: InferenceBackend | str = InferenceBackend.AUTO,
     workspace_size: int | None = None,
     enable_cuda_graph: bool = True,
     strict_ep: bool = False,
     disable_cpu: bool = False,
 ) -> "InferenceSessionWithScale":
-    """Build an ONNX Runtime session, letting the TensorRT RTX builder compile the engine.
+    """Build an ONNX Runtime session for one requested backend.
 
-    Unlike :func:`prepare_model_runtime`, this never forces a global FP16 optimization on the graph,
-    so a mixed precision export keeps its own per-operator types.
+    The session never forces a global FP16 optimization on the graph, so a mixed precision
+    export keeps its own per-operator types.
 
     :param model_path: The ONNX model file
     :param device_id: The GPU device ID to build for
@@ -471,17 +412,33 @@ def prepare_model_runtime_builders(
     :param tile_size: The tile size to build the optimization profiles for
     :param batch_size: The batch size to build the optimization profiles for
     :param data_type: The requested build precision
-    :param with_nvrtx: Request the TRT-RTX execution provider
+    :param backend: The backend to run on, `auto` picks the best one this machine offers
     :param workspace_size: The workspace limit in bytes, or `None` to use 75% of the GPU memory
     :param enable_cuda_graph: Enable CUDA graph replay for the TRT-RTX engine
-    :param strict_ep: Fail instead of falling back when the requested provider is unavailable
+    :param strict_ep: Fail instead of falling back when the selected provider cannot be used
+    :param disable_cpu: Disable the CPU fallback of the execution provider
     :return: The inference session with the detected scale factor attached
-    :raises RuntimeError: If `strict_ep` is set and the requested provider cannot be used
+    :raises RuntimeError: If the requested backend cannot be used on this machine
+    :raises ValueError: If `backend` is not a known backend name
     """
 
     # _preload_custom_extensions()
 
     ort = get_onnxruntime()
+
+    requested_backend = InferenceBackend.from_str(backend) if isinstance(backend, str) else backend
+    if requested_backend is InferenceBackend.AMDGPU:
+        raise RuntimeError(
+            "The `amdgpu` backend is reserved for the upcoming native AMD execution provider and is not "
+            "wired up yet. Use `migraphx` for AMD GPUs."
+        )
+    if not requested_backend.is_automatic:
+        requested_spec = get_backend_spec(requested_backend)
+        if not requested_spec.is_supported_here(sys.platform):
+            raise RuntimeError(
+                f"The {requested_spec.label} backend only runs on {', '.join(requested_spec.platforms)}, "
+                f"but this machine is {sys.platform}."
+            )
 
     verb_level = 0 if is_verbose else 3
     ort.set_default_logger_severity(verb_level)
@@ -504,17 +461,14 @@ def prepare_model_runtime_builders(
 
     cnsl = get_console()
 
-    has_trt_rtx = torch_info[1] >= 8 if torch_info else False
-    if with_nvrtx and not has_trt_rtx:
-        if strict_ep:
-            compute_capability = f"{torch_info[1]}.x" if torch_info else "unknown"
-            raise RuntimeError(
-                "TensorRT RTX was requested but it is not supported on this GPU "
-                f"(CUDA compute capability {compute_capability}, TRT-RTX needs 8.0 or newer). "
-                "Re-run without --with-nvrtx, or stop asking for a strict execution provider."
-            )
-        cnsl.warning("TensorRT RTX is not supported on this GPU. Falling back to TensorRT.")
-        with_nvrtx = False
+    # TRT-RTX has to be asked for by name: it compiles an engine out of the graph on first use, so
+    # `auto` never spends minutes and gigabytes on it behind the caller's back.
+    uses_rtx = requested_backend is InferenceBackend.TRT_RTX
+    if uses_rtx and torch_info is not None and torch_info[1] < 8:
+        raise RuntimeError(
+            "TensorRT RTX needs CUDA compute capability 8.0 or newer, but "
+            f"device {device_id} reports {torch_info[1]}.x. Use `--backend trt` instead."
+        )
 
     # The optimization profiles are configured before any session exists, so the graph itself has
     # to say which shapes it accepts; the image-time clamp in `resolve_model_input_sizes` runs too
@@ -540,7 +494,7 @@ def prepare_model_runtime_builders(
         batch_size=batch_size,
         workspace_size=memory_limit,
         enable_cuda_graph=enable_cuda_graph,
-        with_nvrtx=with_nvrtx,
+        with_nvrtx=uses_rtx,
     )
 
     needs_trt_compat = torch_info[1] >= 12 if torch_info else False
@@ -626,130 +580,161 @@ def prepare_model_runtime_builders(
     # list around instead of only the last device seen per name.
     all_ep_devices = ort.get_ep_devices()
     ep_devices = {ep_device.ep_name: ep_device for ep_device in all_ep_devices}
+    openvino_devices = [
+        device
+        for device in all_ep_devices
+        if device.ep_name == "OpenVINOExecutionProvider" and device.ep_metadata.get("ov_device")
+    ]
+    raw_providers = set(ort.get_available_providers())
+
     config_entry: dict[str, str] = {
         "session.disable_cpu_ep_fallback": "1" if disable_cpu else "0",
     }
-    has_good_ep_devices = False
-    has_nvrtx = False
-    raw_providers = set(ort.get_available_providers())
+    cuda_ep_config = {
+        "device_id": device_id,
+        "arena_extend_strategy": "kNextPowerOfTwo",
+        "gpu_mem_limit": memory_limit,
+        "cudnn_conv_algo_search": "EXHAUSTIVE",
+        "do_copy_in_default_stream": True,
+        "cudnn_conv_use_max_workspace": True,
+        "prefer_nhwc": True,
+    }
 
-    # Selected providers
-    providers = []
-    ep_providers = []
+    # A provider is reachable either by name or, for the plugin builds, only through the device API.
+    # `add_backend` appends to whichever list the backend needs and reports whether this runtime can
+    # use it at all, so `auto` and an explicit choice share one description of what exists.
+    providers: list[tuple[str, dict[str, Any]]] = []
+    backend_devices: list[tuple[Any, dict[str, Any]]] = []
 
-    if sys.platform != "darwin":
-        has_nvrtx = False
-        if "NvTensorRTRTXExecutionProvider" in ep_devices and with_nvrtx:
-            ep_providers.append((ep_devices["NvTensorRTRTXExecutionProvider"], trtrtx_ep_config))
-            # disable CPU fallback
+    def add_backend(candidate: InferenceBackend) -> bool:
+        if candidate is InferenceBackend.TRT_RTX:
+            device = ep_devices.get("NvTensorRTRTXExecutionProvider")
+            if device is None:
+                return False
+            backend_devices.append((device, trtrtx_ep_config))
+            # An RTX engine covers the whole graph, so a CPU fallback would only hide that it did not
             config_entry["session.disable_cpu_ep_fallback"] = "1"
-            has_nvrtx = True
-            has_good_ep_devices = True
-        if "TensorrtExecutionProvider" in raw_providers and not has_nvrtx:
+            return True
+
+        if candidate is InferenceBackend.TRT:
+            if "TensorrtExecutionProvider" not in raw_providers:
+                return False
             providers.append(("TensorrtExecutionProvider", trt_ep_config))
-        if "MIGraphXExecutionProvider" in raw_providers:
-            providers.append(("MIGraphXExecutionProvider", migraphx_ep_config))
-        elif "MIGraphXExecutionProvider" in ep_devices:
-            ep_providers.append((ep_devices["MIGraphXExecutionProvider"], migraphx_ep_config))
-            has_good_ep_devices = True
-        if "CUDAExecutionProvider" in raw_providers:
-            providers.append((
-                "CUDAExecutionProvider",
-                {
-                    "device_id": device_id,
-                    "arena_extend_strategy": "kNextPowerOfTwo",
-                    "gpu_mem_limit": memory_limit,
-                    "cudnn_conv_algo_search": "EXHAUSTIVE",
-                    "do_copy_in_default_stream": True,
-                    "cudnn_conv_use_max_workspace": True,
-                    "prefer_nhwc": True,
-                },
-            ))
-        ov_plugin_devices = [
-            dev
-            for dev in all_ep_devices
-            if dev.ep_name == "OpenVINOExecutionProvider" and dev.ep_metadata.get("ov_device")
-        ]
-        if ov_plugin_devices and not providers and not ep_providers:
-            # Nothing else was picked, so use the plugin's device API: the device itself is what
-            # selects CPU, GPU or NPU. Keep the old `HETERO:GPU,CPU` preference, minus the hetero.
-            by_ov_device = {dev.ep_metadata["ov_device"]: dev for dev in ov_plugin_devices}
-            chosen_ov_device = by_ov_device.get("GPU")
-            if chosen_ov_device is None:
-                chosen_ov_device = by_ov_device.get("CPU", ov_plugin_devices[0])
-            ep_providers.append((chosen_ov_device, {}))
-            has_good_ep_devices = True
-        elif ov_plugin_devices or "OpenVINOExecutionProvider" in raw_providers:
-            # A plugin device cannot be mixed with a provider list, so when an accelerator already
-            # comes first (CUDA or TensorRT RTX) add OpenVINO as a name only fallback. The in-tree
-            # options only apply to a runtime that ships the provider itself.
-            providers.append(("OpenVINOExecutionProvider", {} if ov_plugin_devices else onv_ep_config))
-    else:
-        # Apple Silicon only; unsupported MLX nodes fall through to CoreML and then the CPU
-        if "MLXExecutionProvider" in raw_providers:
+            return True
+
+        if candidate is InferenceBackend.CUDA:
+            if "CUDAExecutionProvider" not in raw_providers:
+                return False
+            providers.append(("CUDAExecutionProvider", cuda_ep_config))
+            return True
+
+        if candidate is InferenceBackend.MIGRAPHX:
+            if "MIGraphXExecutionProvider" in raw_providers:
+                providers.append(("MIGraphXExecutionProvider", migraphx_ep_config))
+                return True
+            device = ep_devices.get("MIGraphXExecutionProvider")
+            if device is None:
+                return False
+            backend_devices.append((device, migraphx_ep_config))
+            return True
+
+        if candidate is InferenceBackend.OPENVINO:
+            # The device itself selects CPU, GPU or NPU, and a plugin device cannot be mixed with a
+            # provider list; keep the old `HETERO:GPU,CPU` preference by picking the GPU device.
+            if openvino_devices:
+                by_ov_device = {device.ep_metadata["ov_device"]: device for device in openvino_devices}
+                chosen_device = by_ov_device.get("GPU") or by_ov_device.get("CPU") or openvino_devices[0]
+                backend_devices.append((chosen_device, {}))
+                return True
+            if "OpenVINOExecutionProvider" not in raw_providers:
+                return False
+            # The in-tree options only apply to a runtime that ships the provider itself
+            providers.append(("OpenVINOExecutionProvider", onv_ep_config))
+            return True
+
+        if candidate is InferenceBackend.MLX:
+            if "MLXExecutionProvider" not in raw_providers:
+                return False
+            # Apple Silicon only; unsupported nodes fall through to CoreML and then the CPU
             providers.append(("MLXExecutionProvider", {}))
             config_entry["ep.mlx.enable_compile"] = "1"
-        providers.append(("CoreMLExecutionProvider", coreml_ep_config))
+            return True
 
-    if not providers and not ep_providers:
-        if "WebGpuExecutionProvider" not in ep_devices:
+        if candidate is InferenceBackend.COREML:
+            if "CoreMLExecutionProvider" not in raw_providers:
+                return False
+            providers.append(("CoreMLExecutionProvider", coreml_ep_config))
+            return True
+
+        if candidate is InferenceBackend.WEBGPU:
+            device = ep_devices.get("WebGpuExecutionProvider")
+            if device is None:
+                return False
+            backend_devices.append((device, {}))
+            return True
+
+        return False
+
+    if requested_backend.is_automatic:
+        selected_backend = next((candidate for candidate in AUTO_BACKEND_PRIORITY if add_backend(candidate)), None)
+        if selected_backend is None:
+            available = ", ".join(sorted(raw_providers)) or "none"
             raise RuntimeError(
                 "No suitable ONNX Runtime execution providers found. "
+                f"Available providers: {available}. "
                 "Ensure you have compatible hardware and the necessary dependencies installed."
             )
+    else:
+        if not add_backend(requested_backend):
+            available = ", ".join(sorted(raw_providers)) or "none"
+            raise RuntimeError(
+                f"The {requested_backend.label} backend is not available on this machine. "
+                f"Available providers: {available}. "
+                "Pick another backend with --backend, or install the execution provider it needs."
+            )
+        selected_backend = requested_backend
 
-        # Has webgpu, add it
-        ep_providers.append((ep_devices["WebGpuExecutionProvider"], {}))
-        has_good_ep_devices = True
-
-    # Resolve what a strict run has to see in the finished session. TRT-RTX answers to two names
-    # depending on whether it is the built-in provider or the standalone plugin, so both count.
+    # Naming a backend already promises it is used; `auto` only promises that under `strict_ep`,
+    # since it is allowed to land on whatever this machine happens to offer.
     required_providers: set[str] = set()
-    if strict_ep:
-        if with_nvrtx:
-            required_providers = {"NvTensorRTRTXExecutionProvider"}
-            if not has_nvrtx:
-                raise RuntimeError(
-                    "TensorRT RTX was requested but this ONNX Runtime exposes no RTX execution provider. "
-                    f"Available providers: {', '.join(sorted(raw_providers))}. "
-                    "Install the TRT-RTX plugin, or drop the strict execution provider check."
-                )
-        elif providers:
-            required_providers = {providers[0][0]}
+    if not requested_backend.is_automatic or strict_ep:
+        required_providers = set(get_backend_spec(selected_backend).provider_names)
 
     cnsl.info(f"Running with ONNX Runtime v{ort.version}")
     cnsl.info("Available providers:", raw_providers)
     cnsl.info("Available EP devices:", list(ep_devices.keys()))
+    cnsl.info(f"Selected backend: {selected_backend.label} ({selected_backend.value})")
 
     st_time = time.time()
 
     sess_opt = ort.SessionOptions()
-    for ep_devices, ep_config in ep_providers:
-        sess_opt.add_provider_for_devices([ep_devices], ep_config)
+    for ep_device, ep_config in backend_devices:
+        sess_opt.add_provider_for_devices([ep_device], ep_config)
 
     for key_c, val_c in config_entry.items():
         sess_opt.add_session_config_entry(key_c, val_c)
 
-    # Check if nvrtx exist, if yes we should recompile
+    # A plugin device cannot be mixed with a provider name list, and an RTX device has to compile its
+    # own model file before the session can be created.
     selected_model_path = model_path
+    session_providers = None if backend_devices else providers
 
-    if has_good_ep_devices:
-        providers = None  # Use EP devices for NvRTX
-
-    for ep_devices, ep_config in ep_providers:
-        if ep_devices.ep_name == "NvTensorRTRTXExecutionProvider":
+    for ep_device, ep_config in backend_devices:
+        if ep_device.ep_name == "NvTensorRTRTXExecutionProvider":
             selected_model_path = _compile_nvrtx_model_for_ep(
                 model_path,
                 data_dir,
                 cache_prefix,
-                ep_devices,
+                ep_device,
                 ep_config,
             )
             break
 
     session = cast(
         "InferenceSessionWithScale",
-        ort.InferenceSession(selected_model_path, sess_options=sess_opt, providers=providers, enable_fallback=0),
+        ort.InferenceSession(
+            selected_model_path, sess_options=sess_opt, providers=session_providers, enable_fallback=0
+        ),
     )
     end_time = time.time()
 

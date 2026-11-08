@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, FilePath, model_validator
@@ -36,10 +36,11 @@ from typing_extensions import Self
 
 from ... import file_handler
 from ...common import RegexCollection
+from ...ml.backends import InferenceBackend
 from ...ml.contracts import MLDataType
 from ...ml.onnx_backend import denoise_single_image_with_overlap
 from ...ml.onnx_cache import get_model_fingerprint, get_tf32_tag
-from ...ml.onnx_session import prepare_model_runtime, prepare_model_runtime_builders
+from ...ml.onnx_session import prepare_model_runtime_builders
 from ...resizer import ResizeKernel, rescale_image
 from ..common import perform_skip_action
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
@@ -88,12 +89,10 @@ class ActionML(BaseAction):
     """The background color to use for padding"""
     contrast_strectch: bool = Field(False, title="Contrast Stretch After Denoising")
     """Whether to apply contrast stretch after denoising"""
-    precompiled: bool = Field(False, title="Is precompiled TensorRT model")
-    """Whether the model is a precompiled TensorRT model, so we do not need to build it"""
-    rtx_ep: bool = Field(False, title="Use TRT-RTX Engine")
-    """Use TRT-RTX engine to do this ML action"""
-    data_type: MLDataType | None = Field(None, title="The data type to use for TensorRT model")
-    """The data type to use for TensorRT model"""
+    backend: InferenceBackend = Field(InferenceBackend.AUTO, title="Inference Backend")
+    """The ONNX Runtime backend, `auto` picks the best one this machine offers"""
+    data_type: MLDataType = Field(MLDataType.FP16, title="The data type to use for TensorRT model")
+    """The data type to build the TensorRT engine with"""
     workspace_size: int | None = Field(None, ge=1, title="TensorRT Workspace Size")
     """The TensorRT workspace limit in MiB, defaults to 75% of the total GPU memory"""
     enable_cuda_graph: bool = Field(True, title="Enable CUDA Graph Replay")
@@ -102,15 +101,6 @@ class ActionML(BaseAction):
     """Whether to fail instead of falling back when the requested execution provider is unavailable"""
     base_path: str = Field("output", title="Output Base Path")
     """The base path to save the resulting images to"""
-
-    @model_validator(mode="after")
-    def validate_precompiled_and_data_type(self) -> Self:
-        if not self.precompiled and self.data_type is None:
-            raise PydanticCustomError(
-                "precompiled_data_type_missing",
-                "data_type must be specified when precompiled is False",
-            )
-        return self
 
     @model_validator(mode="after")
     def validate_tile_overlap(self) -> Self:
@@ -160,16 +150,12 @@ class ActionML(BaseAction):
         graph_hash = get_model_fingerprint(self.model)[:16]
 
         other_key = (
-            f"d{self.device_id}-b{self.batch_size}-t{self.tile_size}-p{self.precompiled}"
-            f"-d{self.data_type or 'None'}-g{graph_hash}-{get_tf32_tag()}"
+            f"d{self.device_id}-b{self.batch_size}-t{self.tile_size}-be{self.backend.value}"
+            f"-dt{self.data_type.value}-g{graph_hash}-{get_tf32_tag()}"
             f"-ws{self.workspace_size or 'auto'}-cg{int(self.enable_cuda_graph)}"
         )
-        if self.rtx_ep:
-            other_key += "-rtx"
         if self.strict_ep:
             other_key += "-strict"
-        if self.precompiled:
-            other_key += "-precomp"
 
         return f"{model_hash}_{other_key}"
 
@@ -187,29 +173,22 @@ class ActionML(BaseAction):
             context.terminal.log(f"Using cached model session for key {cache_key}.")
             return cached_session
 
-        if self.precompiled:
-            session = prepare_model_runtime(
-                self.model,
-                device_id=self.device_id,
-                is_verbose=context.terminal.debugged,
-            )
-        else:
-            context.terminal.info(
-                f"Building/loading TensorRT Engine for {self.model.name}. "
-                + "If it is building, you may need to wait up to 20-25 minutes for the first time."
-            )
-            session = prepare_model_runtime_builders(
-                self.model,
-                device_id=self.device_id,
-                is_verbose=context.terminal.debugged,
-                tile_size=self.tile_size,
-                batch_size=self.batch_size,
-                data_type=cast(MLDataType, self.data_type),
-                with_nvrtx=self.rtx_ep,
-                workspace_size=None if self.workspace_size is None else self.workspace_size * 1024 * 1024,
-                enable_cuda_graph=self.enable_cuda_graph,
-                strict_ep=self.strict_ep,
-            )
+        context.terminal.info(
+            f"Building/loading the engine for {self.model.name}. "
+            + "If it is building, you may need to wait up to 20-25 minutes for the first time."
+        )
+        session = prepare_model_runtime_builders(
+            self.model,
+            device_id=self.device_id,
+            is_verbose=context.terminal.debugged,
+            tile_size=self.tile_size,
+            batch_size=self.batch_size,
+            data_type=self.data_type,
+            backend=self.backend,
+            workspace_size=None if self.workspace_size is None else self.workspace_size * 1024 * 1024,
+            enable_cuda_graph=self.enable_cuda_graph,
+            strict_ep=self.strict_ep,
+        )
 
         context.ml_model_session[cache_key] = session
         context.terminal.log(f"Cached model session for key {cache_key}.")
@@ -236,12 +215,10 @@ class ActionML(BaseAction):
             context.terminal.info(f"- Tile Size: {self.tile_size}")
             context.terminal.info(f"- Background Color: {self.background}")
             context.terminal.info(f"- Contrast Stretch: {self.contrast_strectch}")
-            context.terminal.info(f"- Precompiled Model: {'Yes' if self.precompiled else 'No'}")
-            context.terminal.info(f"- TRT-RTX Engine: {'Yes' if self.rtx_ep else 'No'}")
+            context.terminal.info(f"- Backend: {self.backend.value}")
+            context.terminal.info(f"- Data Type: {self.data_type.value}")
             context.terminal.info(f"- Workspace Size: {self.workspace_size or 'auto'} MiB")
             context.terminal.info(f"- CUDA Graph: {'Yes' if self.enable_cuda_graph else 'No'}")
-            if self.data_type is not None:
-                context.terminal.info(f"- Data Type: {self.data_type.value}")
             context.update_cwd(output_dir)
             return
 
@@ -310,27 +287,16 @@ class ActionML(BaseAction):
         :return: A dictionary of tool names and their kinds
         """
 
-        base_tools = {
+        return {
             "onnxruntime": ToolsKind.PACKAGE,
             "einops": ToolsKind.PACKAGE,
             "numpy": ToolsKind.PACKAGE,
         }
 
-        if not self.precompiled:
-            combined_tools = {
-                "tensorrt": ToolsKind.PACKAGE,
-                "torch": ToolsKind.PACKAGE,
-                "onnx": ToolsKind.PACKAGE,
-                **base_tools,
-            }
-            return combined_tools
-
-        return base_tools
-
 
 class ActionDenoise(ActionML):
     """
-    Action to denoise all images in a volume with denoise-trt
+    Action to denoise all images in a volume with `nmanga ort infer`
     """
 
     model_config = ConfigDict(
@@ -367,7 +333,7 @@ class UpscaleRescaleConfig(BaseModel):
 
 class ActionUpscale(ActionML):
     """
-    Action to upscale all images in a volume with upscale-trt
+    Action to upscale all images in a volume with `nmanga ort infer`
     """
 
     model_config = ConfigDict(

@@ -44,7 +44,6 @@ from .cli.base import NMangaCommandHandler
 from .cli.calc import calc_group
 from .cli.config import cli_config
 from .cli.debugging import simulate_progress
-from .cli.denoiser import denoiser, denoiser_trt, identify_denoise_candidates
 from .cli.epub_stuff import epub_group
 from .cli.image_operations import imops_group
 from .cli.image_optimizer import image_jpegify, image_jxlify, image_mixmatch, image_optimizer
@@ -53,6 +52,7 @@ from .cli.lookup import lookup_group
 from .cli.manual_split import manual_split
 from .cli.merge_chapters import merge_chapters
 from .cli.orchestrator import orchestractor
+from .cli.ort import ort_group
 from .cli.pdf_stuff import pdf_group
 from .cli.posterize import analyze_shades, auto_posterize, posterize2, posterize_simple
 from .cli.releases import prepare_releases, prepare_releases_chapter
@@ -61,7 +61,6 @@ from .cli.rescaler import rescale2, rescale_image
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
 from .cli.torch import torch_group
-from .cli.upscaler import upscale_trt
 from .term import detect_shell, get_console
 from .term.shell import (
     install_completion_for_bash,
@@ -169,7 +168,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Analyze",
     help="Commands for analyzing and processing images",
-    commands=["analyze-peaks", "analyze-shades", "lookup", "identify-quality", "calc"],
+    commands=["analyze-peaks", "analyze-shades", "lookup", "calc"],
 )
 @click.command_panel(
     name="Auto Processing",
@@ -179,7 +178,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="ML Processing",
     help="Commands for processing images using Machine Learning models",
-    commands=["denoise", "denoise-trt", "upscale-trt", "torch"],
+    commands=["ort", "torch"],
 )
 @click.command_panel(
     name="Archive Processing",
@@ -327,11 +326,8 @@ main.add_command(posterize_simple)
 main.add_command(posterize2)
 main.add_command(auto_posterize)
 main.add_command(analyze_shades)
-main.add_command(denoiser)
-main.add_command(denoiser_trt)
-main.add_command(upscale_trt)
+main.add_command(ort_group)
 main.add_command(torch_group)
-main.add_command(identify_denoise_candidates)
 main.add_command(shift_renamer)
 main.add_command(orchestractor)
 main.add_command(lookup_group)
