@@ -181,8 +181,9 @@ def test_ort_initialization_is_shared_and_runs_once(monkeypatch: pytest.MonkeyPa
     assert from_facade is fake_ort
 
     # The DLL preload happens once, and telemetry is disabled exactly once even though the
-    # cached path calls the guard again.
-    assert fake_ort.preload_dll_calls == 1
+    # cached path calls the guard again. `preload_dlls()` is skipped on macOS, where it has
+    # nothing to load.
+    assert fake_ort.preload_dll_calls == (0 if sys.platform == "darwin" else 1)
     assert fake_ort.telemetry_calls == 1
 
     # Every plugin is registered once, in order, and WinML discovery receives the exclusion list

@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+**New Features**
+- `nmanga ort infer` - `--tta` averages every batch over its 8 flips/rotations (test-time augmentation, about 8x slower). The orchestrator `denoise`/`upscale` actions expose it as `tta`
+
 **Changes**
 - `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
+- `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend with complementary linear ramps
+- Overlapping ONNX runs replicate the page edge instead of padding it with `--background`, so the outer tiles no longer pick up a black/white border (the flag still applies to non-overlapping runs)
+
+**Fixes**
+- ONNX inference feeds the precision the model declares, so an fp16 and an fp32 file are each fed as they expect instead of following the caller's guess
+- ONNX inference pads a short final batch up to a static model's declared batch, so static TensorRT/TRT-RTX engines no longer reject the last tiles
+- Contrast stretching no longer divides by zero on a single-colour page
 
 ## [0.31.0] (2026-11-08)
 

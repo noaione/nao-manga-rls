@@ -405,6 +405,11 @@
                     "title": "Contrast Stretch After Denoising",
                     "type": "boolean"
                 },
+                "tta": {
+                    "default": false,
+                    "title": "Test-Time Augmentation",
+                    "type": "boolean"
+                },
                 "backend": {
                     "$ref": "#/$defs/InferenceBackend",
                     "default": "auto",
@@ -1515,6 +1520,11 @@
                 "contrast_strectch": {
                     "default": false,
                     "title": "Contrast Stretch After Denoising",
+                    "type": "boolean"
+                },
+                "tta": {
+                    "default": false,
+                    "title": "Test-Time Augmentation",
                     "type": "boolean"
                 },
                 "backend": {

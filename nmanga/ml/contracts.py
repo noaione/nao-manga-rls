@@ -136,9 +136,9 @@ class TilingConfig:
     The validated JaNai tile grid.
 
     `tile_overlap` is the *total* overlap between two neighbouring tiles, so the stride is
-    `tile_size - tile_overlap`. This is not the ONNX overlap tiler in `nmanga.ml.onnx_backend`, whose stride is
-    `tile_size - 2 * tile_overlap`; the two are not interchangeable because the attention
-    and pooling of the model depend on the whole tile.
+    `tile_size - tile_overlap`. The ONNX overlap tiler in `nmanga.ml.onnx_backend` uses the same
+    stride, but the two are still not interchangeable because the attention and pooling of a torch
+    model depend on the whole tile.
     """
 
     tile_size: int = DEFAULT_TILE_SIZE

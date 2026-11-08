@@ -89,6 +89,8 @@ class ActionML(BaseAction):
     """The background color to use for padding"""
     contrast_strectch: bool = Field(False, title="Contrast Stretch After Denoising")
     """Whether to apply contrast stretch after denoising"""
+    tta: bool = Field(False, title="Test-Time Augmentation")
+    """Average each batch over its 8 flips/rotations, about 8x slower"""
     backend: InferenceBackend = Field(InferenceBackend.AUTO, title="Inference Backend")
     """The ONNX Runtime backend, `auto` picks the best one this machine offers"""
     data_type: MLDataType = Field(MLDataType.FP16, title="The data type to use for TensorRT model")
@@ -215,6 +217,7 @@ class ActionML(BaseAction):
             context.terminal.info(f"- Tile Size: {self.tile_size}")
             context.terminal.info(f"- Background Color: {self.background}")
             context.terminal.info(f"- Contrast Stretch: {self.contrast_strectch}")
+            context.terminal.info(f"- Test-Time Augmentation: {self.tta}")
             context.terminal.info(f"- Backend: {self.backend.value}")
             context.terminal.info(f"- Data Type: {self.data_type.value}")
             context.terminal.info(f"- Workspace Size: {self.workspace_size or 'auto'} MiB")
@@ -263,6 +266,7 @@ class ActionML(BaseAction):
                 batch_size=self.batch_size,
                 tile_size=self.tile_size,
                 contrast_stretch=self.contrast_strectch,
+                tta=self.tta,
                 background=self.background,
                 tile_overlap=self.tile_overlap,
                 use_fp32=not session.use_halfp,

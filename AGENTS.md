@@ -85,9 +85,8 @@ changelog.
 
 - Aim for behaviour assertions that run without a GPU, a model file or TensorRT.
 - The suite must pass on a machine with no CUDA runtime at all.
-- On macOS, `tests/test_ml_refactor.py::test_ort_initialization_is_shared_and_runs_once` fails because
-  it asserts a `preload_dlls()` call that `ml/ort.py` only makes off macOS. That is a known platform
-  failure, not a regression you introduced.
+- Platform-dependent behaviour belongs behind a `sys.platform` check in the test, not a known-failure
+  note here.
 
 ## Changelog
 

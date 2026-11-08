@@ -212,6 +212,14 @@ def list_backends(show_raw_providers: bool):
     help="Apply contrast stretching in pre-processing, in some cases this could made it worse",
 )
 @click.option(
+    "--tta",
+    "tta",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Average each batch over its 8 flips/rotations (test-time augmentation), about 8x slower",
+)
+@click.option(
     "-bg",
     "--background",
     "background",
@@ -275,6 +283,7 @@ def infer(
     tile_size: int,
     tile_overlap: int,
     contrast_stretch: bool,
+    tta: bool,
     background: Literal["black", "white"],
     quant_size: str,
     workspace_size: int | None,
@@ -372,6 +381,7 @@ def infer(
                 batch_size=batch_size,
                 tile_size=tile_size,
                 contrast_stretch=contrast_stretch,
+                tta=tta,
                 background=background,
                 tile_overlap=tile_overlap,
                 use_fp32=not session.use_halfp,
