@@ -23,7 +23,7 @@
   - `nmanga ort backends` prints what the installed runtime can use, with `--raw` adding the provider and device names. `-rtx/--with-nvrtx` becomes `--backend trt-rtx`
 - `nmanga torch infer` - Run a checkpoint with PyTorch instead of ONNX Runtime
   - `--preset fast` applies the lean FDAT rewrites, `--preset original` runs the model untouched. FP32, batch 1, no autocast
-  - Uses the validated JaNai tile grid, where the overlap is the total between two tiles, not the ONNX tiler
+  - Uses the validated torch tile grid, where the overlap is the total between two tiles, not the ONNX tiler
   - `--device auto|cpu|cuda:N`, optional `torch.compile` on CUDA, folder or `--recursive` input, PNG output
 - `nmanga torch to-onnx` - Moved under the `torch` group, same options
 - `nmanga lookup imagesize` - Lookup image sizes in an archive or folder

@@ -55,7 +55,7 @@ def infer_tensor(
     config: TilingConfig,
 ) -> "torch.Tensor":
     """
-    Run `runner` over the JaNai tile grid and stitch the predictions in host memory.
+    Run `runner` over the torch tile grid and stitch the predictions in host memory.
 
     Every tile is replicate-padded to the configured fixed tile size before it is handed to
     `runner`, so a model that depends on the whole tile always sees the same shape and context.

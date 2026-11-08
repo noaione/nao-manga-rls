@@ -133,7 +133,7 @@ class ModelInfo:
 @dataclass(frozen=True)
 class TilingConfig:
     """
-    The validated JaNai tile grid.
+    The validated torch tile grid.
 
     `tile_overlap` is the *total* overlap between two neighbouring tiles, so the stride is
     `tile_size - tile_overlap`. The ONNX overlap tiler in `nmanga.ml.onnx_backend` uses the same

@@ -1,5 +1,5 @@
 """
-Tests for the JaNai style tensor tiler in :mod:`nmanga.ml.torch_backend`.
+Tests for the torch style tensor tiler in :mod:`nmanga.ml.torch_backend`.
 
 Everything here runs on CPU with a fake runner, so no checkpoint, no CUDA device and none of the
 legacy ONNX overlap tiling is involved. The reference for these expectations is the validated
