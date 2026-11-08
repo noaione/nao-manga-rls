@@ -579,6 +579,7 @@ def prepare_model_runtime_builders(
         "migraphx_exhaustive_tune": 1,
         "migraphx_mem_limit": memory_limit,
         "migraphx_cache_dir": str(cache_migx_dir),
+        "migraphx_hip_graph_enable": 1,
     }
     onv_json_ep_config = {
         "CPU": {
@@ -599,6 +600,14 @@ def prepare_model_runtime_builders(
     onv_ep_config = {
         "device_type": "HETERO:GPU,CPU",
         "load_config": json.dumps(onv_json_ep_config),
+    }
+    coreml_ep_config = {
+        "ModelFormat": "MLProgram",
+        "MLComputeUnits": "CPUAndGPU",
+        "RequireStaticInputShapes": "1",
+        "EnableOnSubgraphs": "1",
+        "ModelCacheDirectory": str(cache_dir),
+        "SpecializationStrategy": "FastPrediction",
     }
 
     if tile_size is not None:
@@ -676,23 +685,11 @@ def prepare_model_runtime_builders(
             # options only apply to a runtime that ships the provider itself.
             providers.append(("OpenVINOExecutionProvider", {} if ov_plugin_devices else onv_ep_config))
     else:
+        # Apple Silicon only; unsupported MLX nodes fall through to CoreML and then the CPU
         if "MLXExecutionProvider" in raw_providers:
-            # Apple Silicon only; unsupported nodes fall through to CoreML and then the CPU
             providers.append(("MLXExecutionProvider", {}))
             config_entry["ep.mlx.enable_compile"] = "1"
-        providers.append(
-            (
-                "CoreMLExecutionProvider",
-                {
-                    "ModelFormat": "MLProgram",
-                    "MLComputeUnits": "CPUAndGPU",
-                    "RequireStaticInputShapes": "1",
-                    "EnableOnSubgraphs": "1",
-                    "ModelCacheDirectory": str(cache_dir),
-                    "SpecializationStrategy": "FastPrediction",
-                },
-            ),
-        )
+        providers.append(("CoreMLExecutionProvider", coreml_ep_config))
 
     if not providers and not ep_providers:
         if "WebGpuExecutionProvider" not in ep_devices:
