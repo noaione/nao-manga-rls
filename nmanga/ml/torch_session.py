@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from .contracts import MLDataType, ModelInfo, TorchPreset, TorchRuntimeConfig
 from .model import load_checkpoint
+from .onnx_cache import get_data_dir
 from .opt_arch import build_fast_model, layout_for
 
 if TYPE_CHECKING:
@@ -65,8 +66,10 @@ def configure_torch_runtime() -> None:
     """
     from ..lazy import get_torch
 
+    cache_dir = get_data_dir() / "torch_inductor"
     torch = get_torch()
     os.environ.setdefault("NVIDIA_TF32_OVERRIDE", "0")
+    os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", str(cache_dir))
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cudnn.benchmark = True

@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-Nothing yet.
+**Changes**
+- `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
 
 ## [0.31.0] (2026-11-08)
 
