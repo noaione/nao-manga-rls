@@ -10,6 +10,7 @@
 - `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
 - `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend with complementary linear ramps
 - Overlapping ONNX runs replicate the page edge instead of padding it with `--background`, so the outer tiles no longer pick up a black/white border (the flag still applies to non-overlapping runs)
+- ONNX denoising preserves alpha, processes tiles in batches to reduce peak memory, and detects context-trimmed x1 model outputs
 
 **Fixes**
 - ONNX inference feeds the precision the model declares, so an fp16 and an fp32 file are each fed as they expect instead of following the caller's guess

@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
     class InferenceSessionWithScale(ort.InferenceSession):
         scale_factor: int | None
+        context: int
         use_halfp: bool
         clamped_batch_size_warned: bool
 
@@ -80,12 +81,17 @@ def get_model_scale_factor(
     out = session.get_outputs()[0]
     is_float16 = "float16" in str(inp.type)
 
-    maybe_tile_size = inp.shape[-1]
-    maybe_output_size = out.shape[-1]
+    input_height, input_width = inp.shape[-2:]
+    output_height, output_width = out.shape[-2:]
+    if all(isinstance(size, int) for size in (input_height, input_width, output_height, output_width)):
+        scale_height, context_height = _get_scale_and_context(input_height, output_height)
+        scale_width, context_width = _get_scale_and_context(input_width, output_width)
+        if scale_height != scale_width or context_height != context_width:
+            raise ValueError("Model output dimensions imply different scales or context on each axis.")
+        session.context = context_height
+        return scale_height, is_float16
 
-    if isinstance(maybe_tile_size, int) and isinstance(maybe_output_size, int):
-        return maybe_output_size // maybe_tile_size, is_float16  # Fast path if both sizes are known
-
+    maybe_tile_size = input_width
     real_tile_size = tile_size if tile_size is not None else maybe_tile_size
     if not isinstance(real_tile_size, int):
         real_tile_size = 64  # Fallback tile size
@@ -103,9 +109,23 @@ def get_model_scale_factor(
     input_name = inp.name
     output_name = out.name
 
-    out = session.run([output_name], {input_name: x})
-    scale_height = np.array(out[0]).shape[-1]
-    return scale_height // real_tile_size, is_float16
+    output_shape = np.asarray(session.run([output_name], {input_name: x})[0]).shape
+    scale_height, context_height = _get_scale_and_context(real_tile_size, output_shape[-2])
+    scale_width, context_width = _get_scale_and_context(real_tile_size, output_shape[-1])
+    if scale_height != scale_width or context_height != context_width:
+        raise ValueError("Model output dimensions imply different scales or context on each axis.")
+    session.context = context_height
+    return scale_height, is_float16
+
+
+def _get_scale_and_context(input_size: int, output_size: int) -> tuple[int, int]:
+    """Infer an integer scale, or the symmetric valid-convolution border removed from an x1 tile."""
+    if output_size >= input_size:
+        return output_size // input_size, 0
+    removed = input_size - output_size
+    if removed % 2:
+        raise ValueError("A model output smaller than its input must remove an equal border on both sides.")
+    return 1, removed // 2
 
 
 def get_model_fixed_batch_size(model: "InferenceSessionWithScale") -> int | None:
