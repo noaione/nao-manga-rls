@@ -158,6 +158,32 @@ def _move_color_page(img_file: Path, output_dir: Path, context: WorkerContext) -
     return True
 
 
+def _color_kernel_tools(orchestrator: "OrchestratorConfig") -> dict[str, ToolsKind]:
+    """
+    The packages the configured color detection kernel imports.
+
+    Only the ML kernels need anything beyond Pillow: OGSOV runs torch and scipy, OGSOX
+    runs ONNX Runtime. A volume that lists its color pages needs neither.
+
+    :param orchestrator: The orchestrator configuration
+    :return: A dictionary of package names and their kinds
+    """
+
+    color_model = orchestrator.metafields.color_model
+    if color_model is None:
+        return {}
+    if color_model.kind == ColorDetectionKind.OGSOX:
+        return {
+            "onnxruntime": ToolsKind.PACKAGE,
+            "numpy": ToolsKind.PACKAGE,
+        }
+    return {
+        "numpy": ToolsKind.PACKAGE,
+        "scipy": ToolsKind.PACKAGE,
+        "torch": ToolsKind.PACKAGE,
+    }
+
+
 class ActionMoveColor(BaseAction, ActionColorMixin):
     """
     Action to move the tagged color images to a separate folder
@@ -289,10 +315,11 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
 
         context.terminal.stop_progress(progress, f"Moved {moved_count} color images to {output_dir}", skip_total=True)
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 
@@ -302,7 +329,7 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
                 "xyz.n4o.mangacolor": ToolsKind.VAPOURSYNTH,
                 "xyz.n4o.imgseqs": ToolsKind.VAPOURSYNTH,
             }
-        return {}
+        return _color_kernel_tools(orchestrator)
 
 
 def _runner_jpegify_threaded(
@@ -430,15 +457,17 @@ class ActionColorJpegify(BaseAction, ActionColorMixin):
         if ignored_count > 0:
             context.terminal.info(f" Ignored {ignored_count} colored images.")
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 
         return {
             "cjpegli": ToolsKind.BINARY,
+            **_color_kernel_tools(orchestrator),
         }
 
 
@@ -560,10 +589,11 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
         if context.detected_colors:
             context.terminal.info(f"Detected color pages: {sorted(context.detected_colors)}")
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 
@@ -573,4 +603,4 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
                 "xyz.n4o.mangacolor": ToolsKind.VAPOURSYNTH,
                 "xyz.n4o.imgseqs": ToolsKind.VAPOURSYNTH,
             }
-        return {}
+        return _color_kernel_tools(orchestrator)

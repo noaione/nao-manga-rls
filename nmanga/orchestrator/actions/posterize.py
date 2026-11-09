@@ -493,10 +493,11 @@ class ActionPosterize(BaseAction, ActionColorMixin):
         context.terminal.info(f"Auto detected bit depth {detected} from {first.name}")
         return detected
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 

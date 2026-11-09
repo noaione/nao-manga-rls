@@ -220,10 +220,11 @@ class ActionSpreads(BaseAction):
             for img_path in image_data["images"]:
                 shutil.move(img_path, backup_dir / img_path.name)
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 

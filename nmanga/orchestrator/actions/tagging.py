@@ -156,10 +156,11 @@ class ActionTagging(BaseAction):
 
         context.terminal.stop_progress(progress, f"Finished tagging images in {context.current_dir}")
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 

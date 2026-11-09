@@ -54,6 +54,7 @@ console = term.get_console()
 def _detect_required_tools(
     actions: "Sequence[Actions]",
     *,
+    orchestrator: "OrchestratorConfig",
     magick_path: str,
     pingo_path: str,
     exiftool_path: str,
@@ -63,6 +64,7 @@ def _detect_required_tools(
     Detect all the tools required by the given actions.
 
     :param actions: The actions that are going to run
+    :param orchestrator: The orchestrator configuration
     :return: A mapping of tool name to executable path
     """
 
@@ -72,7 +74,7 @@ def _detect_required_tools(
     console.info("Detecting needed tools...")
     for action in actions:
         action_name = action.kind.name
-        needed_tools = action.get_tools()
+        needed_tools = action.get_tools(orchestrator)
         for tool_name, tool_kind in needed_tools.items():
             match tool_kind:
                 case ToolsKind.PACKAGE:
@@ -348,6 +350,7 @@ def orchestrator_runner(
 
     toolsets = _detect_required_tools(
         config.actions,
+        orchestrator=config,
         magick_path=magick_path,
         pingo_path=pingo_path,
         exiftool_path=exiftool_path,
@@ -496,6 +499,7 @@ def orchestrator_run_target(
 
     toolsets = _detect_required_tools(
         list(action_maps.values()),
+        orchestrator=config,
         magick_path=magick_path,
         pingo_path=pingo_path,
         exiftool_path=exiftool_path,

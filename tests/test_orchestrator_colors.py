@@ -35,6 +35,7 @@ from nmanga.common import RegexCollection
 from nmanga.orchestrator.actions._base import ToolsKind
 from nmanga.orchestrator.actions.colors import (
     ActionColorDetect,
+    ActionColorJpegify,
     ActionMoveColor,
     _known_color_pages,
     _page_images,
@@ -49,14 +50,43 @@ VAPOURSYNTH_TOOLS = {
 }
 
 
+NO_COLOR_MODEL = SimpleNamespace(metafields=SimpleNamespace(color_model=None))
+OGSOV_MODEL = SimpleNamespace(metafields=SimpleNamespace(color_model=SimpleNamespace(kind=ColorDetectionKind.OGSOV)))
+OGSOX_MODEL = SimpleNamespace(metafields=SimpleNamespace(color_model=SimpleNamespace(kind=ColorDetectionKind.OGSOX)))
+
+
 def test_vapoursynth_mode_requests_the_mangacolor_plugins():
-    assert ActionColorDetect(mode="vapoursynth").get_tools() == VAPOURSYNTH_TOOLS
-    assert ActionMoveColor(mode="vapoursynth").get_tools() == VAPOURSYNTH_TOOLS
+    assert ActionColorDetect(mode="vapoursynth").get_tools(OGSOV_MODEL) == VAPOURSYNTH_TOOLS
+    assert ActionMoveColor(mode="vapoursynth").get_tools(OGSOV_MODEL) == VAPOURSYNTH_TOOLS
 
 
-def test_auto_mode_needs_no_vapoursynth_tools():
-    assert ActionColorDetect().get_tools() == {}
-    assert ActionMoveColor().get_tools() == {}
+def test_auto_mode_without_a_color_model_needs_nothing():
+    assert ActionColorDetect().get_tools(NO_COLOR_MODEL) == {}
+    assert ActionMoveColor().get_tools(NO_COLOR_MODEL) == {}
+    assert ActionColorJpegify().get_tools(NO_COLOR_MODEL) == {"cjpegli": ToolsKind.BINARY}
+
+
+def test_ogsov_kernel_requires_torch_and_scipy():
+    kernel_tools = {
+        "numpy": ToolsKind.PACKAGE,
+        "scipy": ToolsKind.PACKAGE,
+        "torch": ToolsKind.PACKAGE,
+    }
+
+    assert ActionColorDetect().get_tools(OGSOV_MODEL) == kernel_tools
+    assert ActionMoveColor().get_tools(OGSOV_MODEL) == kernel_tools
+    assert ActionColorJpegify().get_tools(OGSOV_MODEL) == {"cjpegli": ToolsKind.BINARY, **kernel_tools}
+
+
+def test_ogsox_kernel_requires_onnxruntime():
+    kernel_tools = {
+        "onnxruntime": ToolsKind.PACKAGE,
+        "numpy": ToolsKind.PACKAGE,
+    }
+
+    assert ActionColorDetect().get_tools(OGSOX_MODEL) == kernel_tools
+    assert ActionMoveColor().get_tools(OGSOX_MODEL) == kernel_tools
+    assert ActionColorJpegify().get_tools(OGSOX_MODEL) == {"cjpegli": ToolsKind.BINARY, **kernel_tools}
 
 
 def test_threads_default_follows_the_machine_size(monkeypatch: pytest.MonkeyPatch):
@@ -88,13 +118,9 @@ def test_known_color_pages_detects_when_nothing_is_known():
 
 
 def test_vapoursynth_method_follows_the_configured_kernel():
-    ogsox = SimpleNamespace(metafields=SimpleNamespace(color_model=SimpleNamespace(kind=ColorDetectionKind.OGSOX)))
-    ogsov = SimpleNamespace(metafields=SimpleNamespace(color_model=SimpleNamespace(kind=ColorDetectionKind.OGSOV)))
-    none = SimpleNamespace(metafields=SimpleNamespace(color_model=None))
-
-    assert _vapoursynth_method(ogsox) == "ogsox"
-    assert _vapoursynth_method(ogsov) == "ogsov"
-    assert _vapoursynth_method(none) == "ogsov"
+    assert _vapoursynth_method(OGSOX_MODEL) == "ogsox"
+    assert _vapoursynth_method(OGSOV_MODEL) == "ogsov"
+    assert _vapoursynth_method(NO_COLOR_MODEL) == "ogsov"
 
 
 def test_page_images_keeps_only_page_numbered_files(tmp_path: Path):

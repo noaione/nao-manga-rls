@@ -284,10 +284,11 @@ class ActionML(BaseAction):
         # Update CWD
         context.update_cwd(output_dir)
 
-    def get_tools(self):
+    def get_tools(self, orchestrator: "OrchestratorConfig"):
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 

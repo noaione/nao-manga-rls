@@ -229,10 +229,11 @@ class BaseAction(BaseModel, abc.ABC):
 
         pass
 
-    def get_tools(self) -> dict[str, ToolsKind]:
+    def get_tools(self, orchestrator: "OrchestratorConfig") -> dict[str, ToolsKind]:
         """
         Get the required tools for the action
 
+        :param orchestrator: The orchestrator configuration
         :return: A dictionary of tool names and their kinds
         """
 

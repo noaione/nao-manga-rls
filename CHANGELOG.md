@@ -14,11 +14,13 @@
 - ONNX denoising preserves alpha, processes tiles in batches to reduce peak memory, and detects context-trimmed x1 model outputs
 - `lookup colorama` requests VapourSynth frames asynchronously: up to `--threads` pages stay in flight while the file moves run, so the classifier (and the decoder under it) overlaps instead of running one frame at a time
 - The default thread count is now `TOTAL_THREADS - 4` on machines with more than eight threads and half of them otherwise, for every `--threads` default and the orchestrator `threads` fields
+- Improve memory usage for original OGSOX
 
 **Fixes**
 - ONNX inference feeds the precision the model declares, so an fp16 and an fp32 file are each fed as they expect instead of following the caller's guess
 - ONNX inference pads a short final batch up to a static model's declared batch, so static TensorRT/TRT-RTX engines no longer reject the last tiles
 - Contrast stretching no longer divides by zero on a single-colour page
+- Orchestrator color actions check the packages their configured color kernel needs before running (`torch`/`scipy` for OGSOV, ONNX Runtime for OGSOX), so a missing one aborts up front instead of failing on the first page
 
 ## [0.31.0] (2026-11-08)
 
