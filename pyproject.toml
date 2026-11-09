@@ -98,7 +98,7 @@ denoiser-mlx = [
 vapoursynth = [
     "vapoursynth==82",
     "vapoursynth-imageseqs==0.4.2",
-    "vapoursynth-nimages==0.2.1",
+    "vapoursynth-nimages==0.3.0",
     "vsrepo"
 ]
 epub-render = ["playwright==1.64.1"]
