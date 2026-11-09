@@ -32,6 +32,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rich import box
+from rich.markup import escape
+from rich.table import Table
+
 from nmanga import file_handler, term
 from nmanga.lazy import get_vapoursynth
 from nmanga.ogsov import detect_image_color_ml_bulk, register_ogsov_instance, register_ogsox_instance
@@ -140,7 +144,51 @@ def _references(results: list[BenchResult]) -> dict[str, BenchResult]:
     return references
 
 
-def _check_correctness(results: list[BenchResult], references: dict[str, BenchResult]) -> int:
+def _print_header(console: term.Console, images: list[Path], args: argparse.Namespace, threads: list[int]) -> None:
+    console.console.print()
+    console.console.print("[bold]Color detection benchmark[/]")
+    console.console.print(f"  [dim]path[/]     {escape(str(args.path))}")
+    console.console.print(f"  [dim]images[/]   {len(images)}")
+    console.console.print(f"  [dim]modes[/]    {', '.join(args.modes)}")
+    console.console.print(
+        f"  [dim]threads[/]  {', '.join(str(value) for value in threads)}"
+        f"  [dim]prefetch[/] {args.prefetch}  [dim]repeat[/] {args.repeat}"
+    )
+    console.console.print("  [dim]VS threads are frames in flight; one uses the blocking get_frame.[/]")
+
+
+def _print_results(
+    console: term.Console, results: list[BenchResult], references: dict[str, BenchResult]
+) -> None:
+    table = Table(title="Results", title_justify="left", header_style="bold", box=box.ROUNDED)
+    table.add_column("Mode", style="cyan", no_wrap=True)
+    table.add_column("Threads", justify="right")
+    table.add_column("Pages", justify="right")
+    table.add_column("Color", justify="right")
+    table.add_column("Best", justify="right")
+    table.add_column("Mean", justify="right")
+    table.add_column("Rate", justify="right")
+    table.add_column("Check", justify="right")
+    for result in results:
+        reference = references[result.mode]
+        same = result.pages == reference.pages and result.color_pages == reference.color_pages
+        table.add_row(
+            result.mode,
+            str(result.threads),
+            str(result.pages),
+            str(len(result.color_pages)),
+            f"{result.best:.3f}s",
+            f"{result.mean:.3f}s",
+            f"{result.rate:.2f}/s",
+            "[success]ok[/]" if same else "[error]DIFF[/]",
+        )
+    console.console.print()
+    console.console.print(table)
+
+
+def _check_correctness(
+    console: term.Console, results: list[BenchResult], references: dict[str, BenchResult]
+) -> int:
     """
     Every thread count must find the same pages as the lowest one for its mode.
 
@@ -149,6 +197,7 @@ def _check_correctness(results: list[BenchResult], references: dict[str, BenchRe
     ones are color.
     """
 
+    console.console.print()
     failures = [
         result
         for result in results
@@ -156,16 +205,16 @@ def _check_correctness(results: list[BenchResult], references: dict[str, BenchRe
         or result.color_pages != references[result.mode].color_pages
     ]
     if not failures:
-        print("Correctness: every thread count agrees with the lowest one for its mode.")
+        console.console.print("[success]Correctness:[/] every thread count agrees with the lowest one for its mode.")
         return 0
 
-    print("Correctness: MISMATCH against the lowest thread count for the same mode.")
+    console.console.print("[error]Correctness: MISMATCH[/] against the lowest thread count for the same mode.")
     for result in failures:
         reference = references[result.mode]
         missing = sorted(reference.color_pages - result.color_pages)
         extra = sorted(result.color_pages - reference.color_pages)
-        print(
-            f"  {result.mode} threads={result.threads}: "
+        console.console.print(
+            f"  [error]{result.mode}[/] [dim]threads={result.threads}[/]: "
             f"pages={result.pages}/{reference.pages} missing={missing} extra={extra}"
         )
     return 1
@@ -257,14 +306,12 @@ def main() -> int:
         if args.debug:
             vs_attach_logger(term.get_console())
 
-    print(f"Images: {len(images)} in {args.path}")
-    print(f"Modes: {', '.join(args.modes)}")
-    print(f"Threads: {', '.join(str(value) for value in threads)}  prefetch: {args.prefetch}  repeat: {args.repeat}")
-    print("VapourSynth threads are frames in flight; one uses the blocking get_frame.")
-    print()
+    console = term.get_console()
+    _print_header(console, images, args, threads)
 
     results: list[BenchResult] = []
     for mode in args.modes:
+        console.console.print(f"\n[info]▸ {mode}[/]")
         kernel = None
         if mode in PYTHON_MODES:
             kernel = _resolve_kernel(
@@ -283,34 +330,32 @@ def main() -> int:
             pages = 0
             color_pages: set[str] = set()
             for run in range(args.repeat):
-                start = time.perf_counter()
-                if kernel is not None:
-                    pages, color_pages = _run_python(mode, images, kernel=kernel, threads=thread_count)
-                else:
-                    pages, color_pages = _run_vapoursynth(
-                        mode, images, threads=thread_count, prefetch=args.prefetch, debug=args.debug
-                    )
-                elapsed = time.perf_counter() - start
+                with console.console.status(
+                    f"[dim]running {mode} with {thread_count} thread(s)…[/]",
+                    spinner="dots",
+                    spinner_style="info",
+                ):
+                    start = time.perf_counter()
+                    if kernel is not None:
+                        pages, color_pages = _run_python(mode, images, kernel=kernel, threads=thread_count)
+                    else:
+                        pages, color_pages = _run_vapoursynth(
+                            mode, images, threads=thread_count, prefetch=args.prefetch, debug=args.debug
+                        )
+                    elapsed = time.perf_counter() - start
                 times.append(elapsed)
                 if args.repeat > 1:
-                    print(f"  {mode} threads={thread_count} run {run + 1}: {elapsed:.3f}s")
-            results.append(BenchResult(mode, thread_count, pages, color_pages, times))
+                    console.console.print(f"    [dim]run {run + 1}/{args.repeat}[/]  [bold]{elapsed:.3f}s[/]")
+            result = BenchResult(mode, thread_count, pages, color_pages, times)
+            results.append(result)
+            console.console.print(
+                f"  [success]✓[/] [bold]threads={thread_count}[/]  [dim]·[/]  {pages} pages"
+                f"  [dim]·[/]  {len(color_pages)} color  [dim]·[/]  best [bold]{result.best:.3f}s[/]"
+            )
 
     references = _references(results)
-    print()
-    header = f"{'mode':<15} {'threads':>7} {'pages':>6} {'color':>5} {'best':>9} {'mean':>9} {'rate':>9} {'check':>5}"
-    print(header)
-    print("-" * len(header))
-    for result in results:
-        reference = references[result.mode]
-        check = "ok" if result.color_pages == reference.color_pages and result.pages == reference.pages else "DIFF"
-        print(
-            f"{result.mode:<15} {result.threads:>7} {result.pages:>6} {len(result.color_pages):>5} "
-            f"{result.best:>8.3f}s {result.mean:>8.3f}s {result.rate:>7.2f}/s {check:>5}"
-        )
-
-    print()
-    return _check_correctness(results, references)
+    _print_results(console, results, references)
+    return _check_correctness(console, results, references)
 
 
 if __name__ == "__main__":
