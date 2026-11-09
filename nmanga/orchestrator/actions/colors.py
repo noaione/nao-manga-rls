@@ -24,17 +24,21 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess as sp
-from multiprocessing import cpu_count
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import lowest_or, threaded_worker
-from ..common import SkipActionKind, perform_skip_action
+from ...common import default_cpu_threads, lowest_or, threaded_worker
+from ...lazy import get_vapoursynth
+from ...ogsov import DetectedColor
+from ...vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_iter_frames_async, vs_prepare_image_bulk_raw
+from ..common import ColorDetectionKind, SkipActionKind, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
@@ -45,6 +49,113 @@ __all__ = (
     "ActionColorJpegify",
     "ActionMoveColor",
 )
+
+
+# A chapter of raw frames is tens of megabytes each, so the number in flight stays bounded.
+_VS_WINDOW_MAX = 16
+
+
+def _vapoursynth_method(orchestrator: "OrchestratorConfig") -> Literal["ogsov", "ogsox"]:
+    """
+    Pick the `mangacolor` node that classifies the pages.
+
+    The plugin loads its own model, so the configured color model only names the kernel:
+    `ogsox` needs the classifier the config already validates, everything else is `ogsov`.
+
+    :param orchestrator: The orchestrator configuration
+    :return: The plugin method name
+    """
+
+    color_model = orchestrator.metafields.color_model
+    if color_model is not None and color_model.kind == ColorDetectionKind.OGSOX:
+        return "ogsox"
+    return "ogsov"
+
+
+def _page_images(directory: Path, page_re: re.Pattern[str]) -> list[tuple[Path, int]]:
+    """
+    Collect the images whose stem carries a page number, with that number.
+
+    :param directory: The directory to read
+    :param page_re: The page number regex
+    :return: A list of image paths and their page numbers
+    """
+
+    pages: list[tuple[Path, int]] = []
+    for img_path, _, _, _ in file_handler.collect_image_from_folder(directory):
+        title_match = page_re.match(img_path.stem)
+        if title_match is not None:
+            pages.append((img_path, int(title_match.group("a"))))
+    return pages
+
+
+def _iter_vapoursynth_color_pages(
+    pages: Sequence[tuple[Path, int]],
+    *,
+    method: Literal["ogsov", "ogsox"],
+    prefetch: int,
+    window: int,
+    debug: bool,
+) -> Iterator[tuple[Path, int, DetectedColor]]:
+    """
+    Classify `pages` with the `mangacolor` plugin, one bulk clip for the whole list.
+
+    Frames come back in completion order and carry their own source path, so the page
+    number is looked up by name instead of by position.
+
+    :param pages: The images to classify and their page numbers
+    :param method: The `mangacolor` method to run
+    :param prefetch: How many frames the decoder reads ahead
+    :param window: How many frames stay in flight
+    :param debug: Whether to log the plugin's messages
+    :return: An iterator of the image path, page number and detection result
+    """
+
+    vs = get_vapoursynth()
+    page_by_name = {path.name: page for path, page in pages}
+    clip = vs_prepare_image_bulk_raw([path for path, _ in pages], debug=debug, prefetch=prefetch)
+    if method == "ogsox":
+        analyzed = vs.core.mangacolor.OGSOX(clip, debug=debug)
+    else:
+        analyzed = vs.core.mangacolor.OGSOV(clip, debug=debug)
+
+    for _, frame in vs_iter_frames_async(analyzed, window=window):
+        detected, img_path = vs_analyze_ogsov_frame(frame)
+        yield img_path, page_by_name[img_path.name], detected
+
+
+def _known_color_pages(volume: "VolumeConfig", context: WorkerContext) -> set[int] | None:
+    """
+    The color pages already decided for a volume, or `None` when they need detecting.
+
+    :param volume: The volume configuration
+    :param context: The worker context
+    :return: The page numbers, or `None` when no earlier step decided them
+    """
+
+    if isinstance(volume.colors, list):
+        return set(volume.colors)
+    if isinstance(context.detected_colors, list):
+        return set(context.detected_colors)
+    return None
+
+
+def _move_color_page(img_file: Path, output_dir: Path, context: WorkerContext) -> bool:
+    """
+    Move one page into `output_dir`, refusing to overwrite it.
+
+    :param img_file: The page to move
+    :param output_dir: The directory to move it into
+    :param context: The worker context
+    :return: Whether the page was moved
+    """
+
+    dest_path = output_dir / img_file.name
+    if dest_path.exists():
+        context.terminal.warning(f"Skipping existing file: {dest_path}")
+        return False
+    shutil.move(img_file, dest_path)
+    return True
 
 
 class ActionMoveColor(BaseAction, ActionColorMixin):
@@ -65,6 +176,21 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
     """The kind of action"""
     base_path: str = Field("colors", title="Output Base Path")
     """The base path to save the color images to"""
+    mode: Literal["auto", "vapoursynth"] = Field("auto", title="Detection Method")
+    """
+    How the color pages are found:
+    - auto: ask the configured color model per page, or Pillow when there is none
+    - vapoursynth: classify the whole volume with the `mangacolor` plugin in one pass
+    """
+    prefetch: int = Field(
+        16,
+        ge=0,
+        title="VapourSynth Decoder Prefetch",
+        description="How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+    )
+    """How many VapourSynth frames to decode ahead of the one being processed, only used by the `vapoursynth` mode"""
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
+    """How many VapourSynth frames to keep in flight, only used by the `vapoursynth` mode"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -77,6 +203,10 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
 
         if context.dry_run:
             context.terminal.info(f"- Base path: {self.base_path}")
+            context.terminal.info(f"- Detection Method: {self.mode}")
+            if self.mode == "vapoursynth":
+                context.terminal.info(f"- VapourSynth Decoder Prefetch: {self.prefetch}")
+                context.terminal.info(f"- Processing Threads: {self.threads}")
             if isinstance(volume.colors, list):
                 context.terminal.info(f"- Total {len(volume.colors)} would be moved.")
             else:
@@ -86,21 +216,93 @@ class ActionMoveColor(BaseAction, ActionColorMixin):
         output_dir = context.root_dir / Path(self.base_path) / Path(volume.path)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        if self.mode == "vapoursynth":
+            self._run_vapoursynth(context, volume, orchestrator, output_dir)
+            return
+
         moved_count = 0
         progress = context.terminal.make_progress()
         task = progress.add_task("Moving color images...", finished_text="Moved color images", total=None)
         for img_file, _, total_img, _ in file_handler.collect_image_from_folder(context.current_dir):
             pg_num, is_color = self.is_color_page(img_file, context=context, volume=volume, orchestrator=orchestrator)
-            if is_color and pg_num is not None:
-                dest_path = output_dir / img_file.name
-                if dest_path.exists():
-                    context.terminal.warning(f"Skipping existing file: {dest_path}")
-                else:
-                    shutil.move(img_file, dest_path)
+            if is_color and pg_num is not None and _move_color_page(img_file, output_dir, context):
+                moved_count += 1
+            progress.update(task, advance=1, total=total_img)
+
+        context.terminal.stop_progress(progress, f"Moved {moved_count} color images to {output_dir}", skip_total=True)
+
+    def _run_vapoursynth(
+        self,
+        context: WorkerContext,
+        volume: "VolumeConfig",
+        orchestrator: "OrchestratorConfig",
+        output_dir: Path,
+    ) -> None:
+        """
+        Move the color pages found by one `mangacolor` pass over the volume.
+
+        A chain that already ran `color_detect` hands the verdict over in the context, and
+        an explicit page list in the volume wins over both, so the folder is classified at
+        most once.
+
+        :param context: The worker context
+        :param volume: The volume configuration
+        :param orchestrator: The orchestrator configuration
+        :param output_dir: The directory the color images are moved to
+        """
+
+        color_pages = _known_color_pages(volume, context)
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Moving color images...", finished_text="Moved color images", total=None)
+
+        if color_pages is None:
+            pages = _page_images(context.current_dir, self._page_re)
+            if not pages:
+                context.terminal.warning(
+                    f"No page-numbered images found in {context.current_dir}, skipping color detection."
+                )
+                context.terminal.stop_progress(progress)
+                return
+
+            vs_attach_logger(context.terminal)
+            context.terminal.info(f"Detecting color pages in {context.current_dir} (VapourSynth)...")
+            color_pages = set()
+            for _, page, detected in _iter_vapoursynth_color_pages(
+                pages,
+                method=_vapoursynth_method(orchestrator),
+                prefetch=self.prefetch,
+                window=max(2, min(self.threads, _VS_WINDOW_MAX)),
+                debug=context.terminal.debugged,
+            ):
+                if detected.is_color:
+                    color_pages.add(page)
+                    context.push_detected_colors(page)
+            context.terminal.info(f"Detected {len(color_pages)} color pages.")
+
+        moved_count = 0
+        for img_file, _, total_img, _ in file_handler.collect_image_from_folder(context.current_dir):
+            title_match = self._page_re.match(img_file.stem)
+            if title_match is not None and int(title_match.group("a")) in color_pages:
+                if _move_color_page(img_file, output_dir, context):
                     moved_count += 1
             progress.update(task, advance=1, total=total_img)
 
         context.terminal.stop_progress(progress, f"Moved {moved_count} color images to {output_dir}", skip_total=True)
+
+    def get_tools(self):
+        """
+        Get the required tools for the action
+
+        :return: A dictionary of tool names and their kinds
+        """
+
+        if self.mode == "vapoursynth":
+            return {
+                "vapoursynth": ToolsKind.PACKAGE,
+                "xyz.n4o.mangacolor": ToolsKind.VAPOURSYNTH,
+                "xyz.n4o.imgseqs": ToolsKind.VAPOURSYNTH,
+            }
+        return {}
 
 
 def _runner_jpegify_threaded(
@@ -151,7 +353,7 @@ class ActionColorJpegify(BaseAction, ActionColorMixin):
     """The quality of the output JPEG images"""
     source_path: str = Field("colors", title="Source Path")
     """The source path to look for images to convert"""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
@@ -254,6 +456,21 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
 
     kind: Literal[ActionKind.COLOR_DETECT] = Field(ActionKind.COLOR_DETECT, title="Detect Color Pages Action")
     """The kind of action"""
+    mode: Literal["auto", "vapoursynth"] = Field("auto", title="Detection Method")
+    """
+    How the color pages are found:
+    - auto: ask the configured color model per page, or Pillow when there is none
+    - vapoursynth: classify the whole volume with the `mangacolor` plugin in one pass
+    """
+    prefetch: int = Field(
+        16,
+        ge=0,
+        title="VapourSynth Decoder Prefetch",
+        description="How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+    )
+    """How many VapourSynth frames to decode ahead of the one being processed, only used by the `vapoursynth` mode"""
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
+    """How many VapourSynth frames to keep in flight, only used by the `vapoursynth` mode"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -265,6 +482,10 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
         """
 
         if context.dry_run:
+            context.terminal.info(f"- Detection Method: {self.mode}")
+            if self.mode == "vapoursynth":
+                context.terminal.info(f"- VapourSynth Decoder Prefetch: {self.prefetch}")
+                context.terminal.info(f"- Processing Threads: {self.threads}")
             if volume.colors == "auto":
                 context.terminal.info("- Detect color pages automatically")
                 context.terminal.info(f"- Color model path: {orchestrator.metafields.color_model}")
@@ -277,6 +498,10 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
         if isinstance(volume.colors, list):
             context.push_detected_colors(*volume.colors)
             context.terminal.info(f"Volume has color page information from config: {sorted(volume.colors)}")
+            return
+
+        if self.mode == "vapoursynth":
+            self._run_vapoursynth(context, orchestrator)
             return
 
         context.terminal.info(f"Detecting color pages in {context.current_dir}...")
@@ -294,3 +519,58 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
 
         if context.detected_colors:
             context.terminal.info(f"Detected color pages: {sorted(context.detected_colors)}")
+
+    def _run_vapoursynth(self, context: WorkerContext, orchestrator: "OrchestratorConfig") -> None:
+        """
+        Classify the whole volume with the `mangacolor` plugin and cache the result.
+
+        The pages are pushed into the context, so the move and jpegify actions read the
+        verdict instead of detecting every page again.
+
+        :param context: The worker context
+        :param orchestrator: The orchestrator configuration
+        """
+
+        pages = _page_images(context.current_dir, self._page_re)
+        if not pages:
+            context.terminal.warning(
+                f"No page-numbered images found in {context.current_dir}, skipping color detection."
+            )
+            return
+
+        vs_attach_logger(context.terminal)
+        context.terminal.info(f"Detecting color pages in {context.current_dir} (VapourSynth)...")
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Detecting color...", finished_text="Detected pages", total=len(pages))
+        for _, page, detected in _iter_vapoursynth_color_pages(
+            pages,
+            method=_vapoursynth_method(orchestrator),
+            prefetch=self.prefetch,
+            window=max(2, min(self.threads, _VS_WINDOW_MAX)),
+            debug=context.terminal.debugged,
+        ):
+            if detected.is_color:
+                context.push_detected_colors(page)
+            progress.update(task, advance=1)
+
+        context.terminal.stop_progress(
+            progress, f"Detected {len(context.detected_colors) if context.detected_colors else 0} color pages."
+        )
+
+        if context.detected_colors:
+            context.terminal.info(f"Detected color pages: {sorted(context.detected_colors)}")
+
+    def get_tools(self):
+        """
+        Get the required tools for the action
+
+        :return: A dictionary of tool names and their kinds
+        """
+
+        if self.mode == "vapoursynth":
+            return {
+                "vapoursynth": ToolsKind.PACKAGE,
+                "xyz.n4o.mangacolor": ToolsKind.VAPOURSYNTH,
+                "xyz.n4o.imgseqs": ToolsKind.VAPOURSYNTH,
+            }
+        return {}

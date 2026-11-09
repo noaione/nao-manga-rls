@@ -52,6 +52,7 @@ __all__ = (
     "actual_or_fallback",
     "check_cbz_exist",
     "create_chapter",
+    "default_cpu_threads",
     "format_archive_filename",
     "format_daiz_like_filename",
     "format_elapsed_time",
@@ -186,6 +187,22 @@ def lowest_or(base: int | Iterable[Any], others: int | Iterable[Any]) -> int:
         raise TypeError("Others must be an int or iterable/sized.")
 
     return min(base_value, other_value)
+
+
+def default_cpu_threads() -> int:
+    """
+    The default worker thread count for commands and actions.
+
+    A machine with more than eight threads keeps four of them free, a smaller one hands
+    over half of what it has.
+
+    :return: The number of threads to use
+    """
+
+    total = mp.cpu_count()
+    if total > 8:
+        return max(total - 4, 1)
+    return max(total // 2, 1)
 
 
 def assert_proc(stuff: IO[bytes] | None) -> None:

@@ -25,7 +25,6 @@ SOFTWARE.
 from __future__ import annotations
 
 import subprocess as sp
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -36,6 +35,7 @@ from nmanga import file_handler
 from ... import term
 from ...common import (
     ALLOWED_TAG_EXTENSIONS,
+    default_cpu_threads,
     format_archive_filename,
     format_volume_text,
     lowest_or,
@@ -98,7 +98,7 @@ class ActionTagging(BaseAction):
     """The kind of action"""
     title: str | None = Field(None, title="Override Title")
     """Override the title metadata"""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:

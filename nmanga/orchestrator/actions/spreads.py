@@ -25,7 +25,6 @@ SOFTWARE.
 from __future__ import annotations
 
 import shutil
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal, TypedDict, cast
 
@@ -33,7 +32,7 @@ from PIL import Image
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import RegexCollection, lowest_or, threaded_worker
+from ...common import RegexCollection, default_cpu_threads, lowest_or, threaded_worker
 from ...spreads import SpreadDirection, join_spreads, join_spreads_imagemagick, select_exts
 from ._base import ActionKind, BaseAction, ToolsKind, WorkerContext
 
@@ -124,7 +123,7 @@ class ActionSpreads(BaseAction):
     """The output format of the joined images, auto will use the parent extensions"""
     pillow: bool = Field(False, title="Use Python Pillow")
     """Whether to use Pillow for joining spreads instead of ImageMagick"""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:

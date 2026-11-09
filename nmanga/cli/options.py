@@ -25,7 +25,6 @@ SOFTWARE.
 from __future__ import annotations
 
 import re
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Generator, Literal
 
@@ -33,6 +32,7 @@ import rich_click as click
 from click.shell_completion import CompletionItem
 
 from .._ntypes import VolumeNumberT
+from ..common import default_cpu_threads
 from ..config import get_config
 from ..constants import MANGA_PUBLICATION_TYPES
 from ..exporter import ExporterType
@@ -341,11 +341,7 @@ def manga_publication_type(chapter_mode: bool = False):
     )
 
 
-def half_cpu_threads():
-    return max(cpu_count() // 2, 1)
-
-
-CPU_THREADS = half_cpu_threads()
+CPU_THREADS = default_cpu_threads()
 
 
 archive_file = click.argument(

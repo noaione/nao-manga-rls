@@ -34,6 +34,7 @@ from nmanga.common import (
     actual_or_fallback,
     check_cbz_exist,
     create_chapter,
+    default_cpu_threads,
     format_archive_filename,
     format_daiz_like_filename,
     format_daiz_like_numbering,
@@ -965,3 +966,13 @@ class TestActualOrFallback:
 
     def test_invalid_chapter_float(self):
         assert actual_or_fallback("2.x", 1) == "001"
+
+
+class TestDefaultCpuThreads:
+    @pytest.mark.parametrize(
+        ("total", "expected"),
+        [(16, 12), (9, 5), (8, 4), (4, 2), (1, 1)],
+    )
+    def test_threads_follow_the_machine_size(self, monkeypatch: pytest.MonkeyPatch, total: int, expected: int):
+        monkeypatch.setattr("nmanga.common.mp.cpu_count", lambda: total)
+        assert default_cpu_threads() == expected

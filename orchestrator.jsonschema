@@ -240,6 +240,27 @@
                     "default": "color_detect",
                     "title": "Detect Color Pages Action",
                     "type": "string"
+                },
+                "mode": {
+                    "default": "auto",
+                    "enum": [
+                        "auto",
+                        "vapoursynth"
+                    ],
+                    "title": "Detection Method",
+                    "type": "string"
+                },
+                "prefetch": {
+                    "default": 16,
+                    "description": "How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+                    "minimum": 0,
+                    "title": "VapourSynth Decoder Prefetch",
+                    "type": "integer"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Processing Threads",
+                    "type": "integer"
                 }
             },
             "title": "nmanga Orchestrator - Detect Color Pages Action",
@@ -643,6 +664,27 @@
                     "default": "colors",
                     "title": "Output Base Path",
                     "type": "string"
+                },
+                "mode": {
+                    "default": "auto",
+                    "enum": [
+                        "auto",
+                        "vapoursynth"
+                    ],
+                    "title": "Detection Method",
+                    "type": "string"
+                },
+                "prefetch": {
+                    "default": 16,
+                    "description": "How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
+                    "minimum": 0,
+                    "title": "VapourSynth Decoder Prefetch",
+                    "type": "integer"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Processing Threads",
+                    "type": "integer"
                 }
             },
             "title": "nmanga Orchestrator - Move Color Images Action",

@@ -5,6 +5,7 @@
 **New Features**
 - `nmanga ort infer` - `--tta` averages every batch over its 8 flips/rotations (test-time augmentation, about 8x slower). The orchestrator `denoise`/`upscale` actions expose it as `tta`
 - `nmanga ort to-fp16` - Convert an ONNX model to fp16, this will also run inference to validate the conversion.
+- Orchestrator `color_detect` and `move_color` actions - `mode: vapoursynth` classifies the whole volume with the `mangacolor` plugin in one pass instead of a per-page ONNX/Pillow call, and `move_color` reuses the pages an earlier `color_detect` already found
 
 **Changes**
 - `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
@@ -12,6 +13,7 @@
 - Overlapping ONNX runs replicate the page edge instead of padding it with `--background`, so the outer tiles no longer pick up a black/white border (the flag still applies to non-overlapping runs)
 - ONNX denoising preserves alpha, processes tiles in batches to reduce peak memory, and detects context-trimmed x1 model outputs
 - `lookup colorama` requests VapourSynth frames asynchronously: up to `--threads` pages stay in flight while the file moves run, so the classifier (and the decoder under it) overlaps instead of running one frame at a time
+- The default thread count is now `TOTAL_THREADS - 4` on machines with more than eight threads and half of them otherwise, for every `--threads` default and the orchestrator `threads` fields
 
 **Fixes**
 - ONNX inference feeds the precision the model declares, so an fp16 and an fp32 file are each fed as they expect instead of following the caller's guess

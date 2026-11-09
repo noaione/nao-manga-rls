@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import math
 import shutil
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -41,7 +40,7 @@ from ...autolevel import (
     posterize_image_by_bits,
     posterize_image_with_imagemagick,
 )
-from ...common import lowest_or, threaded_worker
+from ...common import default_cpu_threads, lowest_or, threaded_worker
 from ...lazy import get_vapoursynth
 from ...vapour import (
     PngWriteWindow,
@@ -245,7 +244,7 @@ class ActionPosterize(BaseAction, ActionColorMixin):
         description="How many VapourSynth frames to decode ahead of the one being processed, 0 disables it",
     )
     """How many VapourSynth frames to decode ahead of the one being processed, only used by the `vapoursynth` mode"""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     @field_validator("bpc", mode="after")

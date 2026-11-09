@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
 
@@ -34,7 +33,7 @@ from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from ... import file_handler, term
-from ...common import lowest_or, threaded_worker
+from ...common import default_cpu_threads, lowest_or, threaded_worker
 from ...resizer import ResizeKernel, ResizeMode, ResizeTarget, rescale_image
 from ..common import SkipActionKind, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, WorkerContext
@@ -235,7 +234,7 @@ class ActionRescale(BaseAction, ActionColorMixin):
     """Optional parameter A for certain gray kernels, only if `gray_kernel` is used (e.g., Lanczos support)."""
     gray_param_b: float | int | None = Field(None, title="Gray Parameter B")
     """Optional parameter B for certain gray kernels, only if `gray_kernel` is used (e.g., Lanczos blur factor)."""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:

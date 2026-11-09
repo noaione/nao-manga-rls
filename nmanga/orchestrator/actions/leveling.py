@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import dataclass
-from multiprocessing import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -36,7 +35,7 @@ from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
 from ...autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
-from ...common import lowest_or, threaded_worker
+from ...common import default_cpu_threads, lowest_or, threaded_worker
 from ...lazy import get_vapoursynth
 from ...utils import secure_filename
 from ...vapour import PngWriteWindow, vs_attach_logger, vs_autolevel_clip, vs_png_writer
@@ -233,7 +232,7 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
     """How many VapourSynth frames to decode ahead of the one being processed, only used by the `v3` algorithm"""
     dump_stats: bool = Field(False, title="Dump Leveling Stats")
     """Whether to dump leveling stats to a JSON file"""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     # Aliases so this action can be handed straight to `vs_autolevel_clip` as its
@@ -574,7 +573,7 @@ class ActionLevel(BaseAction, ActionColorMixin):
     """The white level to set for all images"""
     skip_color: bool = Field(False, title="Skip Color Images")
     """Skip color images when auto leveling, only level half-tones/b&w images"""
-    threads: int = Field(default_factory=cpu_count, ge=1, title="Processing Threads")
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
     """The number of threads to use for processing"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
