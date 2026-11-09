@@ -11,6 +11,7 @@
 - `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend with complementary linear ramps
 - Overlapping ONNX runs replicate the page edge instead of padding it with `--background`, so the outer tiles no longer pick up a black/white border (the flag still applies to non-overlapping runs)
 - ONNX denoising preserves alpha, processes tiles in batches to reduce peak memory, and detects context-trimmed x1 model outputs
+- `lookup colorama` requests VapourSynth frames asynchronously: up to `--threads` pages stay in flight while the file moves run, so the classifier (and the decoder under it) overlaps instead of running one frame at a time
 
 **Fixes**
 - ONNX inference feeds the precision the model declares, so an fp16 and an fp32 file are each fed as they expect instead of following the caller's guess

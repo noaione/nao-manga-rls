@@ -26,7 +26,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from concurrent.futures import wait as wait_futures
 from dataclasses import dataclass
 from functools import partial
 from os import PathLike
@@ -213,6 +214,30 @@ def vs_prepare_image_bulk(images: Sequence[PathLike], *, debug: bool = False, pr
     rgb = core.std.FrameEval(source, partial(vs_fix_odd_size_chain, source=source, plain_rgb=plain_rgb))
     rgb = core.resize.Bicubic(rgb, format=vs.RGB24)  # FrameEval cannot promise a format
     return rgb
+
+
+def vs_iter_frames_async(node: "VideoNode", *, window: int = 8) -> "Iterator[tuple[int, VideoFrame]]":
+    """Yield ``(n, frame)`` from ``node`` with a window of requests in flight.
+
+    ``VideoNode.get_frame`` blocks for one frame at a time; ``get_frame_async``
+    lets the filter (and the decoder under it) overlap while the caller works on
+    the frame it already has.  Frames are yielded in completion order, so one
+    slow frame does not stall the ones queued behind it.  ``window`` is the
+    number of requests kept outstanding and is clamped to at least one.
+    """
+
+    total = node.num_frames
+    limit = max(1, window)
+    pending: dict[int, Any] = {}
+    next_frame = 0
+
+    while pending or next_frame < total:
+        while len(pending) < limit and next_frame < total:
+            pending[next_frame] = node.get_frame_async(next_frame)
+            next_frame += 1
+        done, _ = wait_futures(list(pending.values()), return_when="FIRST_COMPLETED")
+        for n in [n for n, future in pending.items() if future in done]:
+            yield n, pending.pop(n).result()
 
 
 def vs_analyze_ogsov_frame(frame: "VideoFrame") -> tuple[DetectedColor, Path]:

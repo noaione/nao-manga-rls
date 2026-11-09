@@ -38,7 +38,13 @@ from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
 from ..ogsov import detect_image_color_ml, register_ogsov_instance, register_ogsox_instance
-from ..vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_find_missing_plugins, vs_prepare_image_bulk_raw
+from ..vapour import (
+    vs_analyze_ogsov_frame,
+    vs_attach_logger,
+    vs_find_missing_plugins,
+    vs_iter_frames_async,
+    vs_prepare_image_bulk_raw,
+)
 from . import options
 from ._deco import time_program
 from .base import NMangaCommandHandler
@@ -363,8 +369,11 @@ def lookup_color_images(
             else:
                 analyzed = core.mangacolor.OGSOX(clip, debug=console.debugged, gpu=vs_gpu)
 
-            for n in range(analyzed.num_frames):
-                frame = analyzed.get_frame(n)
+            # A window of frames in flight: the classifier (and the decoder
+            # under it) overlaps while this loop does the file moves on the
+            # side.  Keep it bounded: a chapter of raw frames is tens of
+            # megabytes each.
+            for _, frame in vs_iter_frames_async(analyzed, window=max(2, min(threads, 16))):
                 detected, img_path = vs_analyze_ogsov_frame(frame)
                 if detected.is_color:
                     dest_file = real_output / img_path.name
