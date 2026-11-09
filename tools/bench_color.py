@@ -175,13 +175,22 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Benchmark the OGSOV/OGSOX color kernels over a folder of images.",
         epilog=(
+            "Example: bench_color.py -p ./chapter -m ogsov-base ogsov-fast -t 1 4 8 "
+            "--color-model ogsov.npz\n\n"
             "The vs modes use the mangacolor plugin's own model configuration, exactly like "
             "`nmanga lookup colorama --method vs-*`; the Python modes need the model files. "
             "Threads are worker threads for the Python modes and frames in flight for the "
             "VapourSynth ones, where one thread uses the blocking get_frame."
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("path", type=Path, help="Folder of images to classify")
+    parser.add_argument(
+        "-p",
+        "--path",
+        type=Path,
+        required=True,
+        help="Folder of images to classify",
+    )
     parser.add_argument(
         "-m",
         "--mode",
