@@ -31,6 +31,7 @@ __all__ = (
     "detect_image_color",
     "detect_image_color_ml",
     "detect_image_color_ml_bulk",
+    "detect_image_color_ml_from_path",
     "is_grayscale_palette",
     "register_ogsov_instance",
     "register_ogsox_instance",
@@ -644,16 +645,12 @@ def detect_image_color(img: Image.Image) -> DetectedColor:
     return DetectedColor(True, 0, None, False)
 
 
-def detect_image_color_ml(img_bytes: bytes, *, kernel: MangaColorInference, fast_method: bool = False) -> DetectedColor:
-    """
-    ML-version of color detection, more accurate but slower than the basic one.
-    """
-
+def _detect_image_color_ml_image(
+    image: Image.Image, *, kernel: MangaColorInference, fast_method: bool
+) -> DetectedColor:
     import numpy as np
 
-    image = Image.open(BytesIO(img_bytes))
     if (detected := detect_image_color(image)) and not detected.is_color:
-        image.close()
         return detected  # if the basic detection already says it's not color, we can skip the ML-based detection
 
     rgb_array = np.array(image.convert("RGB"))
@@ -661,12 +658,41 @@ def detect_image_color_ml(img_bytes: bytes, *, kernel: MangaColorInference, fast
 
     # predict the colorfulness
     is_color, confidence = kernel.predict(bgr_array, fast_method=fast_method)
-    image.close()
     return DetectedColor(is_color, confidence, "ML-based detection", is_color)
 
 
+def detect_image_color_ml(img_bytes: bytes, *, kernel: MangaColorInference, fast_method: bool = False) -> DetectedColor:
+    """
+    ML-version of color detection, more accurate but slower than the basic one.
+
+    :param img_bytes: The encoded image bytes
+    :param kernel: The color detection kernel
+    :param fast_method: Whether to use the kernel's fast algorithm
+    :return: The detection result
+    """
+
+    with Image.open(BytesIO(img_bytes)) as image:
+        return _detect_image_color_ml_image(image, kernel=kernel, fast_method=fast_method)
+
+
+def detect_image_color_ml_from_path(
+    image_path: PathLike, *, kernel: MangaColorInference, fast_method: bool = False
+) -> DetectedColor:
+    """
+    ML-version of color detection that opens the path directly, without reading it into bytes first.
+
+    :param image_path: The path to the image
+    :param kernel: The color detection kernel
+    :param fast_method: Whether to use the kernel's fast algorithm
+    :return: The detection result
+    """
+
+    with Image.open(image_path) as image:
+        return _detect_image_color_ml_image(image, kernel=kernel, fast_method=fast_method)
+
+
 def _detect_image_color_ml_path(image: Path, kernel: MangaColorInference, fast_method: bool) -> DetectedColor:
-    return detect_image_color_ml(image.read_bytes(), kernel=kernel, fast_method=fast_method)
+    return detect_image_color_ml_from_path(image, kernel=kernel, fast_method=fast_method)
 
 
 def detect_image_color_ml_bulk(
