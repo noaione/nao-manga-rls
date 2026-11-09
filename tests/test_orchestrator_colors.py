@@ -30,6 +30,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 
 from nmanga.common import RegexCollection
 from nmanga.orchestrator.actions._base import ToolsKind
@@ -37,6 +38,7 @@ from nmanga.orchestrator.actions.colors import (
     ActionColorDetect,
     ActionColorJpegify,
     ActionMoveColor,
+    _iter_ml_color_pages,
     _known_color_pages,
     _page_images,
     _vapoursynth_method,
@@ -130,3 +132,19 @@ def test_page_images_keeps_only_page_numbered_files(tmp_path: Path):
     pages = _page_images(tmp_path, RegexCollection.page_re())
 
     assert pages == [(tmp_path / "p01.png", 1), (tmp_path / "p02.jpg", 2)]
+
+
+class _StubKernel:
+    def predict(self, bgr_image, *, fast_method: bool = False) -> tuple[bool, int]:
+        return True, 90
+
+
+def test_iter_ml_color_pages_maps_page_numbers(tmp_path: Path):
+    for name in ("p01.png", "p02.png"):
+        Image.new("RGB", (8, 8), (255, 0, 0)).save(tmp_path / name)
+
+    pages = [(tmp_path / "p01.png", 1), (tmp_path / "p02.png", 2)]
+    results = dict(_iter_ml_color_pages(pages, kernel=_StubKernel(), fast_method=False, threads=2))
+
+    assert set(results) == {1, 2}
+    assert all(detected.is_color for detected in results.values())

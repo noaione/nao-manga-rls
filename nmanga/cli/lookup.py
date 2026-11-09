@@ -37,7 +37,7 @@ from PIL import Image
 from .. import file_handler, term
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
-from ..ogsov import detect_image_color_ml, register_ogsov_instance, register_ogsox_instance
+from ..ogsov import detect_image_color_ml_bulk, register_ogsov_instance, register_ogsox_instance
 from ..vapour import (
     vs_analyze_ogsov_frame,
     vs_attach_logger,
@@ -293,7 +293,7 @@ def lookup_color_images(
     We also support ML based approach if you provided a color model file.
     This can be more accurate rather than the naive approach.
 
-    Threads are only used in VapourSynth to make loading faster.
+    Threads classify the pages in parallel, for both the Python and VapourSynth methods.
     """
 
     if not path_or_archive.is_dir():
@@ -400,11 +400,10 @@ def lookup_color_images(
                 instance = register_ogsox_instance(color_model_path, classifier_model_path)
             else:
                 instance = register_ogsov_instance(color_model_path)
-            for img_path in all_images:
-                img_bytes = img_path.read_bytes()
-                detected = detect_image_color_ml(img_bytes, kernel=instance, fast_method=py_fast_method)
-                del img_bytes
-
+            console.info(f"Using {threads} CPU threads for processing.")
+            for img_path, detected in detect_image_color_ml_bulk(
+                all_images, kernel=instance, fast_method=py_fast_method, threads=threads
+            ):
                 if detected.is_color:
                     dest_file = real_output / img_path.name
                     if force and dest_file.exists():

@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from io import BytesIO
 from os import PathLike
@@ -28,6 +30,7 @@ __all__ = (
     "DetectedColor",
     "detect_image_color",
     "detect_image_color_ml",
+    "detect_image_color_ml_bulk",
     "is_grayscale_palette",
     "register_ogsov_instance",
     "register_ogsox_instance",
@@ -660,3 +663,54 @@ def detect_image_color_ml(img_bytes: bytes, *, kernel: MangaColorInference, fast
     is_color, confidence = kernel.predict(bgr_array, fast_method=fast_method)
     image.close()
     return DetectedColor(is_color, confidence, "ML-based detection", is_color)
+
+
+def _detect_image_color_ml_path(image: Path, kernel: MangaColorInference, fast_method: bool) -> DetectedColor:
+    return detect_image_color_ml(image.read_bytes(), kernel=kernel, fast_method=fast_method)
+
+
+def detect_image_color_ml_bulk(
+    images: Sequence[PathLike],
+    *,
+    kernel: MangaColorInference,
+    fast_method: bool = False,
+    threads: int = 1,
+) -> Iterator[tuple[Path, DetectedColor]]:
+    """
+    Run `detect_image_color_ml` over `images`, up to `threads` pages at a time.
+
+    The kernel is shared between the workers: OGSOV's forward pass is read-only and
+    OGSOX's ONNX Runtime session accepts concurrent runs. Both release the GIL for their
+    heavy work, so the decode, the numpy preprocessing and the model call overlap.
+    Results come back in completion order.
+
+    OGSOX's fast path reuses one batch buffer under a lock, so it stays correct but
+    serialises; the default path builds its batch per page and overlaps.
+
+    One thread runs on the caller's thread, without a pool.
+
+    :param images: The image paths to classify
+    :param kernel: The color detection kernel to share between the workers
+    :param fast_method: Whether to use the kernel's fast algorithm
+    :param threads: How many pages to classify at once
+    :return: An iterator of the image path and its detection result
+    """
+
+    paths = [Path(image) for image in images]
+    workers = max(1, threads)
+    if workers == 1 or len(paths) <= 1:
+        for path in paths:
+            yield path, _detect_image_color_ml_path(path, kernel, fast_method)
+        return
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="nmanga-color") as pool:
+        pending = {pool.submit(_detect_image_color_ml_path, path, kernel, fast_method): path for path in paths}
+        try:
+            for future in as_completed(pending):
+                yield pending[future], future.result()
+        except BaseException:
+            # The queued pages have not started yet; cancel them so shutdown only waits for
+            # the ones already running.
+            for future in pending:
+                future.cancel()
+            raise

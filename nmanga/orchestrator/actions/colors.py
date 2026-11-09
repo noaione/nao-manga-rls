@@ -36,12 +36,13 @@ from pydantic import ConfigDict, Field
 from ... import file_handler, term
 from ...common import default_cpu_threads, lowest_or, threaded_worker
 from ...lazy import get_vapoursynth
-from ...ogsov import DetectedColor
+from ...ogsov import DetectedColor, detect_image_color_ml_bulk
 from ...vapour import vs_analyze_ogsov_frame, vs_attach_logger, vs_iter_frames_async, vs_prepare_image_bulk_raw
 from ..common import ColorDetectionKind, SkipActionKind, perform_skip_action
 from ._base import ActionColorMixin, ActionKind, BaseAction, ThreadedResult, ToolsKind, WorkerContext
 
 if TYPE_CHECKING:
+    from ...ogsov import MangaColorInference
     from ..models import OrchestratorConfig, VolumeConfig
 
 __all__ = (
@@ -122,6 +123,33 @@ def _iter_vapoursynth_color_pages(
     for _, frame in vs_iter_frames_async(analyzed, window=window):
         detected, img_path = vs_analyze_ogsov_frame(frame)
         yield img_path, page_by_name[img_path.name], detected
+
+
+def _iter_ml_color_pages(
+    pages: Sequence[tuple[Path, int]],
+    *,
+    kernel: "MangaColorInference",
+    fast_method: bool,
+    threads: int,
+) -> Iterator[tuple[int, DetectedColor]]:
+    """
+    Classify `pages` with the Python ML kernel, `threads` pages at a time.
+
+    Pages come back in completion order and carry their own source path, so the page
+    number is looked up by name instead of by position.
+
+    :param pages: The images to classify and their page numbers
+    :param kernel: The color detection kernel to share between the workers
+    :param fast_method: Whether to use the kernel's fast algorithm
+    :param threads: How many pages to classify at once
+    :return: An iterator of the page number and detection result
+    """
+
+    page_by_name = {path.name: page for path, page in pages}
+    for img_path, detected in detect_image_color_ml_bulk(
+        [path for path, _ in pages], kernel=kernel, fast_method=fast_method, threads=threads
+    ):
+        yield page_by_name[img_path.name], detected
 
 
 def _known_color_pages(volume: "VolumeConfig", context: WorkerContext) -> set[int] | None:
@@ -499,7 +527,7 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
     )
     """How many VapourSynth frames to decode ahead of the one being processed, only used by the `vapoursynth` mode"""
     threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Processing Threads")
-    """How many VapourSynth frames to keep in flight, only used by the `vapoursynth` mode"""
+    """How many pages are worked on at once: ML workers in `auto`, frames in flight in `vapoursynth`"""
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -514,7 +542,7 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
             context.terminal.info(f"- Detection Method: {self.mode}")
             if self.mode == "vapoursynth":
                 context.terminal.info(f"- VapourSynth Decoder Prefetch: {self.prefetch}")
-                context.terminal.info(f"- Processing Threads: {self.threads}")
+            context.terminal.info(f"- Processing Threads: {self.threads}")
             if volume.colors == "auto":
                 context.terminal.info("- Detect color pages automatically")
                 context.terminal.info(f"- Color model path: {orchestrator.metafields.color_model}")
@@ -536,11 +564,32 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
         context.terminal.info(f"Detecting color pages in {context.current_dir}...")
         progress = context.terminal.make_progress()
         task = progress.add_task("Detecting color...", finished_text="Detected pages", total=None)
-        for img_path, _, total_file, _ in file_handler.collect_image_from_folder(context.current_dir):
-            pg_num, is_color = self.is_color_page(img_path, context=context, volume=volume, orchestrator=orchestrator)
-            if pg_num is not None and is_color:
-                context.push_detected_colors(pg_num)
-            progress.update(task, advance=1, total=total_file)
+
+        color_model = orchestrator.metafields.color_model
+        if color_model is not None and not isinstance(context.detected_colors, list):
+            pages = _page_images(context.current_dir, self._page_re)
+            context.terminal.info(f"Using {self.threads} CPU threads for processing.")
+            for page, detected in _iter_ml_color_pages(
+                pages,
+                kernel=color_model.get_kernel(),
+                fast_method=color_model.fast,
+                threads=self.threads,
+            ):
+                if detected.is_color:
+                    context.push_detected_colors(page)
+                progress.update(task, advance=1, total=len(pages))
+        else:
+            for img_path, _, total_file, _ in file_handler.collect_image_from_folder(context.current_dir):
+                pg_num, is_color = self.is_color_page(
+                    img_path, context=context, volume=volume, orchestrator=orchestrator
+                )
+                if pg_num is not None and is_color:
+                    context.push_detected_colors(pg_num)
+                progress.update(task, advance=1, total=total_file)
+
+        # An empty verdict is still a verdict: a later action must not classify the volume again.
+        if context.detected_colors is None:
+            context.detected_colors = []
 
         context.terminal.stop_progress(
             progress, f"Detected {len(context.detected_colors) if context.detected_colors else 0} color pages."
@@ -581,6 +630,10 @@ class ActionColorDetect(BaseAction, ActionColorMixin):
             if detected.is_color:
                 context.push_detected_colors(page)
             progress.update(task, advance=1)
+
+        # An empty verdict is still a verdict: a later action must not classify the volume again.
+        if context.detected_colors is None:
+            context.detected_colors = []
 
         context.terminal.stop_progress(
             progress, f"Detected {len(context.detected_colors) if context.detected_colors else 0} color pages."
