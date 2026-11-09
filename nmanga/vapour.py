@@ -223,8 +223,16 @@ def vs_iter_frames_async(node: "VideoNode", *, window: int = 8) -> "Iterator[tup
     lets the filter (and the decoder under it) overlap while the caller works on
     the frame it already has.  Frames are yielded in completion order, so one
     slow frame does not stall the ones queued behind it.  ``window`` is the
-    number of requests kept outstanding and is clamped to at least one.
+    number of requests kept outstanding and is clamped to at least one.  A window of
+    one has nothing to overlap, so the frames are pulled with the blocking
+    `get_frame` instead.
     """
+
+    if window <= 1:
+        # One frame in flight has nothing to overlap, and the blocking request skips the future.
+        for n in range(node.num_frames):
+            yield n, node.get_frame(n)
+        return
 
     total = node.num_frames
     limit = max(1, window)

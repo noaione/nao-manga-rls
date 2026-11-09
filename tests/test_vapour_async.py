@@ -57,3 +57,29 @@ def test_async_iteration_clamps_a_zero_window():
     clip = _blank(3)
     frames = list(vs_iter_frames_async(clip, window=0))
     assert sorted(n for n, _ in frames) == list(range(3))
+
+
+class _FrameNodeProxy:
+    """A `VideoNode` stand-in that records every async request."""
+
+    def __init__(self, node: vs.VideoNode, async_requests: list[int]):
+        self.num_frames = node.num_frames
+        self._node = node
+        self._async_requests = async_requests
+
+    def get_frame(self, n: int) -> vs.VideoFrame:
+        return self._node.get_frame(n)
+
+    def get_frame_async(self, n: int):
+        self._async_requests.append(n)
+        return self._node.get_frame_async(n)
+
+
+def test_window_of_one_uses_the_blocking_request():
+    clip = _blank(4)
+    async_requests: list[int] = []
+
+    frames = list(vs_iter_frames_async(_FrameNodeProxy(clip, async_requests), window=1))
+
+    assert [n for n, _ in frames] == list(range(4))
+    assert async_requests == []
