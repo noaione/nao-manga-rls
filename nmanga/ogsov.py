@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, cast
 
 from PIL import Image, ImageChops
 
-from .lazy import get_einops_rearrange, get_numpy, get_torch
+from .lazy import get_numpy, get_torch
 from .ml.ort import get_onnxruntime
 
 if TYPE_CHECKING:
@@ -453,15 +453,14 @@ class OGSOX(MangaColorInference):
         # 0. Store original dimensions
         h, w, _ = bgr_array.shape
 
-        # 1. Flat the image out
-        fi = bgr_array.reshape(-1, 3)
-
-        # 3. Map to indices and reshape
-        mask_images: "ndarray" = self.lookup_array[fi[:, 0], fi[:, 1], fi[:, 2]]
-        mask_images: "ndarray" = mask_images.reshape(h, w).astype(bool)
+        # 1. Map each pixel to its index in the flattened 256^3 table
+        # built a band at a time, and one lookup: a 3-index fancy lookup is slower and needs a contiguous copy
+        index = bgr_array[..., 0].astype(self.__np.uint32) << 16
+        index |= bgr_array[..., 1].astype(self.__np.uint32) << 8
+        index |= bgr_array[..., 2]
 
         # return the binary mask
-        return mask_images
+        return self.lookup_array.reshape(-1).take(index).reshape(h, w)
 
     def _tile_image_even_overlap_improved(self, image: "ndarray"):
         """
@@ -530,19 +529,19 @@ class OGSOX(MangaColorInference):
         if fast_method:
             predicted_value = self.score_fast(bgr_image)
         else:
-            rearrange = get_einops_rearrange()
-
             # 1.1 Binary Lookup
             lookup_mask = self._preprocess_mask_lookup(bgr_image)
-            # 1.2 ensure its float32
-            bgrc_array: "ndarray" = self.__np.dstack((bgr_image, lookup_mask))
-            bgrc_array: "ndarray" = bgrc_array.astype(self.__np.float32)
-            # 1.3 Tile the images to a fix size
-            image_tiles_list, _ = self._tile_image_even_overlap_improved(bgrc_array)
 
-            # 1.4 stack them to array and ensure formatting
-            batched_image_array = self.__np.array(image_tiles_list)  # [N H W C]
-            batched_image_array = rearrange(batched_image_array, "n h w c -> n c h w")
+            # 1.2 Tile B, G, R and the mask straight into the model's float32 batch [N C H W]
+            # one pass, no page-sized float copies; the tiles' places come from the (small) mask. Zeros: tiles past a
+            # page under 512 px are zero-padded, as _tile_image_even_overlap_improved pads it
+            _, coordinates = self._tile_image_even_overlap_improved(lookup_mask)
+            batched_image_array = self.__np.zeros((len(coordinates), 4, 512, 512), self.__np.float32)
+            for k, (x1, y1, x2, y2) in enumerate(coordinates):
+                tile = bgr_image[y1:y2, x1:x2]
+                th, tw = tile.shape[:2]
+                batched_image_array[k, :3, :th, :tw] = tile.transpose(2, 0, 1)
+                batched_image_array[k, 3, :th, :tw] = lookup_mask[y1:y2, x1:x2]
 
             # make the prediction
             # ONNX Runtime returns a sequence of outputs, which is only ever indexed here.
