@@ -27,18 +27,27 @@ SOFTWARE.
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from rich import box
 from rich.markup import escape
 from rich.table import Table
 
 from nmanga import file_handler, term
 from nmanga.lazy import get_vapoursynth
-from nmanga.ogsov import detect_image_color_ml_bulk, register_ogsov_instance, register_ogsox_instance
+from nmanga.ogsov import (
+    DetectedColor,
+    detect_image_color_ml_bulk,
+    register_ogsov_instance,
+    register_ogsox_instance,
+)
 from nmanga.vapour import (
     vs_analyze_ogsov_frame,
     vs_attach_logger,
@@ -46,6 +55,14 @@ from nmanga.vapour import (
     vs_iter_frames_async,
     vs_prepare_image_bulk_raw,
 )
+
+try:
+    # pyrefly: ignore[missing-import]
+    import pyvips
+
+    logging.getLogger("pyvips").setLevel(logging.WARNING)
+except ImportError:  # the pyvips decoder is optional
+    pyvips = None
 
 PYTHON_MODES = ("ogsov-base", "ogsov-fast", "ogsox-base", "ogsox-fast")
 VAPOURSYNTH_MODES = ("ogsov-vs", "ogsov-vs-gpu", "ogsox-vs", "ogsox-vs-gpu")
@@ -98,10 +115,53 @@ def _resolve_kernel(
     return register_ogsox_instance(lookup_table, classifier)
 
 
-def _run_python(mode: str, images: list[Path], *, kernel: Any, threads: int) -> tuple[int, set[str]]:
+def _detect_image_color_ml_vips(path: Path, *, kernel: Any, fast_method: bool) -> DetectedColor:
+    """Classify a page from a libvips decode, without reading the file into Python bytes first."""
+
+    if pyvips is None:
+        raise RuntimeError("pyvips is not installed")
+
+    image = pyvips.Image.new_from_file(str(path), access="sequential")
+    if image.interpretation == "cmyk":
+        image = image.colourspace("srgb")
+    array = image.numpy()
+    if array.ndim == 2 or array.shape[2] <= 2:
+        return DetectedColor(False, 100, "is grayscale mode", False)
+    rgb = array[:, :, :3]
+    if np.array_equal(rgb[:, :, 0], rgb[:, :, 1]) and np.array_equal(rgb[:, :, 0], rgb[:, :, 2]):
+        return DetectedColor(False, 100, "is grayscale RGB", True)
+
+    is_color, confidence = kernel.predict(rgb[:, :, ::-1], fast_method=fast_method)
+    return DetectedColor(is_color, confidence, "ML-based detection", is_color)
+
+
+def _run_python_vips(images: list[Path], *, kernel: Any, fast_method: bool, threads: int) -> set[str]:
+    """Classify every page with a pyvips decode, `threads` pages at a time."""
+
+    if pyvips is not None:
+        pyvips.cache_set_max(0)
+        pyvips.concurrency_set(max(1, (os.cpu_count() or 1) // max(1, threads)))
+
+    def work(path: Path) -> tuple[str, bool]:
+        return path.name, _detect_image_color_ml_vips(path, kernel=kernel, fast_method=fast_method).is_color
+
+    if threads <= 1:
+        results = [work(path) for path in images]
+    else:
+        with ThreadPoolExecutor(max_workers=threads, thread_name_prefix="nmanga-vips") as pool:
+            results = list(pool.map(work, images))
+    return {name for name, is_color in results if is_color}
+
+
+def _run_python(
+    mode: str, images: list[Path], *, kernel: Any, threads: int, decode: str
+) -> tuple[int, set[str]]:
     """Classify every page with the Python kernel, `threads` pages at a time."""
 
     fast_method = mode.endswith("-fast")
+    if decode == "pyvips":
+        return len(images), _run_python_vips(images, kernel=kernel, fast_method=fast_method, threads=threads)
+
     color_pages: set[str] = set()
     for img_path, detected in detect_image_color_ml_bulk(
         images, kernel=kernel, fast_method=fast_method, threads=threads
@@ -152,7 +212,7 @@ def _print_header(console: term.Console, images: list[Path], args: argparse.Name
     console.console.print(f"  [dim]modes[/]    {', '.join(args.modes)}")
     console.console.print(
         f"  [dim]threads[/]  {', '.join(str(value) for value in threads)}"
-        f"  [dim]prefetch[/] {args.prefetch}  [dim]repeat[/] {args.repeat}"
+        f"  [dim]decode[/] {args.decode}  [dim]prefetch[/] {args.prefetch}  [dim]repeat[/] {args.repeat}"
     )
     console.console.print("  [dim]VS threads are frames in flight; one uses the blocking get_frame.[/]")
 
@@ -260,6 +320,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--color-model", type=Path, help="OGSOV weights table (.npz)")
     parser.add_argument("--lookup-table", type=Path, help="OGSOX lookup table (.npz)")
     parser.add_argument("--classifier", type=Path, help="OGSOX classifier (.onnx)")
+    parser.add_argument(
+        "--decode",
+        choices=["pillow", "pyvips"],
+        default="pillow",
+        help=("Image decoder for the Python modes (default: pillow); the vs modes decode through the plugin"),
+    )
     parser.add_argument("--prefetch", type=int, default=8, help="VapourSynth decoder readahead (default: 8)")
     parser.add_argument("--repeat", type=int, default=1, help="Runs per mode and thread count (default: 1)")
     parser.add_argument("--limit", type=int, default=0, help="Only classify the first N images")
@@ -299,6 +365,8 @@ def main() -> int:
     if needs_ogsox_python:
         _require_file(parser, args.lookup_table, "--lookup-table")
         _require_file(parser, args.classifier, "--classifier")
+    if args.decode == "pyvips" and pyvips is None:
+        parser.error("--decode pyvips needs pyvips (try: uv run --with pyvips python tools/bench_color.py ...)")
     if any(mode in VAPOURSYNTH_MODES for mode in args.modes):
         missing = vs_find_missing_plugins(list(VAPOURSYNTH_PLUGINS))
         if missing:
@@ -321,7 +389,7 @@ def main() -> int:
                 classifier=args.classifier,
             )
             if args.warmup:
-                _run_python(mode, images[:1], kernel=kernel, threads=1)
+                _run_python(mode, images[:1], kernel=kernel, threads=1, decode=args.decode)
         elif args.warmup:
             _run_vapoursynth(mode, images[:1], threads=1, prefetch=args.prefetch, debug=args.debug)
 
@@ -337,7 +405,9 @@ def main() -> int:
                 ):
                     start = time.perf_counter()
                     if kernel is not None:
-                        pages, color_pages = _run_python(mode, images, kernel=kernel, threads=thread_count)
+                        pages, color_pages = _run_python(
+                            mode, images, kernel=kernel, threads=thread_count, decode=args.decode
+                        )
                     else:
                         pages, color_pages = _run_vapoursynth(
                             mode, images, threads=thread_count, prefetch=args.prefetch, debug=args.debug
