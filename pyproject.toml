@@ -39,7 +39,7 @@ dependencies = [
     "wand==0.7.2",
     "click-pwsh==0.9.7",
     "beautifulsoup4>=4.15.0",
-    "pikepdf==10.17.0",
+    "pikepdf==10.18.1",
     "natsort==8.4.0",
     "numpy>=2.5.4",
     "scipy>=1.18.1",
@@ -49,7 +49,7 @@ dependencies = [
 dev = [
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.4",
+    "ruff==0.17.5",
     "scipy-stubs==1.18.1.1",
     "types-defusedxml==0.7.0.20260504"
 ]
@@ -72,13 +72,13 @@ denoiser = [
 denoiser-ort = [
     # The stock ONNX Runtime wheel: CoreML on macOS, a CPU provider everywhere else. This is the
     # runtime the plugin EP extras (denoiser-intel, denoiser-mlx) load into.
-    "onnxruntime==1.31.1",
+    "onnxruntime~=1.31.1",
 ]
 denoiser-nvidia = [
     # CUDA, TensorRT and TensorRT RTX. This is the only extra that pulls a CUDA build of torch,
     # and it replaces the stock runtime instead of extending it.
     "torch>=2.15.0",
-    "onnxruntime-gpu==1.31.1; sys_platform == 'linux' or sys_platform == 'win32'",
+    "onnxruntime-gpu~=1.31.1; sys_platform == 'linux' or sys_platform == 'win32'",
     "onnxruntime-ep-nv-tensorrt-rtx-cu13==0.5.0; sys_platform == 'linux' or sys_platform == 'win32'",
     "tensorrt-cu13==10.16.1.11; (sys_platform == 'linux' or sys_platform == 'win32') and python_version <= '3.13'",
 ]
@@ -98,10 +98,10 @@ denoiser-mlx = [
 vapoursynth = [
     "vapoursynth==82",
     "vapoursynth-imageseqs==0.4.2",
-    "vapoursynth-nimages==0.3.0",
+    "vapoursynth-nimages==0.4.0",
     "vsrepo"
 ]
-epub-render = ["playwright==1.64.1"]
+epub-render = ["playwright~=1.65.2"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nmanga._metadata.__version__"}
