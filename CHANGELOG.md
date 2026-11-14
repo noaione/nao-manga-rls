@@ -3,29 +3,32 @@
 ## Unreleased
 
 **New Features**
-- `nmanga autolevel2` and `autolevel3` - Use a shared black peak for pages without a usable local peak when a strict majority of leveled pages agree; `--no-book-peak-fallback` disables this
-- `nmanga ort infer` - `--tta` averages every batch over its 8 flips/rotations (test-time augmentation, about 8x slower). The orchestrator `denoise`/`upscale` actions expose it as `tta`
-- `nmanga ort to-fp16` - Convert an ONNX model to fp16, this will also run inference to validate the conversion.
-- Orchestrator `color_detect` and `move_color` actions - `mode: vapoursynth` classifies the whole volume with the `mangacolor` plugin in one pass instead of a per-page ONNX/Pillow call, and `move_color` reuses the pages an earlier `color_detect` already found
+- `autolevel2`, `autolevel3` and the orchestrator `autolevel` action - Level pages without a usable black peak by the peak a strict majority of the book agree on, and pages peaking more than `--book-peak-tolerance` (6) above it by the same peak, since theirs is a dark tone rather than their black; `--no-book-peak-fallback` disables both
+- `nmanga ort infer` - `--tta` averages each batch over 8 flips/rotations (about 8x slower); the orchestrator `denoise`/`upscale` actions expose it as `tta`
+- `nmanga ort to-fp16` - Convert an ONNX model to fp16, running it once to validate the result
+- Orchestrator `color_detect`/`move_color` - `mode: vapoursynth` classifies a whole volume with `mangacolor` in one pass rather than one ONNX/Pillow call per page, and `move_color` reuses the pages `color_detect` found
 
 **Changes**
-- **Breaking:** Removed the old `nmanga autolevel` command; use `autolevel2` or `autolevel3`
-- Autolevel peak detection runs faster and uses less memory by counting grayscale shades directly in Pillow, with the same level selection
-- `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
-- `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend with complementary linear ramps
-- Overlapping ONNX runs replicate the page edge instead of padding it with `--background`, so the outer tiles no longer pick up a black/white border (the flag still applies to non-overlapping runs)
-- ONNX denoising preserves alpha, processes tiles in batches to reduce peak memory, and detects context-trimmed x1 model outputs
-- `lookup colorama` requests VapourSynth frames asynchronously: up to `--threads` pages stay in flight while the file moves run, so the classifier (and the decoder under it) overlaps instead of running one frame at a time
-- The default thread count is now `TOTAL_THREADS - 4` on machines with more than eight threads and half of them otherwise, for every `--threads` default and the orchestrator `threads` fields
-- Improve memory usage for original OGSOX
-- `lookup colorama` and the orchestrator `color_detect` action classify pages with the Python OGSOV/OGSOX kernels on a thread pool, so the decode, numpy work and model call overlap instead of running one page at a time
+- **Breaking:** The old `nmanga autolevel` command is gone; use `autolevel2` or `autolevel3`
+- Autolevel peak detection is cheaper and finds the page's black more reliably:
+  - Counting shades in Pillow replaces the array pass
+  - A 3x3 median runs first, so a JPEG's ringing at black no longer outvotes the real ink and leaves the page unlevelled
+  - It searches up to gray(64) instead of gray(60), whose edge cut through dark tones and passed for a peak
+- The `torch` backend caches compiled models under `$DATA_DIR/torch_inductor`, the same `$DATA_DIR` as `ort`
+- `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend
+  - Overlapping runs replicate the page edge instead of padding it with `--background`, so outer tiles lose the black/white border (the flag still applies to non-overlapping runs)
+- ONNX denoising keeps alpha, batches tiles to cut peak memory, and detects context-trimmed x1 outputs
+- `lookup colorama` and the orchestrator `color_detect` action keep several pages in flight instead of classifying one at a time:
+  - The Python OGSOV/OGSOX kernels run on a thread pool, so the decode, numpy work and model call overlap
+  - The VapourSynth path requests frames async, keeping up to `--threads` pages in flight while the file moves run
+- Every `--threads` default and orchestrator `threads` field is now `TOTAL_THREADS - 4` above eight threads, and half below that
+- The original OGSOX kernel uses less memory
 
 **Fixes**
-- ONNX inference feeds the precision the model declares, so an fp16 and an fp32 file are each fed as they expect instead of following the caller's guess
-- ONNX inference pads a short final batch up to a static model's declared batch, so static TensorRT/TRT-RTX engines no longer reject the last tiles
+- ONNX inference feeds the precision the model declares and pads a short final batch to a static model's batch, so fp16 and fp32 files each get what they expect and TensorRT/TRT-RTX engines accept the last tiles
 - Contrast stretching no longer divides by zero on a single-colour page
-- Orchestrator color actions check the packages their configured color kernel needs before running (`torch`/`scipy` for OGSOV, ONNX Runtime for OGSOX), so a missing one aborts up front instead of failing on the first page
-- A color detection pass that finds no color pages caches the empty result, so the move/jpegify actions do not classify the whole volume again
+- Orchestrator color actions check their kernel's packages first (`torch`/`scipy` for OGSOV, ONNX Runtime for OGSOX), so a missing one aborts up front instead of on the first page
+- A color pass that finds no color pages caches the empty result, so the move/jpegify actions do not scan the volume again
 
 ## [0.31.0] (2026-11-08)
 

@@ -51,7 +51,7 @@
                     "type": "string"
                 },
                 "upper_limit": {
-                    "default": 60,
+                    "default": 64,
                     "maximum": 255,
                     "minimum": 1,
                     "title": "Upper Limit for Peak Finding",
@@ -101,6 +101,18 @@
                     "default": false,
                     "title": "Skip Color Images",
                     "type": "boolean"
+                },
+                "book_peak_fallback": {
+                    "default": true,
+                    "title": "Book Peak Fallback",
+                    "type": "boolean"
+                },
+                "book_peak_tolerance": {
+                    "default": 6,
+                    "maximum": 127,
+                    "minimum": 0,
+                    "title": "Book Peak Tolerance",
+                    "type": "integer"
                 },
                 "algorithm": {
                     "default": "v2",

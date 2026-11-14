@@ -34,7 +34,16 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from nmanga.autolevel import _find_histogram_peak, find_local_peak
+from nmanga.autolevel import (
+    LevellingPolicy,
+    PagePeakAnalysis,
+    ResolvedPageLevels,
+    _find_histogram_peak,
+    analyze_book_peak_page,
+    book_peak_consensus,
+    find_local_peak,
+    resolve_book_peaks,
+)
 
 
 def _image_from_counts(counts: dict[int, int]) -> Image.Image:
@@ -221,3 +230,154 @@ def test_find_local_peak_preserves_current_frame(image_format: str) -> None:
         opened.seek(0)
         assert find_local_peak(opened) == (15, 255, opened.mode != "L")
     assert not stream.closed
+
+
+def _page(black: int, *, found: bool = True, darkest: int | None = None) -> PagePeakAnalysis:
+    """One page's analysis, with the parts the levelling policy does not read filled in."""
+    return PagePeakAnalysis(
+        black_level=black,
+        white_level=255,
+        force_gray=False,
+        black_peak_found=found,
+        white_peak_found=True,
+        darkest_gray=black if darkest is None else darkest,
+    )
+
+
+def test_own_peak_too_high_at_the_absolute_limit() -> None:
+    policy = LevellingPolicy()
+
+    assert policy.own_peak_too_high(54) is False
+    assert policy.own_peak_too_high(55) is True
+
+
+def test_own_peak_too_high_compares_against_the_book() -> None:
+    policy = LevellingPolicy(book_peak_tolerance=6)
+
+    assert policy.own_peak_too_high(26, book=20) is False
+    assert policy.own_peak_too_high(27, book=20) is True
+    # The offset shifts a page's peak and the book's alike, so it cancels out of the comparison.
+    assert LevellingPolicy(book_peak_tolerance=6, peak_offset=4).own_peak_too_high(24, book=20) is False
+
+
+def test_own_peak_too_high_ignores_the_book_without_the_fallback() -> None:
+    policy = LevellingPolicy(book_peak_fallback=False)
+
+    assert policy.own_peak_too_high(40, book=20) is False
+    assert policy.own_peak_too_high(60) is True
+
+
+def test_own_peak_too_high_applies_the_offset_to_the_limit() -> None:
+    policy = LevellingPolicy(peak_offset=3)
+
+    assert policy.own_peak_too_high(51) is False
+    assert policy.own_peak_too_high(52) is True
+
+
+def test_levels_peak_keeps_only_a_qualified_peak_inside_the_bounds() -> None:
+    policy = LevellingPolicy()
+
+    assert policy.levels_peak(30, qualified=True) == 30
+    assert policy.levels_peak(9, qualified=True) == 9
+    assert policy.levels_peak(8, qualified=True) is None
+    assert policy.levels_peak(30, qualified=False) is None
+    assert policy.levels_peak(None, qualified=False) is None
+    assert policy.levels_peak(30, qualified=True, book=20) is None
+    assert LevellingPolicy(book_peak_tolerance=20).levels_peak(30, qualified=True, book=20) == 30
+
+
+def test_resolve_takes_the_book_peak_only_for_a_dark_tone() -> None:
+    policy = LevellingPolicy()
+
+    # Black ink already: the page keeps its own dark tone and is left alone.
+    assert policy.resolve(5, qualified=True, book=20) == (None, False)
+    # More than the tolerance above the book's peak, so the book's peak levels the page.
+    assert policy.resolve(40, qualified=True, book=20) == (20, True)
+    # At or above the absolute limit with no book peak to fall back to.
+    assert policy.resolve(60, qualified=True) == (None, False)
+    # Nothing found at all.
+    assert policy.resolve(None, qualified=False, book=20) == (20, True)
+
+
+def test_resolve_skips_levels_without_the_fallback_or_a_book_peak() -> None:
+    # Without the fallback a page is judged against the absolute limit alone, so its own peak
+    # stands unless that limit rejects it.
+    assert LevellingPolicy(book_peak_fallback=False).resolve(40, qualified=True, book=20) == (40, False)
+    assert LevellingPolicy(book_peak_fallback=False).resolve(60, qualified=True, book=20) == (None, False)
+    assert LevellingPolicy().resolve(40, qualified=True, book=None) == (40, False)
+
+
+def test_book_peak_consensus_counts_only_pages_inside_the_bounds() -> None:
+    policy = LevellingPolicy()
+    pages = [_page(30), _page(30), _page(30), _page(5), _page(60), _page(0, found=False)]
+
+    assert book_peak_consensus(pages, policy) == 30
+
+
+def test_book_peak_consensus_applies_the_peak_offset_to_the_bounds() -> None:
+    policy = LevellingPolicy(peak_offset=-6)
+
+    assert book_peak_consensus([_page(60), _page(60)], policy) == 60
+
+
+def test_book_peak_consensus_needs_a_strict_majority() -> None:
+    assert book_peak_consensus([_page(30), _page(40)], LevellingPolicy()) is None
+
+
+def test_resolve_book_peaks_levels_a_dark_tone_by_the_book_peak() -> None:
+    pages = {
+        Path("001.png"): _page(30),
+        Path("002.png"): _page(30),
+        Path("003.png"): _page(30),
+        Path("004.png"): _page(30),
+        Path("005.png"): _page(30),
+        Path("006.png"): _page(44),
+        Path("007.png"): _page(44),  # a dark tone, more than the tolerance above the book's
+        Path("008.png"): _page(44, darkest=60),  # and nothing in it darker than the limit
+        Path("009.png"): _page(9),  # its own peak is black ink already
+    }
+
+    shared_peak, resolved = resolve_book_peaks(pages, LevellingPolicy())
+
+    assert shared_peak == 30
+    assert resolved[Path("006.png")] == ResolvedPageLevels(30, 255, False, True)
+    assert resolved[Path("008.png")] == ResolvedPageLevels(None, 255, False, False)
+    assert resolved[Path("009.png")] == ResolvedPageLevels(9, 255, False, False)
+    assert resolved[Path("001.png")] == ResolvedPageLevels(30, 255, False, False)
+
+
+def _ringing_page() -> Image.Image:
+    """A page whose only ink is a solid patch, plus isolated samples clipped to gray(0)."""
+    image = Image.new("L", (60, 60), 255)
+    image.paste(30, (10, 10, 16, 16))
+    placed = 0
+    for y in range(0, 60, 2):
+        for x in range(0, 60, 2):
+            if placed == 200:
+                break
+            if 8 <= x <= 18 and 8 <= y <= 18:
+                continue
+            image.putpixel((x, y), 0)
+            placed += 1
+    return image
+
+
+def test_find_local_peak_median_drops_isolated_ringing() -> None:
+    image = _ringing_page()
+
+    # The ringing outnumbers the page's ink, so an unfiltered histogram peaks at gray(0).
+    assert find_local_peak(image, median_filter=False) == (0, 255, False)
+    assert find_local_peak(image) == (30, 255, False)
+
+
+def test_analyze_book_peak_page_reports_the_darkest_shade(tmp_path: Path) -> None:
+    page = tmp_path / "001.png"
+    _ringing_page().save(page)
+
+    analysed_path, analysis = analyze_book_peak_page(
+        page, upper_limit=64, peak_min_pct=0.25, peak_prom_pct=None, no_white=False
+    )
+
+    assert analysed_path == page
+    assert analysis.black_level == 30
+    assert analysis.darkest_gray == 30

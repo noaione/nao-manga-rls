@@ -1,7 +1,8 @@
 """
 MIT License
 
-Copyright (c) 2022-present noaione, anon
+Copyright (c) 2022-present noaione
+Copyright (c) 2025-present anon
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Automatic level detection and grayscale posterization.
+# Automatic level detection, the levelling policy and grayscale posterization.
 
 from __future__ import annotations
 
@@ -30,12 +31,13 @@ import math
 import subprocess as sp
 from collections import Counter
 from contextlib import nullcontext
+from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple, TypedDict
+from typing import TYPE_CHECKING, Iterable, NamedTuple, TypedDict
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from .lazy import get_numpy, get_scipy_signal
 from .ogsov import is_grayscale_palette
@@ -44,10 +46,16 @@ if TYPE_CHECKING:
     from numpy import ndarray
 
 __all__ = (
+    "LevellingPolicy",
+    "PagePeakAnalysis",
     "PosterizePointMethod",
+    "ResolvedPageLevels",
+    "analyze_book_peak_page",
+    "analyze_book_peak_page_star",
     "analyze_gray_shades",
     "apply_levels",
     "book_peak",
+    "book_peak_consensus",
     "create_magick_params",
     "detect_nearest_bpc",
     "find_local_peak",
@@ -57,6 +65,7 @@ __all__ = (
     "posterize_image_by_bits",
     "posterize_image_by_shades",
     "posterize_image_with_imagemagick",
+    "resolve_book_peaks",
 )
 
 # Setting image max pixel count to ~4/3 GPx for 3bpp (24-bit) to get ~4GB of memory usage tops
@@ -134,37 +143,122 @@ def book_peak(peaks: list[int]) -> int | None:
     return peak
 
 
-class _LocalPeakAnalysis(NamedTuple):
+@dataclass(frozen=True)
+class LevellingPolicy:
+    """
+    What a page's own gray peak has to be for that peak to level the page.
+
+    A page whose qualified peak sits at or above `upper_limit`, or far enough above the book's
+    usual peak, was found at a dark tone rather than at its black, so it is levelled by the
+    book's peak instead while `book_peak_fallback` is on. Peaks are raw 8-bit code values, and
+    `peak_offset` corrects a page's own peak before the limits are compared.
+    """
+
+    lower_limit: int = 8
+    upper_limit: int = 55
+    peak_offset: int = 0
+    book_peak_tolerance: int = 6
+    book_peak_fallback: bool = True
+
+    def own_peak_too_high(self, peak: int, book: int | None = None) -> bool:
+        """Whether `peak` is too high to level the page by, given the book's raw peak `book`."""
+        if peak + self.peak_offset >= self.upper_limit:
+            return True
+        # The offset shifts the page's peak and the book's peak alike, so it cancels here.
+        return self.book_peak_fallback and book is not None and peak > book + self.book_peak_tolerance
+
+    def levels_peak(self, peak: int | None, qualified: bool, book: int | None = None) -> int | None:
+        """The raw peak a page levels by on its own, or None when it has no usable one."""
+        if peak is None or not qualified:
+            return None
+        if peak + self.peak_offset <= self.lower_limit:
+            return None
+        return None if self.own_peak_too_high(peak, book) else peak
+
+    def resolve(self, peak: int | None, qualified: bool, book: int | None = None) -> tuple[int | None, bool]:
+        """
+        The raw peak a page is levelled by, and whether that is the book's usual peak.
+
+        A page whose ink is black already (a qualified peak at or below `lower_limit`) is left
+        alone; every other page without a usable peak of its own takes the book's while there
+        is one to take.
+        """
+        own = self.levels_peak(peak, qualified, book)
+        if own is not None:
+            return own, False
+        if book is None or not self.book_peak_fallback:
+            return None, False
+        if peak is not None and qualified and not self.own_peak_too_high(peak, book):
+            return None, False
+        return book, True
+
+
+class ResolvedPageLevels(NamedTuple):
+    """What one analysed page is levelled with; a None black level means its levels are skipped."""
+
+    black_level: int | None
+    white_level: int
+    force_gray: bool
+    used_book_peak: bool
+
+
+class PagePeakAnalysis(NamedTuple):
     black_level: int
     white_level: int
     force_gray: bool
     black_peak_found: bool
     white_peak_found: bool
+    darkest_gray: int
+    # The darkest shade the page holds, from the same histogram its peaks come from.
+
+
+def _page_histogram(image: Image.Image, median_filter: bool) -> list[int]:
+    """
+    The 256-bin histogram of a page, or of a 3x3 median of it when `median_filter` is set.
+
+    The median drops isolated pixels, which is what JPEG ringing leaves behind: a few samples
+    clipped to gray(0) would otherwise outvote the page's real black and pass for a peak.
+    """
+    if not median_filter:
+        return image.histogram()
+    median = image.filter(ImageFilter.MedianFilter(size=3))
+    try:
+        return median.histogram()
+    finally:
+        median.close()
+
+
+def _darkest_shade(hist: list[int]) -> int:
+    """The lowest shade with a pixel in it, or 255 when the page has none."""
+    return next((level for level, count in enumerate(hist) if count), 255)
 
 
 def _find_local_peak_analysis(
     img_path: Path | BytesIO | Image.Image,
     *,
-    upper_limit: int = 60,
+    upper_limit: int = 64,
     peak_percentage: float | None = 0.25,
     peak_prominence: float | None = None,
     skip_white_check: bool = False,
-) -> _LocalPeakAnalysis:
+    median_filter: bool = True,
+) -> PagePeakAnalysis:
     image_context = nullcontext(img_path) if isinstance(img_path, Image.Image) else Image.open(img_path)
     with image_context as image:
         force_gray = image.mode != "L"
         if force_gray:
             gray_image = image.convert("L")
             try:
-                hist = gray_image.histogram()
+                hist = _page_histogram(gray_image, median_filter)
             finally:
                 gray_image.close()
         else:
-            hist = image.histogram()
+            hist = _page_histogram(image, median_filter)
         total_pixels = image.width * image.height
+        # The peaks and the darkest shade come out of one histogram, so they cannot disagree.
+        darkest_gray = _darkest_shade(hist)
 
     if upper_limit < 0:
-        return _LocalPeakAnalysis(0, 255, force_gray, False, False)
+        return PagePeakAnalysis(0, 255, force_gray, False, False, darkest_gray)
 
     min_pix_count = math.ceil(total_pixels * (peak_percentage / 100.0)) if peak_percentage is not None else 0
     min_prominence = math.ceil(total_pixels * (peak_prominence / 100.0)) if peak_prominence is not None else 0
@@ -174,23 +268,24 @@ def _find_local_peak_analysis(
     )
     black_peak_level = 0 if black_peak is None else black_peak
     if skip_white_check:
-        return _LocalPeakAnalysis(black_peak_level, 255, force_gray, black_peak_found, False)
+        return PagePeakAnalysis(black_peak_level, 255, force_gray, black_peak_found, False, darkest_gray)
 
     white_start = max(0, 255 - upper_limit)
-    white_peak, white_peak_found = _find_histogram_peak_with_status(
-        hist[white_start:], min_pix_count, min_prominence
-    )
+    white_peak, white_peak_found = _find_histogram_peak_with_status(hist[white_start:], min_pix_count, min_prominence)
     white_peak_level = 255 if white_peak is None else white_start + white_peak
-    return _LocalPeakAnalysis(black_peak_level, white_peak_level, force_gray, black_peak_found, white_peak_found)
+    return PagePeakAnalysis(
+        black_peak_level, white_peak_level, force_gray, black_peak_found, white_peak_found, darkest_gray
+    )
 
 
 def find_local_peak(
     img_path: Path | BytesIO | Image.Image,
     *,
-    upper_limit: int = 60,
+    upper_limit: int = 64,
     peak_percentage: float | None = 0.25,
     peak_prominence: float | None = None,
     skip_white_check: bool = False,
+    median_filter: bool = True,
 ) -> tuple[int, int, bool]:
     """
     Determine black and white levels from the tallest local peaks in the grayscale histogram.
@@ -198,6 +293,9 @@ def find_local_peak(
     If no peak passes the percentage and prominence thresholds, use the tallest peak anyway.
     An empty region defaults to black 0 or white 255. The final flag indicates whether the
     input needed grayscale conversion, not whether the thresholds passed.
+
+    The histogram is taken over a 3x3 median of the page unless `median_filter` is off, so a
+    stray pixel cannot pass for a peak: JPEG ringing that clips to gray(0) is the common case.
 
     Courtesy of anon.
 
@@ -210,8 +308,75 @@ def find_local_peak(
         peak_percentage=peak_percentage,
         peak_prominence=peak_prominence,
         skip_white_check=skip_white_check,
+        median_filter=median_filter,
     )
     return analysis.black_level, analysis.white_level, analysis.force_gray
+
+
+def analyze_book_peak_page(
+    img_path: Path,
+    *,
+    upper_limit: int,
+    peak_min_pct: float | None,
+    peak_prom_pct: float | None,
+    no_white: bool,
+) -> tuple[Path, PagePeakAnalysis]:
+    """The peak analysis of one page of a book, voted on by `book_peak_consensus`."""
+    with Image.open(img_path) as image:
+        analysis = _find_local_peak_analysis(
+            image,
+            upper_limit=upper_limit,
+            peak_percentage=peak_min_pct,
+            peak_prominence=peak_prom_pct,
+            skip_white_check=no_white,
+        )
+    return img_path, analysis
+
+
+def analyze_book_peak_page_star(
+    args: tuple[Path, int, float | None, float | None, bool],
+) -> tuple[Path, PagePeakAnalysis]:
+    """`analyze_book_peak_page` for a worker pool, which passes each page as one argument."""
+    img_path, upper_limit, peak_min_pct, peak_prom_pct, no_white = args
+    return analyze_book_peak_page(
+        img_path,
+        upper_limit=upper_limit,
+        peak_min_pct=peak_min_pct,
+        peak_prom_pct=peak_prom_pct,
+        no_white=no_white,
+    )
+
+
+def book_peak_consensus(pages: Iterable[PagePeakAnalysis], policy: LevellingPolicy) -> int | None:
+    """The peak a strict majority of `pages` can be levelled by, or None when they disagree."""
+    own_peaks = [
+        page.black_level
+        for page in pages
+        if page.black_peak_found and policy.lower_limit < page.black_level + policy.peak_offset < policy.upper_limit
+    ]
+    return book_peak(own_peaks)
+
+
+def _resolve_book_peak_page(
+    page: PagePeakAnalysis, shared_peak: int | None, policy: LevellingPolicy
+) -> ResolvedPageLevels:
+    peak, by_book = policy.resolve(
+        page.black_level if page.black_peak_found else None, page.black_peak_found, shared_peak
+    )
+    if by_book and page.darkest_gray > policy.upper_limit:
+        # Nothing in the page is darker than the levelling limit (a publisher's flat gray logo,
+        # say), so there is no black for the book's peak to set: the page is left as it is.
+        return ResolvedPageLevels(None, page.white_level, page.force_gray, False)
+    return ResolvedPageLevels(peak, page.white_level, page.force_gray, by_book)
+
+
+def resolve_book_peaks(
+    pages: dict[Path, PagePeakAnalysis], policy: LevellingPolicy
+) -> tuple[int | None, dict[Path, ResolvedPageLevels]]:
+    """The book's usual peak, and what every analysed page is levelled by."""
+    shared_peak = book_peak_consensus(pages.values(), policy)
+    resolved = {path: _resolve_book_peak_page(page, shared_peak, policy) for path, page in pages.items()}
+    return shared_peak, resolved
 
 
 def find_local_peak_legacy(

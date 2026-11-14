@@ -34,7 +34,17 @@ from PIL import Image
 from pydantic import ConfigDict, Field
 
 from ... import file_handler, term
-from ...autolevel import apply_levels, find_local_peak, find_local_peak_legacy, gamma_correction
+from ...autolevel import (
+    LevellingPolicy,
+    PagePeakAnalysis,
+    ResolvedPageLevels,
+    analyze_book_peak_page_star,
+    apply_levels,
+    find_local_peak,
+    find_local_peak_legacy,
+    gamma_correction,
+    resolve_book_peaks,
+)
 from ...common import default_cpu_threads, lowest_or, threaded_worker
 from ...lazy import get_vapoursynth
 from ...utils import secure_filename
@@ -86,6 +96,7 @@ def _runner_autolevel2_threaded(
     action: "ActionAutolevel",
     is_color: bool,
     is_skipped_action: SkipActionKind | None = None,
+    resolved_levels: ResolvedPageLevels | None = None,
 ) -> AutolevelResult:
     cnsl = term.with_thread_queue(log_q)
     if is_skipped_action is not None:
@@ -99,10 +110,15 @@ def _runner_autolevel2_threaded(
         return AutolevelResult.from_threaded_result(img_path.name, ThreadedResult.COPIED)
 
     img = Image.open(img_path)
-    if action.algorithm == "v1":
+    if resolved_levels is not None:
+        black_level = resolved_levels.black_level or 0
+        white_level = resolved_levels.white_level
+        skip_levels = resolved_levels.black_level is None
+    elif action.algorithm == "v1":
         black_level, white_level, _ = find_local_peak_legacy(
             img, upper_limit=action.upper_limit, skip_white_peaks=action.skip_white
         )
+        skip_levels = False
     else:
         black_level, white_level, _ = find_local_peak(
             img,
@@ -111,12 +127,14 @@ def _runner_autolevel2_threaded(
             peak_prominence=action.min_prominence_pct,
             skip_white_check=action.skip_white,
         )
+        skip_levels = False
 
     is_black_bad = black_level <= 0
     is_white_bad = white_level >= 255 if not action.skip_white else False
 
     if (
-        (is_black_bad and is_white_bad and not action.skip_white)  # both levels are bad
+        skip_levels
+        or (is_black_bad and is_white_bad and not action.skip_white)  # both levels are bad
         or (is_black_bad and action.skip_white)
         or black_level > action.upper_limit
     ):
@@ -157,7 +175,9 @@ def _runner_autolevel2_threaded(
 
 
 def _runner_autolevel2_threaded_star(
-    args: tuple[term.MessageQueue, Path, Path, "ActionAutolevel", bool, SkipActionKind | None],
+    args: tuple[
+        term.MessageQueue, Path, Path, "ActionAutolevel", bool, SkipActionKind | None, ResolvedPageLevels | None
+    ],
 ) -> AutolevelResult:
     return _runner_autolevel2_threaded(*args)
 
@@ -199,7 +219,7 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
     """The kind of action"""
     base_path: str = Field("leveled", title="Output Base Path")
     """The base path to save the leveled images to"""
-    upper_limit: int = Field(60, ge=1, le=255, title="Upper Limit for Peak Finding")
+    upper_limit: int = Field(64, ge=1, le=255, title="Upper Limit for Peak Finding")
     """The upper limit for finding local peaks in the histogram"""
     peak_offset: int = Field(0, ge=-20, le=20, title="Peak Offset")
     """The offset to add to the found black level peak, can be negative"""
@@ -214,6 +234,17 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
     """Whether to skip white peaks when finding local peaks in the histogram"""
     skip_color: bool = Field(False, title="Skip Color Images")
     """Skip color images when auto leveling, only level half-tones/b&w images"""
+    book_peak_fallback: bool = Field(True, title="Book Peak Fallback")
+    """
+    Level pages without a usable local black peak by the peak a strict majority of the volume's
+    pages were found at; only the `v2` algorithm reads this
+    """
+    book_peak_tolerance: int = Field(6, ge=0, le=127, title="Book Peak Tolerance")
+    """
+    A page whose own black peak sits more than this above the book's usual peak was found at a
+    dark tone rather than at its black, so it is levelled by the book's peak instead; only the
+    `v2` algorithm reads this
+    """
     algorithm: Literal["v1", "v2", "v3"] = Field("v2", title="The algorithm or mode to use for peaks + leveling")
     """
     The algorithm or mode to use for peaks + leveling:
@@ -254,6 +285,15 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
         """Alias of :attr:`skip_white`, for the VapourSynth helper."""
         return self.skip_white
 
+    @property
+    def policy(self) -> LevellingPolicy:
+        """How this action decides what a page is levelled by, as the CLI's levelling policy."""
+        return LevellingPolicy(
+            peak_offset=self.peak_offset,
+            book_peak_tolerance=self.book_peak_tolerance,
+            book_peak_fallback=self.book_peak_fallback,
+        )
+
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
         Run the action on a volume
@@ -274,6 +314,9 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
             context.terminal.info(f"- Skip White Levels During Peak Finding: {self.skip_white}")
             context.terminal.info(f"- Skip Color Images: {self.skip_color}")
             context.terminal.info(f"- Algorithm: {self.algorithm}")
+            if self.algorithm == "v2":
+                context.terminal.info(f"- Book Peak Fallback: {'Yes' if self.book_peak_fallback else 'No'}")
+                context.terminal.info(f"- Book Peak Tolerance: {self.book_peak_tolerance}")
             if self.algorithm == "v3":
                 context.terminal.info(f"- VapourSynth Frame Cache: {self.cache_mb} MiB")
                 context.terminal.info(f"- VapourSynth Decoder Prefetch: {self.prefetch}")
@@ -309,6 +352,10 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
 
             images_complete.append((image, is_color, is_skip_action))
 
+        resolved_by_path: dict[Path, ResolvedPageLevels] = {}
+        if self.algorithm == "v2" and self.book_peak_fallback:
+            resolved_by_path = self._resolve_page_levels(context, images_complete)
+
         results: list[AutolevelResult] = []
         progress = context.terminal.make_progress()
         task = progress.add_task("Auto-leveling images...", finished_text="Auto-leveled images", total=total_images)
@@ -317,7 +364,7 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
             for result in pool.imap_unordered(
                 _runner_autolevel2_threaded_star,
                 [
-                    (log_q, image, output_dir, self, is_color, is_skip_action)
+                    (log_q, image, output_dir, self, is_color, is_skip_action, resolved_by_path.get(image))
                     for image, is_color, is_skip_action in images_complete
                 ],
             ):
@@ -352,6 +399,52 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
                 )
         # Update CWD
         context.update_cwd(output_dir)
+
+    def _resolve_page_levels(
+        self,
+        context: WorkerContext,
+        images: list[tuple[Path, bool, SkipActionKind | None]],
+    ) -> dict[Path, ResolvedPageLevels]:
+        """
+        Resolve what every page this action levels is levelled by, from the volume's usual peak.
+
+        Only the pages this action will level vote, so a credit or colour page it copies does
+        not pull the vote away from the volume's real black.
+        """
+        voters = [
+            image
+            for image, is_color, skip_action in images
+            if skip_action is None and not (is_color and self.skip_color)
+        ]
+        if not voters:
+            return {}
+
+        context.terminal.info("Scanning every page for the book's usual black peak...")
+        pages: dict[Path, PagePeakAnalysis] = {}
+        progress = context.terminal.make_progress()
+        task = progress.add_task("Analyzing book peaks...", finished_text="Analyzed book peaks", total=len(voters))
+        with threaded_worker(context.terminal, lowest_or(self.threads, voters)) as (pool, _):
+            for page_path, page in pool.imap_unordered(
+                analyze_book_peak_page_star,
+                (
+                    (page_path, self.upper_limit, self.min_peak_pct, self.min_prominence_pct, self.skip_white)
+                    for page_path in voters
+                ),
+            ):
+                pages[page_path] = page
+                progress.update(task, advance=1)
+        context.terminal.stop_progress(progress, f"Analyzed book peaks for {len(voters)} images.")
+
+        shared_peak, resolved = resolve_book_peaks(pages, self.policy)
+        if shared_peak is None:
+            context.terminal.info(
+                "No majority book peak found; pages without a usable local black peak will be skipped."
+            )
+        else:
+            context.terminal.info(
+                f"Using book-wide black peak {shared_peak} for pages without a usable local black peak."
+            )
+        return resolved
 
     def _run_vapoursynth(
         self,

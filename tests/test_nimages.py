@@ -304,6 +304,9 @@ class TestAutolevelClip:
                     peak_percentage=0.25,
                     peak_prominence=None,
                     skip_white_check=False,
+                    # The plugin's counter reads the page unfiltered, so the median has to be off
+                    # for this comparison to be about the level selection and not the decode.
+                    median_filter=False,
                 )
             assert (black, white) == (expected_black, expected_white)
 

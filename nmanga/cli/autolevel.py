@@ -33,21 +33,23 @@ from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple, Sequence, TypedDict
+from typing import TYPE_CHECKING, Sequence, TypedDict
 
 import rich_click as click
-from PIL import Image, ImageFilter
+from PIL import Image
 from wand.image import Image as WandImage
 
 from .. import file_handler, term
 from ..autolevel import (
-    _find_local_peak_analysis,
-    _LocalPeakAnalysis,
+    LevellingPolicy,
+    PagePeakAnalysis,
+    ResolvedPageLevels,
+    analyze_book_peak_page_star,
     apply_levels,
-    book_peak,
     find_local_peak,
     find_local_peak_legacy,
     gamma_correction,
+    resolve_book_peaks,
 )
 from ..common import lowest_or, threaded_worker
 from ..lazy import get_vapoursynth
@@ -75,18 +77,6 @@ class AutoLevelResult(int, Enum):
     COPIED = 3
 
 
-class _BookPeakPage(NamedTuple):
-    analysis: _LocalPeakAnalysis
-    darkest_gray: int
-
-
-class _ResolvedPageLevels(NamedTuple):
-    black_level: int | None
-    white_level: int
-    force_gray: bool
-    used_book_peak: bool
-
-
 def _is_default_path(path: str) -> bool:
     path = path.lower()
     if path == "magick":
@@ -107,37 +97,6 @@ def make_prefix_convert(magick_exe: str):
     raise ValueError("Invalid magick executable name, must be 'magick' or 'convert'")
 
 
-def _analyze_book_peak_page(
-    img_path: Path,
-    upper_limit: int,
-    peak_min_pct: float | None,
-    peak_prom_pct: float | None,
-    no_white: bool,
-) -> tuple[Path, _BookPeakPage]:
-    with Image.open(img_path) as image:
-        analysis = _find_local_peak_analysis(
-            image,
-            upper_limit=upper_limit,
-            peak_percentage=peak_min_pct,
-            peak_prominence=peak_prom_pct,
-            skip_white_check=no_white,
-        )
-        gray = image.convert("L")
-        median = gray.filter(ImageFilter.MedianFilter(size=3))
-        try:
-            darkest_gray = next((level for level, count in enumerate(median.histogram()) if count), 255)
-        finally:
-            median.close()
-            gray.close()
-    return img_path, _BookPeakPage(analysis, darkest_gray)
-
-
-def _analyze_book_peak_page_star(
-    args: tuple[Path, int, float | None, float | None, bool],
-) -> tuple[Path, _BookPeakPage]:
-    return _analyze_book_peak_page(*args)
-
-
 def _analyze_book_peak_pages(
     img_paths: Sequence[Path],
     upper_limit: int,
@@ -145,69 +104,19 @@ def _analyze_book_peak_pages(
     peak_prom_pct: float | None,
     no_white: bool,
     threads: int,
-) -> dict[Path, _BookPeakPage]:
-    pages: dict[Path, _BookPeakPage] = {}
+) -> dict[Path, PagePeakAnalysis]:
+    pages: dict[Path, PagePeakAnalysis] = {}
     progress = console.make_progress()
     task = progress.add_task("Analyzing book peaks...", finished_text="Analyzed book peaks", total=len(img_paths))
     with threaded_worker(console, lowest_or(threads, img_paths)) as (pool, _):
         for img_path, page in pool.imap_unordered(
-            _analyze_book_peak_page_star,
+            analyze_book_peak_page_star,
             ((path, upper_limit, peak_min_pct, peak_prom_pct, no_white) for path in img_paths),
         ):
             pages[img_path] = page
             progress.update(task, advance=1)
     console.stop_progress(progress, f"Analyzed book peaks for {len(img_paths)} images.")
     return pages
-
-
-def _book_peak_consensus(
-    pages: Sequence[_BookPeakPage],
-    peak_offset: int,
-    levelling_lower_limit: int,
-    levelling_upper_limit: int,
-) -> int | None:
-    own_peaks = [
-        page.analysis.black_level
-        for page in pages
-        if page.analysis.black_peak_found
-        and levelling_lower_limit < page.analysis.black_level + peak_offset < levelling_upper_limit
-    ]
-    return book_peak(own_peaks)
-
-
-def _resolve_book_peak_pages(
-    pages: dict[Path, _BookPeakPage],
-    peak_offset: int,
-    levelling_lower_limit: int,
-    levelling_upper_limit: int,
-) -> tuple[int | None, dict[Path, _ResolvedPageLevels]]:
-    shared_peak = _book_peak_consensus(tuple(pages.values()), peak_offset, levelling_lower_limit, levelling_upper_limit)
-    resolved = {
-        img_path: _resolve_book_peak_page(page, shared_peak, peak_offset, levelling_lower_limit, levelling_upper_limit)
-        for img_path, page in pages.items()
-    }
-    return shared_peak, resolved
-
-
-def _resolve_book_peak_page(
-    page: _BookPeakPage,
-    shared_peak: int | None,
-    peak_offset: int,
-    levelling_lower_limit: int,
-    levelling_upper_limit: int,
-) -> _ResolvedPageLevels:
-    analysis = page.analysis
-    own_level = analysis.black_level + peak_offset
-    if analysis.black_peak_found and levelling_lower_limit < own_level < levelling_upper_limit:
-        return _ResolvedPageLevels(analysis.black_level, analysis.white_level, analysis.force_gray, False)
-
-    if analysis.black_peak_found and own_level <= levelling_lower_limit:
-        return _ResolvedPageLevels(None, analysis.white_level, analysis.force_gray, False)
-
-    if shared_peak is None or page.darkest_gray > levelling_upper_limit:
-        return _ResolvedPageLevels(None, analysis.white_level, analysis.force_gray, False)
-
-    return _ResolvedPageLevels(shared_peak, analysis.white_level, analysis.force_gray, True)
 
 
 @dataclass
@@ -223,7 +132,19 @@ class Autolevel2Config:
     use_magick: bool = False
     levelling_lower_limit: int = 8
     levelling_upper_limit: int = 55
+    book_peak_tolerance: int = 6
     book_peak_fallback: bool = True
+
+    @property
+    def policy(self) -> LevellingPolicy:
+        """How this config decides what a page is levelled by."""
+        return LevellingPolicy(
+            lower_limit=self.levelling_lower_limit,
+            upper_limit=self.levelling_upper_limit,
+            peak_offset=self.peak_offset,
+            book_peak_tolerance=self.book_peak_tolerance,
+            book_peak_fallback=self.book_peak_fallback,
+        )
 
 
 def _autolevel2_wrapper(
@@ -232,7 +153,7 @@ def _autolevel2_wrapper(
     dest_output: Path,
     config: Autolevel2Config,
     is_legacy: bool,
-    resolved_levels: _ResolvedPageLevels | None = None,
+    resolved_levels: ResolvedPageLevels | None = None,
 ) -> AutoLevelResult:
     img = Image.open(img_path)
     if resolved_levels is not None:
@@ -316,7 +237,7 @@ def _autolevel2_wrapper(
 
 
 def _autolevel2_wrapper_star(
-    args: tuple[term.MessageQueue, Path, Path, Autolevel2Config, bool, _ResolvedPageLevels | None],
+    args: tuple[term.MessageQueue, Path, Path, Autolevel2Config, bool, ResolvedPageLevels | None],
 ) -> AutoLevelResult:
     return _autolevel2_wrapper(*args)
 
@@ -333,7 +254,7 @@ def _autolevel2_wrapper_star(
     "--upper-limit",
     "upper_limit",
     type=click.IntRange(1, 255),
-    default=60,
+    default=64,
     show_default=True,
     help="The upper limit for finding local peaks in the histogram",
 )
@@ -371,6 +292,18 @@ def _autolevel2_wrapper_star(
     is_flag=True,
     default=False,
     help="Do not use the book's majority peak for pages without a usable local black peak",
+)
+@click.option(
+    "-bpt",
+    "--book-peak-tolerance",
+    "book_peak_tolerance",
+    type=click.IntRange(0, 127),
+    default=6,
+    show_default=True,
+    help=(
+        "Pages whose own black peak is more than this above the book's usual peak are a dark tone "
+        "rather than their black, so they are levelled by the book's peak"
+    ),
 )
 @click.option(
     "-gr",
@@ -429,6 +362,7 @@ def autolevel2(
     peak_prom_pct: float | None,
     peak_offset: int,
     no_book_peak_fallback: bool,
+    book_peak_tolerance: int,
     force_gray: bool,
     keep_colorspace: bool,
     image_fmt: str,
@@ -480,6 +414,7 @@ def autolevel2(
             no_white=no_white,
             use_magick=use_magick,
             book_peak_fallback=not no_book_peak_fallback and not legacy,
+            book_peak_tolerance=book_peak_tolerance,
         )
 
         real_output = dest_output
@@ -487,7 +422,7 @@ def autolevel2(
             real_output = dest_output / path_real.name
         real_output.mkdir(parents=True, exist_ok=True)
 
-        resolved_by_path: dict[Path, _ResolvedPageLevels] | None = None
+        resolved_by_path: dict[Path, ResolvedPageLevels] | None = None
         if full_config.book_peak_fallback:
             analyzed_pages = _analyze_book_peak_pages(
                 all_files,
@@ -497,12 +432,7 @@ def autolevel2(
                 no_white,
                 threads,
             )
-            shared_peak, resolved_by_path = _resolve_book_peak_pages(
-                analyzed_pages,
-                peak_offset,
-                full_config.levelling_lower_limit,
-                full_config.levelling_upper_limit,
-            )
+            shared_peak, resolved_by_path = resolve_book_peaks(analyzed_pages, full_config.policy)
             if shared_peak is None:
                 console.info("No majority book peak found; pages without a usable local black peak will be skipped.")
             else:
@@ -565,7 +495,19 @@ class Autolevel3Config:
     gpu: bool = False
     levelling_lower_limit: int = 8
     levelling_upper_limit: int = 55
+    book_peak_tolerance: int = 6
     book_peak_fallback: bool = True
+
+    @property
+    def policy(self) -> LevellingPolicy:
+        """How this config decides what a page is levelled by."""
+        return LevellingPolicy(
+            lower_limit=self.levelling_lower_limit,
+            upper_limit=self.levelling_upper_limit,
+            peak_offset=self.peak_offset,
+            book_peak_tolerance=self.book_peak_tolerance,
+            book_peak_fallback=self.book_peak_fallback,
+        )
 
 
 def _page_levels(frame: "VideoFrame") -> tuple[int, int, bool, bool]:
@@ -623,7 +565,7 @@ def _source_page_is_gray(source: "VideoNode", index: int) -> bool:
     "--upper-limit",
     "upper_limit",
     type=click.IntRange(1, 255),
-    default=60,
+    default=64,
     show_default=True,
     help="The upper limit for finding local peaks in the histogram",
 )
@@ -801,7 +743,7 @@ def autolevel3(
             real_output = dest_output / path_real.name
         real_output.mkdir(parents=True, exist_ok=True)
 
-        resolved_by_path: dict[Path, _ResolvedPageLevels] | None = None
+        resolved_by_path: dict[Path, ResolvedPageLevels] | None = None
         book_peak_overrides: dict[int, int] = {}
         if full_config.book_peak_fallback:
             analyzed_pages = _analyze_book_peak_pages(
@@ -812,12 +754,7 @@ def autolevel3(
                 no_white,
                 threads,
             )
-            shared_peak, resolved_by_path = _resolve_book_peak_pages(
-                analyzed_pages,
-                peak_offset,
-                full_config.levelling_lower_limit,
-                full_config.levelling_upper_limit,
-            )
+            shared_peak, resolved_by_path = resolve_book_peaks(analyzed_pages, full_config.policy)
             if shared_peak is None:
                 console.info("No majority book peak found; pages without a usable local black peak will be skipped.")
             else:
@@ -1064,7 +1001,7 @@ def _analyze_level_wrapper_star(args: tuple[Path, Autolevel2Config, bool]) -> Au
     "--upper-limit",
     "upper_limit",
     type=click.IntRange(1, 255),
-    default=60,
+    default=64,
     show_default=True,
     help="The upper limit for finding local peaks in the histogram",
 )
