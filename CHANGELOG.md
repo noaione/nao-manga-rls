@@ -8,6 +8,7 @@
 - Orchestrator `color_detect` and `move_color` actions - `mode: vapoursynth` classifies the whole volume with the `mangacolor` plugin in one pass instead of a per-page ONNX/Pillow call, and `move_color` reuses the pages an earlier `color_detect` already found
 
 **Changes**
+- Autolevel peak detection runs faster and uses less memory by counting grayscale shades directly in Pillow, with the same level selection
 - `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
 - `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend with complementary linear ramps
 - Overlapping ONNX runs replicate the page edge instead of padding it with `--background`, so the outer tiles no longer pick up a black/white border (the flag still applies to non-overlapping runs)

@@ -22,10 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+# Automatic level detection and grayscale posterization.
+
 from __future__ import annotations
 
 import math
 import subprocess as sp
+from contextlib import nullcontext
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
@@ -91,6 +94,25 @@ class PosterizePointMethod(str, Enum):
             raise ValueError(f"Unknown PosterizePointMethod: {self}")
 
 
+def _find_histogram_peak(hist: list[int], min_pix_count: int, min_prominence: int) -> int | None:
+    np = get_numpy()
+    scisignal = get_scipy_signal()
+
+    # Zero padding makes the first and last shades eligible peaks.
+    padded = np.zeros(len(hist) + 2, dtype=np.float64)
+    padded[1:-1] = hist
+    peaks, properties = scisignal.find_peaks(
+        padded, height=min_pix_count, prominence=min_prominence if min_prominence > 0 else None
+    )
+    if peaks.size == 0:
+        peaks, properties = scisignal.find_peaks(padded, height=0)
+    if peaks.size == 0:
+        return None
+
+    # argmax keeps the lower shade when peak heights tie.
+    return int(peaks[properties["peak_heights"].argmax()]) - 1
+
+
 def find_local_peak(
     img_path: Path | BytesIO | Image.Image,
     *,
@@ -100,125 +122,44 @@ def find_local_peak(
     skip_white_check: bool = False,
 ) -> tuple[int, int, bool]:
     """
-    Automatically determine the optimal black level for an image by finding local peaks in its histogram.
+    Determine black and white levels from the tallest local peaks in the grayscale histogram.
+
+    If no peak passes the percentage and prominence thresholds, use the tallest peak anyway.
+    An empty region defaults to black 0 or white 255. The final flag indicates whether the
+    input needed grayscale conversion, not whether the thresholds passed.
 
     Courtesy of anon.
+
+    :return: Black level, white level, and whether the input needed grayscale conversion.
     """
 
-    np = get_numpy()
-    scisignal = get_scipy_signal()
+    image_context = nullcontext(img_path) if isinstance(img_path, Image.Image) else Image.open(img_path)
+    with image_context as image:
+        force_gray = image.mode != "L"
+        if force_gray:
+            gray_image = image.convert("L")
+            try:
+                hist = gray_image.histogram()
+            finally:
+                gray_image.close()
+        else:
+            hist = image.histogram()
+        total_pixels = image.width * image.height
 
-    image = img_path if isinstance(img_path, Image.Image) else Image.open(img_path)
-    force_gray = image.mode != "L"
-
-    if image.mode == "P":
-        palette = image.getpalette()
-        if (palette is not None) and is_grayscale_palette(palette):
-            force_gray = True
-
-    if force_gray:
-        image = image.convert("L")  # force grayscale
-
-    if peak_percentage is not None and (peak_percentage <= 0 and peak_percentage >= 100):
-        peak_percentage = 0.25  # default value
-    if peak_prominence is not None and (peak_prominence <= 0 and peak_prominence >= 100):
-        peak_prominence = 0.1  # default value
-
-    img_width, img_height = image.size
-
-    img_array = np.array(image)
-    hist, bin_edges = np.histogram(img_array, bins=256, range=(0, 256))
-
-    # Region of interest: only consider peaks in the lower range for black level
-    roi_min = 0
-    roi_max = upper_limit
-    roi_mask = (bin_edges[:-1] >= roi_min) & (bin_edges[:-1] <= roi_max)
-    hist_roi = hist[roi_mask]
-
-    if len(hist_roi) == 0:
-        # Nothing to analyze, return defaults
+    if upper_limit < 0:
         return 0, 255, force_gray
-
-    bins_roi = bin_edges[:-1][roi_mask].astype(int)
-    total_pixels = img_width * img_height
 
     min_pix_count = math.ceil(total_pixels * (peak_percentage / 100.0)) if peak_percentage is not None else 0
     min_prominence = math.ceil(total_pixels * (peak_prominence / 100.0)) if peak_prominence is not None else 0
 
-    # Pad so edge bins can be detected as peaks
-    hist_padded = np.pad(hist_roi, (1, 1), mode="constant", constant_values=0)
-    # Primary peak detection with thresholds
-    find_peaks_kwargs: dict = {"height": min_pix_count}
-    if min_prominence is not None:
-        find_peaks_kwargs["prominence"] = min_prominence
-
-    peaks_padded, properties = scisignal.find_peaks(hist_padded, **find_peaks_kwargs)
-
-    # Map back from padded indices to ROI indices and filter out padding ghosts
-    peaks = peaks_padded - 1
-    valid = (peaks >= 0) & (peaks < len(hist_roi))
-    peaks = peaks[valid]
-    heights = np.array(properties["peak_heights"])[valid]
-
-    black_peak_level = 0
-    if len(peaks) > 0:
-        # Select the tallest peak, not the first
-        best = np.argmax(heights)
-        black_peak_level = int(bins_roi[peaks[best]])
-    else:
-        # Fallback: find any peak in the ROI regardless of thresholds
-        peaks_padded_fb, properties_fb = scisignal.find_peaks(hist_padded, height=0)
-        peaks_fb = peaks_padded_fb - 1
-        valid_fb = (peaks_fb >= 0) & (peaks_fb < len(hist_roi))
-        peaks_fb = peaks_fb[valid_fb]
-        heights_fb = np.array(properties_fb["peak_heights"])[valid_fb]
-
-        if len(peaks_fb) > 0:
-            best_fb = np.argmax(heights_fb)
-            black_peak_level = int(bins_roi[peaks_fb[best_fb]])
-
-    # Do the reverse, white level detection
-    # Check what's the most common shade in the white region (e.g. 195-255)
-    # If it has a significant amount of pixels, we can consider that as the white level
-    white_peak_level = 255
+    black_peak = _find_histogram_peak(hist[: min(256, upper_limit + 1)], min_pix_count, min_prominence)
+    black_peak_level = 0 if black_peak is None else black_peak
     if skip_white_check:
-        return black_peak_level, white_peak_level, force_gray
+        return black_peak_level, 255, force_gray
 
-    # Region of interest for white level detection
-    w_roi_min = 255 - upper_limit
-    w_roi_max = 255
-    w_roi_mask = (bin_edges[:-1] >= w_roi_min) & (bin_edges[:-1] <= w_roi_max)
-    hist_w_roi = hist[w_roi_mask]
-
-    if len(hist_w_roi) == 0:
-        return black_peak_level, white_peak_level, force_gray
-
-    bins_w_roi = bin_edges[:-1][w_roi_mask].astype(int)
-
-    hist_w_paddded = np.pad(hist_w_roi, (1, 1), mode="constant", constant_values=0)
-
-    w_peaks_padded, w_properties = scisignal.find_peaks(hist_w_paddded, **find_peaks_kwargs)
-
-    w_peaks = w_peaks_padded - 1
-    w_valid = (w_peaks >= 0) & (w_peaks < len(hist_w_roi))
-    w_peaks = w_peaks[w_valid]
-    w_heights = np.array(w_properties["peak_heights"])[w_valid]
-
-    if len(w_peaks) > 0:
-        best_w = np.argmax(w_heights)
-        white_peak_level = int(bins_w_roi[w_peaks[best_w]])
-    else:
-        # Fallback
-        w_peaks_padded_fb, w_properties_fb = scisignal.find_peaks(hist_w_paddded, height=0)
-        w_peaks_fb = w_peaks_padded_fb - 1
-        w_valid_fb = (w_peaks_fb >= 0) & (w_peaks_fb < len(hist_w_roi))
-        w_peaks_fb = w_peaks_fb[w_valid_fb]
-        w_heights_fb = np.array(w_properties_fb["peak_heights"])[w_valid_fb]
-
-        if len(w_peaks_fb) > 0:
-            best_w_fb = np.argmax(w_heights_fb)
-            white_peak_level = int(bins_w_roi[w_peaks_fb[best_w_fb]])
-
+    white_start = max(0, 255 - upper_limit)
+    white_peak = _find_histogram_peak(hist[white_start:], min_pix_count, min_prominence)
+    white_peak_level = 255 if white_peak is None else white_start + white_peak
     return black_peak_level, white_peak_level, force_gray
 
 
