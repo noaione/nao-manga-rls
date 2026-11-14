@@ -503,6 +503,7 @@ def vs_autolevel_clip(
     prefetch: int = 0,
     debug: bool = False,
     core: "Core | None" = None,
+    black_level_overrides: Mapping[int, int] | None = None,
 ) -> AutolevelChain:
     """
     Read `files` and build the `PeakStats` to `Levels` chain over their analysis form.
@@ -529,6 +530,9 @@ def vs_autolevel_clip(
 
     `prefetch` is how many pages `imgseqs` decodes ahead of the frame being asked for, and
     `debug` turns on the plugin's log lines.
+
+    `black_level_overrides` replaces selected `PeakStats` black-level properties before
+    `Levels` reads them. The CLI uses this for pages that inherit the book's shared peak.
     """
     vs = get_vapoursynth()
     if core is None:
@@ -556,6 +560,17 @@ def vs_autolevel_clip(
     analysis = vs_to_gray8(source, core=core) if gray else source
 
     stats = core.nimages.PeakStats(analysis, **stats_args)
+    if black_level_overrides:
+        def override_book_peak(*, n: int, f: "list[VideoFrame]") -> "VideoFrame":
+            frame = f[0]
+            if n not in black_level_overrides:
+                return frame
+            output = frame.copy()
+            output.props["NImagesBlackLevel"] = black_level_overrides[n]
+            output.props["NImagesBlackPeakFound"] = 1
+            return output
+
+        stats = core.std.ModifyFrame(stats, clips=[stats], selector=override_book_peak)
     leveled = core.nimages.Levels(
         stats,
         use_props=True,

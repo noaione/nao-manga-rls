@@ -39,7 +39,7 @@ from rich.box import MINIMAL_HEAVY_HEAD
 from ._metadata import __author__, __name__, __version__
 from .cli.archive import pack_releases, pack_releases_comment_archive, pack_releases_epub_mode
 from .cli.auto_split import auto_split
-from .cli.autolevel import analyze_level, autolevel, autolevel2, autolevel3, force_gray
+from .cli.autolevel import analyze_level, autolevel2, autolevel3, force_gray
 from .cli.base import NMangaCommandHandler
 from .cli.calc import calc_group
 from .cli.config import cli_config
@@ -173,7 +173,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="Auto Processing",
     help="Commands for automatically analyzing and processing images",
-    commands=["orchestra", "autolevel", "autolevel2", "autolevel3", "autoposterize"],
+    commands=["orchestra", "autolevel2", "autolevel3", "autoposterize"],
 )
 @click.command_panel(
     name="ML Processing",
@@ -317,7 +317,6 @@ main.add_command(image_jpegify)
 main.add_command(image_jxlify)
 main.add_command(image_mixmatch)
 main.add_command(timewizard_modify)
-main.add_command(autolevel)
 main.add_command(autolevel2)
 main.add_command(autolevel3)
 main.add_command(force_gray)

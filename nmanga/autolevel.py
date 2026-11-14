@@ -28,11 +28,12 @@ from __future__ import annotations
 
 import math
 import subprocess as sp
+from collections import Counter
 from contextlib import nullcontext
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 from PIL import Image
 
@@ -46,6 +47,7 @@ __all__ = (
     "PosterizePointMethod",
     "analyze_gray_shades",
     "apply_levels",
+    "book_peak",
     "create_magick_params",
     "detect_nearest_bpc",
     "find_local_peak",
@@ -95,6 +97,13 @@ class PosterizePointMethod(str, Enum):
 
 
 def _find_histogram_peak(hist: list[int], min_pix_count: int, min_prominence: int) -> int | None:
+    peak, _ = _find_histogram_peak_with_status(hist, min_pix_count, min_prominence)
+    return peak
+
+
+def _find_histogram_peak_with_status(
+    hist: list[int], min_pix_count: int, min_prominence: int
+) -> tuple[int | None, bool]:
     np = get_numpy()
     scisignal = get_scipy_signal()
 
@@ -104,13 +113,75 @@ def _find_histogram_peak(hist: list[int], min_pix_count: int, min_prominence: in
     peaks, properties = scisignal.find_peaks(
         padded, height=min_pix_count, prominence=min_prominence if min_prominence > 0 else None
     )
+    passed = bool(peaks.size)
     if peaks.size == 0:
         peaks, properties = scisignal.find_peaks(padded, height=0)
     if peaks.size == 0:
-        return None
+        return None, False
 
     # argmax keeps the lower shade when peak heights tie.
-    return int(peaks[properties["peak_heights"].argmax()]) - 1
+    return int(peaks[properties["peak_heights"].argmax()]) - 1, passed
+
+
+def book_peak(peaks: list[int]) -> int | None:
+    """Return the peak shared by a strict majority of pages, or ``None`` when they disagree."""
+    if not peaks:
+        return None
+
+    peak, count = Counter(peaks).most_common(1)[0]
+    if count * 2 <= len(peaks):
+        return None
+    return peak
+
+
+class _LocalPeakAnalysis(NamedTuple):
+    black_level: int
+    white_level: int
+    force_gray: bool
+    black_peak_found: bool
+    white_peak_found: bool
+
+
+def _find_local_peak_analysis(
+    img_path: Path | BytesIO | Image.Image,
+    *,
+    upper_limit: int = 60,
+    peak_percentage: float | None = 0.25,
+    peak_prominence: float | None = None,
+    skip_white_check: bool = False,
+) -> _LocalPeakAnalysis:
+    image_context = nullcontext(img_path) if isinstance(img_path, Image.Image) else Image.open(img_path)
+    with image_context as image:
+        force_gray = image.mode != "L"
+        if force_gray:
+            gray_image = image.convert("L")
+            try:
+                hist = gray_image.histogram()
+            finally:
+                gray_image.close()
+        else:
+            hist = image.histogram()
+        total_pixels = image.width * image.height
+
+    if upper_limit < 0:
+        return _LocalPeakAnalysis(0, 255, force_gray, False, False)
+
+    min_pix_count = math.ceil(total_pixels * (peak_percentage / 100.0)) if peak_percentage is not None else 0
+    min_prominence = math.ceil(total_pixels * (peak_prominence / 100.0)) if peak_prominence is not None else 0
+
+    black_peak, black_peak_found = _find_histogram_peak_with_status(
+        hist[: min(256, upper_limit + 1)], min_pix_count, min_prominence
+    )
+    black_peak_level = 0 if black_peak is None else black_peak
+    if skip_white_check:
+        return _LocalPeakAnalysis(black_peak_level, 255, force_gray, black_peak_found, False)
+
+    white_start = max(0, 255 - upper_limit)
+    white_peak, white_peak_found = _find_histogram_peak_with_status(
+        hist[white_start:], min_pix_count, min_prominence
+    )
+    white_peak_level = 255 if white_peak is None else white_start + white_peak
+    return _LocalPeakAnalysis(black_peak_level, white_peak_level, force_gray, black_peak_found, white_peak_found)
 
 
 def find_local_peak(
@@ -133,34 +204,14 @@ def find_local_peak(
     :return: Black level, white level, and whether the input needed grayscale conversion.
     """
 
-    image_context = nullcontext(img_path) if isinstance(img_path, Image.Image) else Image.open(img_path)
-    with image_context as image:
-        force_gray = image.mode != "L"
-        if force_gray:
-            gray_image = image.convert("L")
-            try:
-                hist = gray_image.histogram()
-            finally:
-                gray_image.close()
-        else:
-            hist = image.histogram()
-        total_pixels = image.width * image.height
-
-    if upper_limit < 0:
-        return 0, 255, force_gray
-
-    min_pix_count = math.ceil(total_pixels * (peak_percentage / 100.0)) if peak_percentage is not None else 0
-    min_prominence = math.ceil(total_pixels * (peak_prominence / 100.0)) if peak_prominence is not None else 0
-
-    black_peak = _find_histogram_peak(hist[: min(256, upper_limit + 1)], min_pix_count, min_prominence)
-    black_peak_level = 0 if black_peak is None else black_peak
-    if skip_white_check:
-        return black_peak_level, 255, force_gray
-
-    white_start = max(0, 255 - upper_limit)
-    white_peak = _find_histogram_peak(hist[white_start:], min_pix_count, min_prominence)
-    white_peak_level = 255 if white_peak is None else white_start + white_peak
-    return black_peak_level, white_peak_level, force_gray
+    analysis = _find_local_peak_analysis(
+        img_path,
+        upper_limit=upper_limit,
+        peak_percentage=peak_percentage,
+        peak_prominence=peak_prominence,
+        skip_white_check=skip_white_check,
+    )
+    return analysis.black_level, analysis.white_level, analysis.force_gray
 
 
 def find_local_peak_legacy(

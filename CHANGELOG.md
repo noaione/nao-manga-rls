@@ -3,11 +3,13 @@
 ## Unreleased
 
 **New Features**
+- `nmanga autolevel2` and `autolevel3` - Use a shared black peak for pages without a usable local peak when a strict majority of leveled pages agree; `--no-book-peak-fallback` disables this
 - `nmanga ort infer` - `--tta` averages every batch over its 8 flips/rotations (test-time augmentation, about 8x slower). The orchestrator `denoise`/`upscale` actions expose it as `tta`
 - `nmanga ort to-fp16` - Convert an ONNX model to fp16, this will also run inference to validate the conversion.
 - Orchestrator `color_detect` and `move_color` actions - `mode: vapoursynth` classifies the whole volume with the `mangacolor` plugin in one pass instead of a per-page ONNX/Pillow call, and `move_color` reuses the pages an earlier `color_detect` already found
 
 **Changes**
+- **Breaking:** Removed the old `nmanga autolevel` command; use `autolevel2` or `autolevel3`
 - Autolevel peak detection runs faster and uses less memory by counting grayscale shades directly in Pillow, with the same level selection
 - `torch` backend now cache the compiled model under `$DATA_DIR/torch_inductor` (`$DATA_DIR` is the same as `ort` backend)
 - `ort infer` and the orchestrator `denoise`/`upscale` actions tile with the waifu2x overlap-add: `tile_overlap` is now the real output overlap (stride `tile_size - tile_overlap`), so the same value runs fewer, cheaper tiles and seams blend with complementary linear ramps

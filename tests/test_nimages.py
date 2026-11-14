@@ -1258,15 +1258,15 @@ class TestBitsOption:
 
 
 class TestPluginRegistration:
-    """The two new commands have to be reachable, and the old ones untouched."""
+    """The new commands have to be reachable, and removed commands stay unavailable."""
 
     def test_commands_are_registered(self):
         from nmanga.cmd import main
 
         names = set(main.commands)
         assert {"autolevel3", "posterize2"} <= names
-        # Nothing existing may disappear.
-        assert {"autolevel", "autolevel2", "posterize", "autoposterize", "analyze-shades"} <= names
+        assert {"autolevel2", "posterize", "autoposterize", "analyze-shades"} <= names
+        assert "autolevel" not in names
 
     def test_autolevel3_rejects_the_flags_it_cannot_honour(self):
         from click.testing import CliRunner

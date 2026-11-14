@@ -22,8 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Automatically adjust the levels of images in a directory using ImageMagick
-# Recommended only for images that is grayscaled
+# Automatically adjust image levels with Pillow or VapourSynth.
 
 from __future__ import annotations
 
@@ -34,16 +33,18 @@ from dataclasses import dataclass
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NamedTuple, Sequence, TypedDict
 
 import rich_click as click
-from PIL import Image
+from PIL import Image, ImageFilter
 from wand.image import Image as WandImage
 
 from .. import file_handler, term
 from ..autolevel import (
+    _find_local_peak_analysis,
+    _LocalPeakAnalysis,
     apply_levels,
-    create_magick_params,
+    book_peak,
     find_local_peak,
     find_local_peak_legacy,
     gamma_correction,
@@ -74,6 +75,18 @@ class AutoLevelResult(int, Enum):
     COPIED = 3
 
 
+class _BookPeakPage(NamedTuple):
+    analysis: _LocalPeakAnalysis
+    darkest_gray: int
+
+
+class _ResolvedPageLevels(NamedTuple):
+    black_level: int | None
+    white_level: int
+    force_gray: bool
+    used_book_peak: bool
+
+
 def _is_default_path(path: str) -> bool:
     path = path.lower()
     if path == "magick":
@@ -94,261 +107,107 @@ def make_prefix_convert(magick_exe: str):
     raise ValueError("Invalid magick executable name, must be 'magick' or 'convert'")
 
 
-def _autolevel_exec(term_q: term.MessageOrInterface, command: list[str]) -> None:
-    output = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    # check exit code
-    if output.returncode != 0:
-        cnsl = term.with_thread_queue(term_q)
-        cnsl.error(f"Command {' '.join(command)} failed with exit code {output.returncode}")
-
-
-def _autolevel_exec_star(args: tuple[term.MessageQueue, list[str]]) -> None:
-    return _autolevel_exec(*args)
-
-
-def determine_image_format(img_path: Path, prefer: str) -> str:
-    if prefer != "auto":
-        return f".{prefer}"
-
-    ext = img_path.suffix.lower()
-    if not ext.startswith("."):
-        return f".{ext}"
-    return ext
-
-
-def _find_local_peak_magick_wrapper(
+def _analyze_book_peak_page(
     img_path: Path,
     upper_limit: int,
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
-    skip_white: bool,
-    is_legacy: bool,
-) -> tuple[int, int, Path, bool]:
-    if not is_legacy:
-        black_level, white_level, force_gray = find_local_peak(
-            img_path,
+    no_white: bool,
+) -> tuple[Path, _BookPeakPage]:
+    with Image.open(img_path) as image:
+        analysis = _find_local_peak_analysis(
+            image,
             upper_limit=upper_limit,
             peak_percentage=peak_min_pct,
             peak_prominence=peak_prom_pct,
-            skip_white_check=skip_white,
+            skip_white_check=no_white,
         )
-    else:
-        black_level, white_level, force_gray = find_local_peak_legacy(
-            img_path, upper_limit=upper_limit, skip_white_peaks=skip_white
-        )
-    return black_level, white_level, img_path, force_gray
+        gray = image.convert("L")
+        median = gray.filter(ImageFilter.MedianFilter(size=3))
+        try:
+            darkest_gray = next((level for level, count in enumerate(median.histogram()) if count), 255)
+        finally:
+            median.close()
+            gray.close()
+    return img_path, _BookPeakPage(analysis, darkest_gray)
 
 
-def _find_local_peak_magick_wrapper_star(
-    args: tuple[Path, int, float | None, float | None, bool, bool],
-) -> tuple[int, int, Path, bool]:
-    return _find_local_peak_magick_wrapper(*args)
+def _analyze_book_peak_page_star(
+    args: tuple[Path, int, float | None, float | None, bool],
+) -> tuple[Path, _BookPeakPage]:
+    return _analyze_book_peak_page(*args)
 
 
-@click.command(
-    name="autolevel",
-    help="Automatically adjust the levels of images in a directory using ImageMagick",
-    cls=NMangaCommandHandler,
-)
-@options.path_or_archive(disable_archive=True)
-@options.dest_output()
-@click.option(
-    "-ul",
-    "--upper-limit",
-    "upper_limit",
-    type=click.IntRange(1, 255),
-    default=60,
-    show_default=True,
-    help="The upper limit for finding local peaks in the histogram",
-)
-@click.option(
-    "-pmp",
-    "--peak-min-pct",
-    "peak_min_pct",
-    type=click.FloatRange(0.0, 100.0),
-    default=0.25,
-    show_default=True,
-    help="The minimum percentage of pixels for a peak to be considered valid",
-)
-@click.option(
-    "-ppm",
-    "--peak-prominence-pct",
-    "peak_prom_pct",
-    type=click.FloatRange(0.0, 100.0),
-    default=None,
-    show_default=True,
-    help="Minimum prominence relative to nearby shades to be considered a peak.",
-)
-@click.option(
-    "-po",
-    "--peak-offset",
-    "peak_offset",
-    type=click.IntRange(-100, 100),
-    default=0,
-    show_default=True,
-    help="The offset to add to the detected black level percentage",
-)
-@click.option(
-    "-f",
-    "--format",
-    "image_fmt",
-    default="auto",
-    show_default=True,
-    type=click.Choice(["auto", "png", "jpg"]),
-    help="The format of the output image, auto will detect the format from the input images",
-)
-@click.option(
-    "--no-white",
-    "no_white",
-    is_flag=True,
-    default=False,
-    help="Do not adjust white level, only adjust black level",
-)
-@click.option(
-    "--legacy",
-    is_flag=True,
-    default=False,
-    help="Use legacy autolevel analysis",
-)
-@options.threads
-@options.magick_path
-@time_program
-def autolevel(
-    path_or_archive: Path,
-    dest_output: Path,
+def _analyze_book_peak_pages(
+    img_paths: Sequence[Path],
     upper_limit: int,
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
-    peak_offset: int,
-    image_fmt: str,
     no_white: bool,
-    legacy: bool,
     threads: int,
-    magick_path: str,
-):  # pragma: no cover
-    """
-    Automatically adjust the levels of all images in a directory based on local peaks in their histograms.
-    """
-
-    force_search = not _is_default_path(magick_path)
-    magick_exe = test_or_find_magick(magick_path, force_search)
-    if magick_exe is None:
-        console.error("Could not find the magick executable")
-        return 1
-    console.info("Using magick executable: {}".format(magick_exe))
-
-    if not path_or_archive.is_dir():
-        raise click.BadParameter(
-            f"{path_or_archive} is not a directory. Please provide a directory.",
-            param_hint="path_or_archive",
-        )
-
-    all_files = [file for file, _, _, _ in file_handler.collect_image_from_folder(path_or_archive)]
-    console.info(f"Found {len(all_files)} files in the directory.")
-
-    is_continue = console.confirm("Proceed with autoleveling calculation")
-    if not is_continue:
-        console.info("Aborting autolevel.")
-        return 0
-
+) -> dict[Path, _BookPeakPage]:
+    pages: dict[Path, _BookPeakPage] = {}
     progress = console.make_progress()
-    task_calculate = progress.add_task("Analzying images...", finished_text="Analzyed images", total=len(all_files))
-
-    results: list[tuple[int, int, Path, bool]] = []
-    console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, all_files)) as (pool, _):
-        for result in pool.imap_unordered(
-            _find_local_peak_magick_wrapper_star,
-            ((file, upper_limit, peak_min_pct, peak_prom_pct, no_white, legacy) for file in all_files),
+    task = progress.add_task("Analyzing book peaks...", finished_text="Analyzed book peaks", total=len(img_paths))
+    with threaded_worker(console, lowest_or(threads, img_paths)) as (pool, _):
+        for img_path, page in pool.imap_unordered(
+            _analyze_book_peak_page_star,
+            ((path, upper_limit, peak_min_pct, peak_prom_pct, no_white) for path in img_paths),
         ):
-            results.append(result)
-            progress.update(task_calculate, advance=1)
-    progress.update(task_calculate, completed=len(all_files))
+            pages[img_path] = page
+            progress.update(task, advance=1)
+    console.stop_progress(progress, f"Analyzed book peaks for {len(img_paths)} images.")
+    return pages
 
-    commands: list[list[str]] = []
-    to_be_copied: list[Path] = []
-    magick_cmd: list[str] = make_prefix_convert(magick_exe)
 
-    console.info(f"Saving processed images to: {dest_output}")
-    dest_output.mkdir(parents=True, exist_ok=True)
+def _book_peak_consensus(
+    pages: Sequence[_BookPeakPage],
+    peak_offset: int,
+    levelling_lower_limit: int,
+    levelling_upper_limit: int,
+) -> int | None:
+    own_peaks = [
+        page.analysis.black_level
+        for page in pages
+        if page.analysis.black_peak_found
+        and levelling_lower_limit < page.analysis.black_level + peak_offset < levelling_upper_limit
+    ]
+    return book_peak(own_peaks)
 
-    dumped_data_temp = []
-    for black_level, white_level, img_path, force_gray in results:
-        dumped_data_temp.append({
-            "image": str(img_path),
-            "black_level": black_level,
-            "white_level": white_level,
-            "force_gray": force_gray,
-        })
 
-    # Dump the results for debugging
-    dumped_data = json.dumps(dumped_data_temp, indent=4)
-    current_cwd = Path.cwd()
-    dump_path = current_cwd / "autolevel_debug.json"
-    dump_path.write_text(dumped_data, encoding="utf-8")
-    console.info(f"Dumped autolevel debug data to: {dump_path}")
+def _resolve_book_peak_pages(
+    pages: dict[Path, _BookPeakPage],
+    peak_offset: int,
+    levelling_lower_limit: int,
+    levelling_upper_limit: int,
+) -> tuple[int | None, dict[Path, _ResolvedPageLevels]]:
+    shared_peak = _book_peak_consensus(tuple(pages.values()), peak_offset, levelling_lower_limit, levelling_upper_limit)
+    resolved = {
+        img_path: _resolve_book_peak_page(page, shared_peak, peak_offset, levelling_lower_limit, levelling_upper_limit)
+        for img_path, page in pages.items()
+    }
+    return shared_peak, resolved
 
-    # Pre-compute all the image magick commands
-    task_cmd = progress.add_task(
-        "Preparing autolevel commands...", finished_text="Prepared autolevel commands", total=len(results)
-    )
-    total_results = len(results)
-    for black_level, white_level, img_path, force_gray in results:
-        if black_level == 0:
-            # Skip images that don't need autolevel
-            to_be_copied.append(img_path)
-            continue
-        if black_level > upper_limit:
-            # Skip images that are too bright
-            to_be_copied.append(img_path)
-            continue
 
-        params = create_magick_params(black_level, white_level, peak_offset)
-        image_name = img_path.stem + determine_image_format(img_path, image_fmt)
-        dest_path = dest_output / image_name
+def _resolve_book_peak_page(
+    page: _BookPeakPage,
+    shared_peak: int | None,
+    peak_offset: int,
+    levelling_lower_limit: int,
+    levelling_upper_limit: int,
+) -> _ResolvedPageLevels:
+    analysis = page.analysis
+    own_level = analysis.black_level + peak_offset
+    if analysis.black_peak_found and levelling_lower_limit < own_level < levelling_upper_limit:
+        return _ResolvedPageLevels(analysis.black_level, analysis.white_level, analysis.force_gray, False)
 
-        cmd = [
-            *magick_cmd,
-            str(img_path),
-            "-alpha",
-            "off",
-        ]
-        if force_gray:
-            cmd.extend(["-colorspace", "Gray"])
-        cmd.extend(["-level", params, str(dest_path)])
-        commands.append(cmd)
-        progress.update(task_cmd, advance=1)
+    if analysis.black_peak_found and own_level <= levelling_lower_limit:
+        return _ResolvedPageLevels(None, analysis.white_level, analysis.force_gray, False)
 
-    progress.update(task_cmd, completed=total_results)
+    if shared_peak is None or page.darkest_gray > levelling_upper_limit:
+        return _ResolvedPageLevels(None, analysis.white_level, analysis.force_gray, False)
 
-    console.info(f"Images to be autoleveled: {len(commands)}")
-    console.info(f"Images to be copied without autolevel: {len(to_be_copied)}")
-    console.info(f"Using {threads} CPU threads for processing.")
-    is_continue = console.confirm("Proceed with autoleveling?")
-    if not is_continue:
-        console.info("Aborting autolevel.")
-        return 0
-
-    task_copy = progress.add_task("Copying images...", finished_text="Copied images", total=len(to_be_copied))
-    # Do copying first
-    for img_path in to_be_copied:
-        dest_path = dest_output / img_path.name
-        if dest_path.exists():
-            console.warning(f"Skipping existing file: {dest_path}")
-            progress.update(task_copy, advance=1)
-            continue
-        shutil.copy2(img_path, dest_path)
-        progress.update(task_copy, advance=1)
-
-    progress.update(task_copy, completed=len(to_be_copied))
-
-    task_proc = progress.add_task("Auto-leveling images...", finished_text="Auto-leveled images", total=len(commands))
-    console.info(f"Using {threads} CPU threads for processing.")
-    with threaded_worker(console, lowest_or(threads, commands)) as (pool, log_q):
-        for _ in pool.imap_unordered(_autolevel_exec_star, [(log_q, cmd) for cmd in commands]):
-            progress.update(task_proc, advance=1)
-
-    console.stop_progress(progress, f"Auto-leveled {len(commands)} images.")
+    return _ResolvedPageLevels(shared_peak, analysis.white_level, analysis.force_gray, True)
 
 
 @dataclass
@@ -362,13 +221,25 @@ class Autolevel2Config:
     image_fmt: str
     no_white: bool
     use_magick: bool = False
+    levelling_lower_limit: int = 8
+    levelling_upper_limit: int = 55
+    book_peak_fallback: bool = True
 
 
 def _autolevel2_wrapper(
-    log_q: term.MessageOrInterface, img_path: Path, dest_output: Path, config: Autolevel2Config, is_legacy: bool
+    log_q: term.MessageOrInterface,
+    img_path: Path,
+    dest_output: Path,
+    config: Autolevel2Config,
+    is_legacy: bool,
+    resolved_levels: _ResolvedPageLevels | None = None,
 ) -> AutoLevelResult:
     img = Image.open(img_path)
-    if not is_legacy:
+    if resolved_levels is not None:
+        black_level = resolved_levels.black_level or 0
+        white_level = resolved_levels.white_level
+        skip_levels = resolved_levels.black_level is None
+    elif not is_legacy:
         black_level, white_level, _ = find_local_peak(
             img,
             upper_limit=config.upper_limit,
@@ -376,10 +247,12 @@ def _autolevel2_wrapper(
             peak_prominence=config.peak_prom_pct,
             skip_white_check=config.no_white,
         )
+        skip_levels = False
     else:
         black_level, white_level, _ = find_local_peak_legacy(
             img, upper_limit=config.upper_limit, skip_white_peaks=config.no_white
         )
+        skip_levels = False
 
     cnsl = term.with_thread_queue(log_q)
 
@@ -387,7 +260,8 @@ def _autolevel2_wrapper(
     is_white_bad = white_level >= 255 if not config.no_white else False
 
     if (
-        (is_black_bad and is_white_bad and not config.no_white)  # both levels are bad
+        skip_levels
+        or (is_black_bad and is_white_bad and not config.no_white)  # both levels are bad
         or (is_black_bad and config.no_white)
         or black_level > config.upper_limit
     ):
@@ -441,7 +315,9 @@ def _autolevel2_wrapper(
     return AutoLevelResult.PROCESSED
 
 
-def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autolevel2Config, bool]) -> AutoLevelResult:
+def _autolevel2_wrapper_star(
+    args: tuple[term.MessageQueue, Path, Path, Autolevel2Config, bool, _ResolvedPageLevels | None],
+) -> AutoLevelResult:
     return _autolevel2_wrapper(*args)
 
 
@@ -487,6 +363,14 @@ def _autolevel2_wrapper_star(args: tuple[term.MessageQueue, Path, Path, Autoleve
     default=0,
     show_default=True,
     help="The offset to add to the detected black level percentage",
+)
+@click.option(
+    "-nbp",
+    "--no-book-peak-fallback",
+    "no_book_peak_fallback",
+    is_flag=True,
+    default=False,
+    help="Do not use the book's majority peak for pages without a usable local black peak",
 )
 @click.option(
     "-gr",
@@ -544,6 +428,7 @@ def autolevel2(
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
     peak_offset: int,
+    no_book_peak_fallback: bool,
     force_gray: bool,
     keep_colorspace: bool,
     image_fmt: str,
@@ -582,6 +467,8 @@ def autolevel2(
             continue
 
         console.info(f"Found {total_files} files in the directory.")
+        if legacy and not no_book_peak_fallback:
+            console.warning("Book-peak fallback needs the current peak analysis and is disabled with --legacy.")
         full_config = Autolevel2Config(
             upper_limit=upper_limit,
             peak_offset=peak_offset,
@@ -592,12 +479,34 @@ def autolevel2(
             image_fmt=image_fmt,
             no_white=no_white,
             use_magick=use_magick,
+            book_peak_fallback=not no_book_peak_fallback and not legacy,
         )
 
         real_output = dest_output
         if recursive:
             real_output = dest_output / path_real.name
         real_output.mkdir(parents=True, exist_ok=True)
+
+        resolved_by_path: dict[Path, _ResolvedPageLevels] | None = None
+        if full_config.book_peak_fallback:
+            analyzed_pages = _analyze_book_peak_pages(
+                all_files,
+                upper_limit,
+                peak_min_pct,
+                peak_prom_pct,
+                no_white,
+                threads,
+            )
+            shared_peak, resolved_by_path = _resolve_book_peak_pages(
+                analyzed_pages,
+                peak_offset,
+                full_config.levelling_lower_limit,
+                full_config.levelling_upper_limit,
+            )
+            if shared_peak is None:
+                console.info("No majority book peak found; pages without a usable local black peak will be skipped.")
+            else:
+                console.info(f"Using book-wide black peak {shared_peak} for pages without a usable local black peak.")
 
         results: list[AutoLevelResult] = []
         progress = console.make_progress()
@@ -607,7 +516,17 @@ def autolevel2(
         with threaded_worker(console, lowest_or(threads, all_files)) as (pool, log_q):
             for result in pool.imap_unordered(
                 _autolevel2_wrapper_star,
-                ((log_q, img_path, real_output, full_config, legacy) for img_path in all_files),
+                (
+                    (
+                        log_q,
+                        img_path,
+                        real_output,
+                        full_config,
+                        legacy,
+                        resolved_by_path.get(img_path) if resolved_by_path is not None else None,
+                    )
+                    for img_path in all_files
+                ),
             ):
                 results.append(result)
                 progress.update(task, advance=1)
@@ -644,6 +563,9 @@ class Autolevel3Config:
     output_mode: OutputMode = OutputMode.COLOR
     cache_mb: int = 512
     gpu: bool = False
+    levelling_lower_limit: int = 8
+    levelling_upper_limit: int = 55
+    book_peak_fallback: bool = True
 
 
 def _page_levels(frame: "VideoFrame") -> tuple[int, int, bool, bool]:
@@ -733,6 +655,14 @@ def _source_page_is_gray(source: "VideoNode", index: int) -> bool:
     help="The offset to add to the detected black level, as a code value",
 )
 @click.option(
+    "-nbp",
+    "--no-book-peak-fallback",
+    "no_book_peak_fallback",
+    is_flag=True,
+    default=False,
+    help="Do not use the book's majority peak for pages without a usable local black peak",
+)
+@click.option(
     "--color/--gray",
     "color_output",
     default=True,
@@ -760,8 +690,8 @@ def _source_page_is_gray(source: "VideoNode", index: int) -> bool:
     is_flag=True,
     default=False,
     help=(
-        "Run the analysis and the leveling on the GPU, needs vapoursynth-nimages 0.2.1 or "
-        "newer and a Vulkan 1.4 device (it fails rather than falling back)"
+        "Run the nimages analysis and leveling on the GPU, needs vapoursynth-nimages 0.2.1 or newer and a Vulkan "
+        "1.4 device (it fails rather than falling back). Book-peak voting still scans pages on the CPU."
     ),
 )
 @options.prefetch
@@ -775,6 +705,7 @@ def autolevel3(
     peak_min_pct: float | None,
     peak_prom_pct: float | None,
     peak_offset: int,
+    no_book_peak_fallback: bool,
     color_output: bool,
     no_white: bool,
     cache_mb: int,
@@ -798,6 +729,9 @@ def autolevel3(
     each page in its own container's colour; gray forces one plane per page, a skipped
     page included. A page that is skipped is copied byte for byte when it is already in
     the chosen mode and re-encoded from the analysed page when it is not.
+
+    Book-peak fallback scans the pages with Pillow first, then applies the shared peak in the
+    VapourSynth graph. This selection pass stays on the CPU even when `--gpu` is enabled.
     """
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -834,6 +768,7 @@ def autolevel3(
         gpu=gpu,
         no_white=no_white,
         cache_mb=cache_mb,
+        book_peak_fallback=not no_book_peak_fallback,
     )
 
     for path_real in candidates:
@@ -866,6 +801,33 @@ def autolevel3(
             real_output = dest_output / path_real.name
         real_output.mkdir(parents=True, exist_ok=True)
 
+        resolved_by_path: dict[Path, _ResolvedPageLevels] | None = None
+        book_peak_overrides: dict[int, int] = {}
+        if full_config.book_peak_fallback:
+            analyzed_pages = _analyze_book_peak_pages(
+                all_files,
+                upper_limit,
+                peak_min_pct,
+                peak_prom_pct,
+                no_white,
+                threads,
+            )
+            shared_peak, resolved_by_path = _resolve_book_peak_pages(
+                analyzed_pages,
+                peak_offset,
+                full_config.levelling_lower_limit,
+                full_config.levelling_upper_limit,
+            )
+            if shared_peak is None:
+                console.info("No majority book peak found; pages without a usable local black peak will be skipped.")
+            else:
+                console.info(f"Using book-wide black peak {shared_peak} for pages without a usable local black peak.")
+            book_peak_overrides = {
+                index: levels.black_level
+                for index, img_path in enumerate(all_files)
+                if (levels := resolved_by_path[img_path]).used_book_peak and levels.black_level is not None
+            }
+
         chain = vs_autolevel_clip(
             all_files,
             options=full_config,
@@ -874,6 +836,7 @@ def autolevel3(
             core=vs.core,
             gray=full_config.output_mode is OutputMode.GRAY,
             gpu=full_config.gpu,
+            black_level_overrides=book_peak_overrides,
         )
 
         results: list[AutoLevelResult] = []
@@ -904,7 +867,10 @@ def autolevel3(
                 )
 
                 page: PageWrite[AutoLevelResult] | None = None
-                if _levels_are_unusable(black_level, white_level, full_config):
+                resolved_levels = resolved_by_path[img_path] if resolved_by_path is not None else None
+                if (resolved_levels is not None and resolved_levels.black_level is None) or _levels_are_unusable(
+                    black_level, white_level, full_config
+                ):
                     if gray_writer is not None and not _source_page_is_gray(chain.source, index):
                         page = window.submit(gray_writer, index, AutoLevelResult.GRAYSCALED)
                     else:
