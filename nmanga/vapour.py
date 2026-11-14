@@ -54,6 +54,10 @@ if TYPE_CHECKING:
         peak_offset: int
         no_white: bool
         cache_mb: int
+        book_peak_fallback: bool
+        book_peak_tolerance: int
+        levelling_lower_limit: int
+        levelling_upper_limit: int
 
 
 # `metric -> bits -> one score per page`, the shape the selection reduces over. Defined at run
@@ -494,6 +498,22 @@ class AutolevelChain:
     leveled: "VideoNode"
 
 
+def _require_book_policy(signature: str) -> None:
+    """
+    Refuse a `PeakStats` that predates the whole-book policy.
+
+    The policy lives in the plugin from `vapoursynth-nimages` 0.4.0 on, so a plugin without
+    these arguments cannot make the same decisions and must fail here rather than quietly
+    level every page by its own peak.
+
+    :param signature: The `PeakStats` signature a loaded plugin reports.
+    :raises RuntimeError: When an argument the policy needs is missing.
+    """
+    required = ("median_filter:", "book_peak_fallback:", "book_peak_tolerance:")
+    if any(argument not in signature for argument in required):
+        raise RuntimeError("the installed nimages plugin lacks the updated peak policy")
+
+
 def vs_autolevel_clip(
     files: Sequence[PathLike],
     *,
@@ -503,7 +523,6 @@ def vs_autolevel_clip(
     prefetch: int = 0,
     debug: bool = False,
     core: "Core | None" = None,
-    black_level_overrides: Mapping[int, int] | None = None,
 ) -> AutolevelChain:
     """
     Read `files` and build the `PeakStats` to `Levels` chain over their analysis form.
@@ -519,20 +538,23 @@ def vs_autolevel_clip(
     each frame's own colour family. A colour page is levelled on its own planes and a gray page
     stays gray, which is the whole of the old `--keep-colorspace` behaviour, by construction;
     `PNGWrite` then stores an `RGB24` still as RGB and converts a YUV still to RGB with the
-    frame's matrix and range. Pull the frame you want from `leveled` and read the level
-    properties off it, rather than pulling from `stats` and then `leveled`, which analyses
-    every page twice.
+    frame's matrix and range. Decide a page from `stats` first and pull `leveled` only when the
+    page is eligible: `Levels` is lazy, and an excluded page's levels can be invalid for the
+    curve, so asking for its frame is the work to avoid.
 
     `gpu` passes `gpu=1` to the counter and the map, and then downloads the levelled frame
-    because every consumer of it takes host frames. It needs `vapoursynth-nimages` 0.2.1 or
-    `vapoursynth-nimages` 0.2.1 or newer and a Vulkan 1.4 device; the plugin refuses at
-    node creation otherwise rather than quietly running the host path.
+    because every consumer of it takes host frames. It needs `vapoursynth-nimages` 0.4.0 or
+    newer and a Vulkan 1.4 device; the plugin refuses at node creation otherwise rather than
+    quietly running the host path.
 
     `prefetch` is how many pages `imgseqs` decodes ahead of the frame being asked for, and
     `debug` turns on the plugin's log lines.
 
-    `black_level_overrides` replaces selected `PeakStats` black-level properties before
-    `Levels` reads them. The CLI uses this for pages that inherit the book's shared peak.
+    With `options.book_peak_fallback` the plugin scans the whole clip when `stats` is built and
+    attaches `NImagesBookPeakUsed` and `NImagesLevelEligible` to every frame, so the routing
+    decision is read off `stats` instead of being resolved here. `Levels` never reads either
+    property, and an excluded page keeps its own levels, which can be invalid for a curve: an
+    all-black page reports black and white on zero.
     """
     vs = get_vapoursynth()
     if core is None:
@@ -546,31 +568,34 @@ def vs_autolevel_clip(
         debug=int(debug),
     )
 
+    analysis = vs_to_gray8(source, core=core) if gray else source
+
+    _require_book_policy(core.nimages.PeakStats.signature)
+
+    book_enabled = options.book_peak_fallback
     stats_args: dict[str, Any] = {
         "upper_limit": options.upper_limit,
-        "peak_percentage": options.peak_min_pct,
-        "skip_white": 1 if options.no_white else 0,
-        "debug": int(debug),
+        "median_filter": True,
+        # `None` disables the height threshold in Python, which is `0.0` to the plugin.
+        "peak_percentage": options.peak_min_pct if options.peak_min_pct is not None else 0.0,
+        "skip_white": int(options.no_white),
         "gpu": int(gpu),
+        "debug": int(debug),
     }
     # `None` is not a value a VapourSynth argument list can carry, so the argument has to
     # be left off entirely to leave prominence disabled.
     if options.peak_prom_pct is not None:
         stats_args["peak_prominence"] = options.peak_prom_pct
-    analysis = vs_to_gray8(source, core=core) if gray else source
+    if book_enabled:
+        stats_args.update(
+            book_peak_fallback=1,
+            book_peak_tolerance=options.book_peak_tolerance,
+            levelling_lower_limit=options.levelling_lower_limit,
+            levelling_upper_limit=options.levelling_upper_limit,
+            peak_offset=options.peak_offset,
+        )
 
     stats = core.nimages.PeakStats(analysis, **stats_args)
-    if black_level_overrides:
-        def override_book_peak(*, n: int, f: "list[VideoFrame]") -> "VideoFrame":
-            frame = f[0]
-            if n not in black_level_overrides:
-                return frame
-            output = frame.copy()
-            output.props["NImagesBlackLevel"] = black_level_overrides[n]
-            output.props["NImagesBlackPeakFound"] = 1
-            return output
-
-        stats = core.std.ModifyFrame(stats, clips=[stats], selector=override_book_peak)
     leveled = core.nimages.Levels(
         stats,
         use_props=True,

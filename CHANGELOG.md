@@ -22,6 +22,12 @@
   - The Python OGSOV/OGSOX kernels run on a thread pool, so the decode, numpy work and model call overlap
   - The VapourSynth path requests frames async, keeping up to `--threads` pages in flight while the file moves run
 - Every `--threads` default and orchestrator `threads` field is now `TOTAL_THREADS - 4` above eight threads, and half below that
+- `autolevel3` and the orchestrator `autolevel` action's `v3` algorithm run the whole-book scan inside the plugin, so the decision no longer needs a Pillow pass before the graph:
+  - `autolevel3` gains `--book-peak-tolerance` (default 6, `0..127`), which `autolevel2` already had
+  - `--gpu` keeps working: the plugin scans the pages once when the stats node is built, and its decision is read off the stats frame
+  - A page the policy excludes is copied, or re-encoded from the analysis clip under `--gray`, without the plugin evaluating a curve for it
+  - The orchestrator `v3` algorithm now honours `book_peak_fallback` and `book_peak_tolerance`, which only `v2` read before
+- `vapoursynth-nimages` 0.4.0 is required for the VapourSynth autolevel paths: the plugin medians the page before it counts shades and reports `NImagesBookPeakUsed`/`NImagesLevelEligible`, and `autolevel3` refuses a plugin without either
 - The original OGSOX kernel uses less memory
 
 **Fixes**

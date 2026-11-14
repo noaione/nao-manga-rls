@@ -498,20 +498,9 @@ class Autolevel3Config:
     book_peak_tolerance: int = 6
     book_peak_fallback: bool = True
 
-    @property
-    def policy(self) -> LevellingPolicy:
-        """How this config decides what a page is levelled by."""
-        return LevellingPolicy(
-            lower_limit=self.levelling_lower_limit,
-            upper_limit=self.levelling_upper_limit,
-            peak_offset=self.peak_offset,
-            book_peak_tolerance=self.book_peak_tolerance,
-            book_peak_fallback=self.book_peak_fallback,
-        )
-
 
 def _page_levels(frame: "VideoFrame") -> tuple[int, int, bool, bool]:
-    """Read the two detected levels and their found flags off one levelled page."""
+    """Read the two detected levels and their found flags off one stats page."""
     return (
         int(frame.props["NImagesBlackLevel"]),  # type: ignore[arg-type]
         int(frame.props["NImagesWhiteLevel"]),  # type: ignore[arg-type]
@@ -605,6 +594,18 @@ def _source_page_is_gray(source: "VideoNode", index: int) -> bool:
     help="Do not use the book's majority peak for pages without a usable local black peak",
 )
 @click.option(
+    "-bpt",
+    "--book-peak-tolerance",
+    "book_peak_tolerance",
+    type=click.IntRange(0, 127),
+    default=6,
+    show_default=True,
+    help=(
+        "Pages whose own black peak is more than this above the book's usual peak are a dark tone "
+        "rather than their black, so they are levelled by the book's peak"
+    ),
+)
+@click.option(
     "--color/--gray",
     "color_output",
     default=True,
@@ -648,6 +649,7 @@ def autolevel3(
     peak_prom_pct: float | None,
     peak_offset: int,
     no_book_peak_fallback: bool,
+    book_peak_tolerance: int,
     color_output: bool,
     no_white: bool,
     cache_mb: int,
@@ -672,8 +674,8 @@ def autolevel3(
     page included. A page that is skipped is copied byte for byte when it is already in
     the chosen mode and re-encoded from the analysed page when it is not.
 
-    Book-peak fallback scans the pages with Pillow first, then applies the shared peak in the
-    VapourSynth graph. This selection pass stays on the CPU even when `--gpu` is enabled.
+    Book-peak fallback scans every page inside the plugin when the stats node is built and keeps
+    the answer, so that pass runs on the host even when `--gpu` is enabled.
     """
     if not path_or_archive.is_dir():
         raise click.BadParameter(
@@ -711,6 +713,7 @@ def autolevel3(
         no_white=no_white,
         cache_mb=cache_mb,
         book_peak_fallback=not no_book_peak_fallback,
+        book_peak_tolerance=book_peak_tolerance,
     )
 
     for path_real in candidates:
@@ -743,27 +746,10 @@ def autolevel3(
             real_output = dest_output / path_real.name
         real_output.mkdir(parents=True, exist_ok=True)
 
-        resolved_by_path: dict[Path, ResolvedPageLevels] | None = None
-        book_peak_overrides: dict[int, int] = {}
         if full_config.book_peak_fallback:
-            analyzed_pages = _analyze_book_peak_pages(
-                all_files,
-                upper_limit,
-                peak_min_pct,
-                peak_prom_pct,
-                no_white,
-                threads,
-            )
-            shared_peak, resolved_by_path = resolve_book_peaks(analyzed_pages, full_config.policy)
-            if shared_peak is None:
-                console.info("No majority book peak found; pages without a usable local black peak will be skipped.")
-            else:
-                console.info(f"Using book-wide black peak {shared_peak} for pages without a usable local black peak.")
-            book_peak_overrides = {
-                index: levels.black_level
-                for index, img_path in enumerate(all_files)
-                if (levels := resolved_by_path[img_path]).used_book_peak and levels.black_level is not None
-            }
+            # Building the chain is what reads the book, so say so before the writing loop
+            # starts with a progress bar that cannot move yet.
+            console.info("Scanning every page for the book's usual black peak...")
 
         chain = vs_autolevel_clip(
             all_files,
@@ -773,13 +759,13 @@ def autolevel3(
             core=vs.core,
             gray=full_config.output_mode is OutputMode.GRAY,
             gpu=full_config.gpu,
-            black_level_overrides=book_peak_overrides,
         )
 
         results: list[AutoLevelResult] = []
         progress = console.make_progress()
         task = progress.add_task("Processing images...", finished_text="Processed images", total=total_files)
         gray_mode = full_config.output_mode is OutputMode.GRAY
+        book_mode = full_config.book_peak_fallback
 
         # One writer per clip: the node's output frame `n` is its input frame `n` plus the
         # write, so the encode and the publish both leave Python. The destination is decided
@@ -796,18 +782,25 @@ def autolevel3(
                 else None
             )
             for index, img_path in enumerate(all_files):
-                with chain.leveled.get_frame(index) as frame:
+                # The decision is read from the stats frame: an excluded page keeps its own levels,
+                # which can be invalid for a curve, and `Levels` would evaluate them to hand
+                # over the frame.
+                with chain.stats.get_frame(index) as frame:
                     black_level, white_level, black_found, white_found = _page_levels(frame)
+                    used_book_peak = book_mode and bool(frame.props["NImagesBookPeakUsed"])
+                    eligible = (
+                        bool(frame.props["NImagesLevelEligible"])
+                        if book_mode
+                        else not _levels_are_unusable(black_level, white_level, full_config)
+                    )
+                book_note = " (book peak)" if used_book_peak else ""
                 console.log(
                     f"{img_path.name}: black={black_level} (found={black_found}) "
-                    f"white={white_level} (found={white_found})"
+                    f"white={white_level} (found={white_found}){book_note}"
                 )
 
                 page: PageWrite[AutoLevelResult] | None = None
-                resolved_levels = resolved_by_path[img_path] if resolved_by_path is not None else None
-                if (resolved_levels is not None and resolved_levels.black_level is None) or _levels_are_unusable(
-                    black_level, white_level, full_config
-                ):
+                if not eligible:
                     if gray_writer is not None and not _source_page_is_gray(chain.source, index):
                         page = window.submit(gray_writer, index, AutoLevelResult.GRAYSCALED)
                     else:

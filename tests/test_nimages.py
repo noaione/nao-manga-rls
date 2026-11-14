@@ -26,6 +26,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -284,7 +285,7 @@ def _tmp_odd_webp(tmp_path: Path) -> Path:
 class TestAutolevelClip:
     """The `PeakStats` to `Levels` chain over a directory of pages."""
 
-    def test_levels_match_the_pillow_reference(self, tmp_path: Path):
+    def test_levels_match_the_median_pillow_reference(self, tmp_path: Path):
         from nmanga.autolevel import find_local_peak
         from nmanga.lazy import get_vapoursynth
         from nmanga.vapour import vs_autolevel_clip
@@ -304,9 +305,8 @@ class TestAutolevelClip:
                     peak_percentage=0.25,
                     peak_prominence=None,
                     skip_white_check=False,
-                    # The plugin's counter reads the page unfiltered, so the median has to be off
-                    # for this comparison to be about the level selection and not the decode.
-                    median_filter=False,
+                    # The plugin medians the page before it counts, which is its default, so
+                    # the reference has to median it too.
                 )
             assert (black, white) == (expected_black, expected_white)
 
@@ -482,6 +482,155 @@ class TestAutolevelClip:
             for index, page in enumerate(files):
                 with clip.get_frame(index) as frame:
                     assert frame.props["ImgSeqPath"] == str(page), label
+
+
+@requires_nimages
+@requires_imagseqs
+class TestBookPeakPolicy:
+    """The whole-book scan: what each page is levelled by, and which pages are left out."""
+
+    def _chain(self, pages: Sequence[Path], **overrides):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_autolevel_clip
+
+        return vs_autolevel_clip(pages, options=_config(**overrides), core=get_vapoursynth().core)
+
+    def _decisions(self, pages: Sequence[Path], **overrides) -> list[tuple[int, int, bool, bool, bool, bool]]:
+        chain = self._chain(pages, **overrides)
+        decisions: list[tuple[int, int, bool, bool, bool, bool]] = []
+        for index in range(len(pages)):
+            with chain.stats.get_frame(index) as frame:
+                decisions.append(_frame_decision(frame))
+        return decisions
+
+    def test_a_dark_tone_page_is_levelled_by_the_book_peak(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", 12) for index in range(3)]
+        pages.append(_split_page(tmp_path, "dark.png", 30))
+
+        *usual, dark = self._decisions(pages)
+        for decision in usual:
+            assert decision == (12, 244, True, True, False, True)
+        # 30 is more than the tolerance above 12, so this page was measured at a dark tone
+        # rather than at its black and the book's peak levels it. The local threshold status
+        # stays true: the found flag reports the measurement, not the inheritance.
+        assert dark == (12, 244, True, True, True, True)
+
+    def test_a_half_tie_leaves_every_page_alone(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", shade) for index, shade in enumerate((12, 12, 30, 30))]
+
+        decisions = self._decisions(pages)
+        assert [decision[0] for decision in decisions] == [12, 12, 30, 30]
+        assert [decision[4] for decision in decisions] == [False] * 4
+        assert [decision[5] for decision in decisions] == [True] * 4
+
+    def test_a_page_without_a_qualified_peak_is_excluded(self, tmp_path: Path):
+        pages = [
+            _split_page(tmp_path, "first.png", 12),
+            _split_page(tmp_path, "second.png", 30),
+            _sparse_page(tmp_path, "weak.png"),
+        ]
+
+        *disagreeing, weak = self._decisions(pages)
+        # Two usable votes that disagree are not a majority, so nothing is inherited.
+        assert [decision[0] for decision in disagreeing] == [12, 30]
+        _black, _white, black_found, _white_found, used, eligible = weak
+        assert black_found is False
+        assert (used, eligible) == (False, False)
+
+    def test_a_qualified_peak_on_zero_is_reported_but_not_levelled(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", 12) for index in range(2)]
+        pages.append(_split_page(tmp_path, "black.png", 0))
+
+        # A real peak on zero is found, which is what separates it from "no peak", but the
+        # page is black already and there is no curve left to take.
+        assert self._decisions(pages)[2] == (0, 244, True, True, False, False)
+
+    def test_a_peak_on_the_lower_bound_is_left_alone(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", 12) for index in range(2)]
+        pages.append(_split_page(tmp_path, "edge.png", 8))
+
+        assert self._decisions(pages)[2] == (8, 244, True, True, False, False)
+
+    def test_a_peak_on_the_upper_bound_is_a_dark_tone(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", 12) for index in range(2)]
+        pages.append(_split_page(tmp_path, "edge.png", 55))
+
+        assert self._decisions(pages)[2] == (12, 244, True, True, True, True)
+
+    def test_the_tolerance_decides_what_counts_as_a_dark_tone(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", 12) for index in range(2)]
+        pages.append(_split_page(tmp_path, "tone.png", 30))
+
+        assert self._decisions(pages)[2][0] == 12
+        # 30 sits inside 12 + 20, so the page keeps its own peak and is levelled by it.
+        assert self._decisions(pages, book_peak_tolerance=20)[2] == (30, 244, True, True, False, True)
+
+    def test_the_offset_reaches_the_eligibility_rule(self, tmp_path: Path):
+        pages = [_split_page(tmp_path, f"page_{index}.png", 40) for index in range(2)]
+        pages.append(_split_page(tmp_path, "tone.png", 50))
+
+        # Inside the bounds and inside the tolerance, so the page levels by its own peak.
+        assert self._decisions(pages, book_peak_tolerance=20)[2] == (50, 244, True, True, False, True)
+        # The offset moves that peak onto the upper bound, where it is a dark tone instead.
+        shifted = self._decisions(pages, book_peak_tolerance=20, peak_offset=5)
+        assert shifted[2] == (40, 244, True, True, True, True)
+
+    def test_book_mode_disabled_writes_no_decision(self, tmp_path: Path):
+        chain = self._chain([_split_page(tmp_path, "page.png", 12)], book_peak_fallback=False)
+
+        with chain.stats.get_frame(0) as frame:
+            assert "NImagesBookPeakUsed" not in frame.props
+            assert "NImagesLevelEligible" not in frame.props
+
+    def test_the_default_analysis_measures_the_median_page(self, tmp_path: Path):
+        from nmanga.autolevel import find_local_peak
+
+        page = _ringing_page(tmp_path)
+        chain = self._chain([page], peak_min_pct=15.0, book_peak_fallback=False)
+
+        with chain.stats.get_frame(0) as frame:
+            black = int(frame.props["NImagesBlackLevel"])
+        median = find_local_peak(page, upper_limit=60, peak_percentage=15.0, median_filter=True)
+        raw = find_local_peak(page, upper_limit=60, peak_percentage=15.0, median_filter=False)
+        # The fixture has to tell the two apart, or the assertion below proves nothing.
+        assert (median[0], raw[0]) == (20, 0)
+        assert black == median[0]
+
+    def test_pages_of_different_sizes_and_families_share_one_scan(self, tmp_path: Path):
+        gray = _split_page(tmp_path, "gray.png", 12)
+        small = _split_page(tmp_path, "small.png", 12, size=(40, 30))
+        colour = tmp_path / "rgb.png"
+        with Image.open(gray) as opened:
+            opened.convert("RGB").save(colour)
+
+        decisions = self._decisions([gray, small, colour])
+        assert [decision[0] for decision in decisions] == [12, 12, 12]
+        assert [decision[4] for decision in decisions] == [False] * 3
+        assert [decision[5] for decision in decisions] == [True] * 3
+
+    def test_the_scan_answers_the_same_whatever_the_request_order(self, tmp_path: Path):
+        from concurrent.futures import ThreadPoolExecutor
+
+        shades = (12, 12, 30)
+        pages = [_split_page(tmp_path, f"page_{index}.png", shade) for index, shade in enumerate(shades)]
+        chain = self._chain(pages)
+
+        def pull(index: int):
+            with chain.stats.get_frame(index) as frame:
+                return _frame_decision(frame)
+
+        forward = [pull(index) for index in range(len(pages))]
+        assert [pull(index) for index in reversed(range(len(pages)))][::-1] == forward
+        with ThreadPoolExecutor(max_workers=len(pages)) as pool:
+            assert list(pool.map(pull, range(len(pages)))) == forward
+
+    def test_a_plugin_without_the_book_policy_is_refused(self):
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import _require_book_policy
+
+        _require_book_policy(get_vapoursynth().core.nimages.PeakStats.signature)
+        with pytest.raises(RuntimeError, match="updated peak policy"):
+            _require_book_policy("clip:vnode:all;upper_limit:int:opt;peak_percentage:float:opt;")
 
 
 @requires_nimages
@@ -1828,6 +1977,74 @@ def _colour_level_page(directory: Path) -> Path:
     return path
 
 
+def _split_page(directory: Path, name: str, black: int, *, white: int = 244, size: tuple[int, int] = (64, 48)) -> Path:
+    """A page split between `black` and `white`, so its local black peak sits exactly on `black`."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    width, height = size
+    image = Image.new("L", size, white)
+    pixels = image.load()
+    ink = (width * 3) // 5
+    for y in range(height):
+        for x in range(ink):
+            pixels[x, y] = black  # type: ignore
+    image.save(path)
+    return path
+
+
+def _sparse_page(directory: Path, name: str) -> Path:
+    """
+    A page whose dark shades are spread thin, so nothing in the black range is a peak.
+
+    Twenty four pixels per shade is under the twenty five a ten thousand pixel page needs at
+    the default height threshold, and the shades sit in columns so the 3x3 median keeps every
+    count as it is.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    image = Image.new("L", (100, 100), 255)
+    pixels = image.load()
+    for x in range(61):
+        for y in range(24):
+            pixels[x, y] = x  # type: ignore
+    image.save(path)
+    return path
+
+
+def _ringing_page(directory: Path) -> Path:
+    """
+    A page whose scattered dark noise outvotes its own ink.
+
+    Every noised pixel is isolated, so the 3x3 median drops all of them and the ink on 20
+    becomes the tallest shade in the black range. Without the median the tallest is the noise
+    on zero, which is the page wide speckle the median exists to remove.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "ringing.png"
+    image = Image.new("L", (100, 100), 120)
+    pixels = image.load()
+    for y in range(100):
+        for x in range(20):
+            pixels[x, y] = 20  # type: ignore
+    for y in range(0, 100, 2):
+        for x in range(0, 100, 2):
+            pixels[x, y] = 0  # type: ignore
+    image.save(path)
+    return path
+
+
+def _frame_decision(frame) -> tuple[int, int, bool, bool, bool, bool]:
+    """One stats frame as `black, white, black found, white found, book peak, eligible`."""
+    return (
+        int(frame.props["NImagesBlackLevel"]),
+        int(frame.props["NImagesWhiteLevel"]),
+        bool(frame.props["NImagesBlackPeakFound"]),
+        bool(frame.props["NImagesWhitePeakFound"]),
+        bool(frame.props["NImagesBookPeakUsed"]),
+        bool(frame.props["NImagesLevelEligible"]),
+    )
+
+
 def _vulkan_device_available() -> bool:
     """Whether `nimages` can build and run a `gpu=1` node, which needs Vulkan 1.4."""
     try:
@@ -2221,6 +2438,126 @@ class TestAutolevel3Acceptance:
         with Image.open(output / "even.png") as even:
             assert (even.mode, even.size) == ("L", (66, 34))
 
+    def _book_expected(self, pages: Sequence[Path]):
+        import numpy as np
+
+        from nmanga.lazy import get_vapoursynth
+        from nmanga.vapour import vs_autolevel_clip, vs_frame_to_image
+
+        chain = vs_autolevel_clip(pages, options=_config(), core=get_vapoursynth().core)
+        expected = []
+        for index in range(len(pages)):
+            with chain.leveled.get_frame(index) as frame:
+                expected.append(np.asarray(vs_frame_to_image(frame)).copy())
+        return expected
+
+    def test_a_dark_tone_page_is_written_levelled_by_the_book_peak(self, tmp_path: Path):
+        import numpy as np
+
+        directory = tmp_path / "pages"
+        pages = [_split_page(directory, f"page_{index}.png", 12) for index in range(3)]
+        pages.append(_split_page(directory, "dark.png", 30))
+        output = tmp_path / "out"
+
+        result = self._run(directory, output)
+        assert result.exit_code == 0, result.output
+        assert "Autoleveled 4 images." in result.output
+        for page, expected in zip(pages, self._book_expected(pages), strict=True):
+            with Image.open(output / f"{page.stem}.png") as opened:
+                assert np.array_equal(np.asarray(opened), expected)
+
+    def test_no_book_peak_fallback_keeps_the_page_own_peak(self, tmp_path: Path):
+        directory = tmp_path / "pages"
+        _split_page(directory, "page_a.png", 12)
+        _split_page(directory, "page_b.png", 12)
+        _split_page(directory, "page_c.png", 12)
+        _split_page(directory, "dark.png", 30)
+        book = tmp_path / "book"
+        local = tmp_path / "local"
+
+        assert self._run(directory, book).exit_code == 0
+        result = self._run(directory, local, "--no-book-peak-fallback")
+        assert result.exit_code == 0, result.output
+        # Only the dark tone changes: it keeps the peak it was measured at instead of the
+        # book's, and the pages that agreed on 12 are levelled the same either way.
+        assert (book / "dark.png").read_bytes() != (local / "dark.png").read_bytes()
+        assert (book / "page_a.png").read_bytes() == (local / "page_a.png").read_bytes()
+
+    def test_an_excluded_page_is_copied_and_never_levelled(self, tmp_path: Path):
+        directory = tmp_path / "pages"
+        _split_page(directory, "page_a.png", 12)
+        _split_page(directory, "page_b.png", 12)
+        excluded = _split_page(directory, "black.png", 0)
+        output = tmp_path / "out"
+
+        result = self._run(directory, output)
+        assert result.exit_code == 0, result.output
+        assert "Copied 1 images without autolevel." in result.output
+        # A peak on the lower bound is real but leaves no curve to take, so the page keeps its
+        # bytes instead of being levelled by the book's peak.
+        assert (output / "black.png").read_bytes() == excluded.read_bytes()
+
+    def test_an_excluded_colour_page_is_grayscaled_from_the_analysis_clip(self, tmp_path: Path):
+        directory = tmp_path / "pages"
+        _split_page(directory, "page_a.png", 12)
+        _split_page(directory, "page_b.png", 12)
+        with Image.open(_split_page(directory, "black.png", 0)) as opened:
+            opened.convert("RGB").save(directory / "black-rgb.png")
+        output = tmp_path / "out"
+
+        result = self._run(directory, output, "--gray")
+        assert result.exit_code == 0, result.output
+        assert "Grayscaled 1 images." in result.output
+        with Image.open(output / "black-rgb.png") as written:
+            assert written.mode == "L"
+
+    def test_autolevel3_never_scans_pages_with_pillow(self, tmp_path: Path, monkeypatch):
+        import nmanga.cli.autolevel as autolevel_cli
+
+        def fail(*args, **kwargs):
+            raise AssertionError("autolevel3 ran the Pillow book scan")
+
+        monkeypatch.setattr(autolevel_cli, "_analyze_book_peak_pages", fail)
+        _write_pages(tmp_path / "pages", 2)
+
+        result = self._run(tmp_path / "pages", tmp_path / "out")
+        assert result.exit_code == 0, result.output
+        assert result.exception is None
+
+    def test_a_nonzero_offset_moves_the_curve_once(self, tmp_path: Path):
+        """The offset shifts the curve endpoint; the gamma still comes from the raw peak."""
+        import numpy as np
+
+        from nmanga.autolevel import apply_levels, gamma_correction
+
+        directory = tmp_path / "pages"
+        pages = [_split_page(directory, f"page_{index}.png", 40) for index in range(2)]
+        output = tmp_path / "out"
+
+        result = self._run(directory, output, "--peak-offset", "4")
+        assert result.exit_code == 0, result.output
+        for page in pages:
+            with Image.open(page) as source:
+                expected = np.asarray(apply_levels(source, 40 + 4, 244, gamma_correction(40))).copy()
+            with Image.open(output / f"{page.stem}.png") as opened:
+                assert np.array_equal(np.asarray(opened), expected)
+
+    def test_no_white_curves_against_the_sample_maximum(self, tmp_path: Path):
+        import numpy as np
+
+        from nmanga.autolevel import apply_levels, gamma_correction
+
+        directory = tmp_path / "pages"
+        page = _split_page(directory, "page.png", 40)
+        output = tmp_path / "out"
+
+        result = self._run(directory, output, "--no-white")
+        assert result.exit_code == 0, result.output
+        with Image.open(page) as source:
+            expected = np.asarray(apply_levels(source, 40, 255, gamma_correction(40))).copy()
+        with Image.open(output / "page.png") as opened:
+            assert np.array_equal(np.asarray(opened), expected)
+
 
 class TestPngSaveGuard:
     """A PNG page that still goes through Pillow fails loudly here."""
@@ -2330,6 +2667,23 @@ class TestCommandSurface:
             result = runner.invoke(main, ["autolevel3", ".", "-o", ".", flag])
             assert result.exit_code != 0
 
+    def test_autolevel3_exposes_the_book_peak_tolerance(self):
+        from click.testing import CliRunner
+
+        from nmanga.cmd import main
+
+        # The option's own table row wraps at the runner's terminal width, so the command is
+        # asked for the parameter instead of the help text being scraped.
+        command = main.commands["autolevel3"]
+        option = next(param for param in command.params if getattr(param, "name", None) == "book_peak_tolerance")
+        assert option.default == 6
+        assert (option.type.min, option.type.max) == (0, 127)
+
+        # The plugin validates the tolerance in `0..=127`, so the CLI has to refuse beyond it
+        # rather than let the plugin abort on the first page.
+        refused = CliRunner().invoke(main, ["autolevel3", ".", "-o", ".", "--book-peak-tolerance", "128"])
+        assert refused.exit_code != 0
+
     def test_posterize2_exposes_gpu(self):
         from click.testing import CliRunner
 
@@ -2403,6 +2757,30 @@ class TestGpuFlag:
         assert self._run_autolevel3(tmp_path / "pages", device, "--gpu").exit_code == 0
         for page in pages:
             name = f"{page.stem}.png"
+            with Image.open(host / name) as host_image:
+                expected = np.asarray(host_image)
+            with Image.open(device / name) as device_image:
+                assert np.array_equal(np.asarray(device_image), expected)
+
+    @requires_nimages
+    @requires_imagseqs
+    @requires_vulkan
+    def test_autolevel3_gpu_inherits_the_book_peak_too(self, tmp_path: Path):
+        import numpy as np
+
+        directory = tmp_path / "pages"
+        _split_page(directory, "page_a.png", 12)
+        _split_page(directory, "page_b.png", 12)
+        _split_page(directory, "dark.png", 30)
+        host = tmp_path / "host"
+        device = tmp_path / "device"
+
+        assert self._run_autolevel3(directory, host).exit_code == 0
+        result = self._run_autolevel3(directory, device, "--gpu")
+        assert result.exit_code == 0, result.output + repr(result.exception)
+        # The host scan decides even on the device route, so the inherited page has to come
+        # out of both runs byte for byte the same.
+        for name in ("page_a.png", "page_b.png", "dark.png"):
             with Image.open(host / name) as host_image:
                 expected = np.asarray(host_image)
             with Image.open(device / name) as device_image:

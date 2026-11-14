@@ -237,13 +237,13 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
     book_peak_fallback: bool = Field(True, title="Book Peak Fallback")
     """
     Level pages without a usable local black peak by the peak a strict majority of the volume's
-    pages were found at; only the `v2` algorithm reads this
+    pages were found at; the `v1` algorithm ignores this
     """
     book_peak_tolerance: int = Field(6, ge=0, le=127, title="Book Peak Tolerance")
     """
     A page whose own black peak sits more than this above the book's usual peak was found at a
-    dark tone rather than at its black, so it is levelled by the book's peak instead; only the
-    `v2` algorithm reads this
+    dark tone rather than at its black, so it is levelled by the book's peak instead; the `v1`
+    algorithm ignores this
     """
     algorithm: Literal["v1", "v2", "v3"] = Field("v2", title="The algorithm or mode to use for peaks + leveling")
     """
@@ -293,6 +293,18 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
             book_peak_tolerance=self.book_peak_tolerance,
             book_peak_fallback=self.book_peak_fallback,
         )
+
+    # `autolevel3` exposes the levelling bounds as CLI options, so the plugin is told the two
+    # numbers the policy here already holds instead of copying their defaults.
+    @property
+    def levelling_lower_limit(self) -> int:
+        """The lower levelling bound the policy uses, for the VapourSynth helper."""
+        return self.policy.lower_limit
+
+    @property
+    def levelling_upper_limit(self) -> int:
+        """The upper levelling bound the policy uses, for the VapourSynth helper."""
+        return self.policy.upper_limit
 
     def run(self, context: WorkerContext, volume: "VolumeConfig", orchestrator: "OrchestratorConfig") -> None:
         """
@@ -508,6 +520,7 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
                 debug=context.terminal.debugged,
                 core=vs.core,
             )
+            book_mode = self.book_peak_fallback
 
             # One writer per clip: the node's output frame `n` is its input frame `n` plus the
             # write, so the encode and the publish both leave Python. The skip decision is made
@@ -521,17 +534,26 @@ class ActionAutolevel(BaseAction, ActionColorMixin):
             queued: list[tuple[str, int, int]] = []
             with PngWriteWindow(self.threads) as window:
                 for index, img_path in enumerate(to_process):
-                    with chain.leveled.get_frame(index) as frame:
+                    # The decision comes from the stats frame: an excluded page keeps levels that
+                    # can be invalid for a curve, and `Levels` would evaluate them to hand one over.
+                    with chain.stats.get_frame(index) as frame:
                         black_level = int(frame.props["NImagesBlackLevel"])  # type: ignore[arg-type]
                         white_level = int(frame.props["NImagesWhiteLevel"])  # type: ignore[arg-type]
                         black_found = bool(frame.props["NImagesBlackPeakFound"])
                         white_found = bool(frame.props["NImagesWhitePeakFound"])
+                        used_book_peak = book_mode and bool(frame.props["NImagesBookPeakUsed"])
+                        eligible = (
+                            bool(frame.props["NImagesLevelEligible"])
+                            if book_mode
+                            else not _levels_are_unusable(black_level, white_level, self)
+                        )
+                    book_note = " (book peak)" if used_book_peak else ""
                     context.terminal.log(
                         f"{img_path.name}: black={black_level} (found={black_found}) "
-                        f"white={white_level} (found={white_found})"
+                        f"white={white_level} (found={white_found}){book_note}"
                     )
 
-                    if _levels_are_unusable(black_level, white_level, self):
+                    if not eligible:
                         copy_dest = output_dir / img_path.name
                         if copy_dest.exists():
                             context.terminal.warning(f"Skipping existing file: {copy_dest}")
