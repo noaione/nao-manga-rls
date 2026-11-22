@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from nmanga.ml.umzi import (
-    UmziPackageInfo,
+    GateRV3Details,
     build_kernel_options,
     create_umzi_session,
     describe_package,
@@ -53,21 +53,82 @@ class FakeSession:
         self.closed = True
 
 
+def _payload(family: str | None) -> SimpleNamespace | None:
+    """Build the family payload `umzi_native.peek_model` attaches, named like the runtime dataclasses."""
+    if family == "gaterv3":
+        return SimpleNamespace(
+            scale=1,
+            input_channels=3,
+            output_channels=3,
+            alignment=16,
+            base_channels=32,
+            tensors=12,
+            operations=9,
+            weight_bytes=1024,
+            op_kinds={"Conv": 4, "Silu": 5},
+            checkpoint="1x_umzi_digital_decompress_gaterv3_1.pth",
+        )
+    if family == "gaterv2":
+        return SimpleNamespace(
+            scale=1,
+            input_channels=3,
+            output_channels=3,
+            alignment=16,
+            base_channels=32,
+            encoder_depths=(1, 1),
+            decoder_depths=(1, 2),
+            latent_blocks=2,
+            attention_eps=0.00001,
+            parameters=1000,
+            weight_bytes=4000,
+            checkpoint="gaterv2.pth",
+        )
+    if family == "moesr":
+        return SimpleNamespace(
+            scale=4,
+            input_channels=3,
+            output_channels=3,
+            alignment=8,
+            base_channels=64,
+            groups=3,
+            full_blocks=3,
+            reduced_blocks=1,
+            full_hidden=96,
+            reduced_hidden=64,
+            weight_bytes=5000,
+            checkpoint="moesr.pth",
+        )
+    if family == "gfisrv2":
+        return SimpleNamespace(
+            scale=4,
+            input_channels=3,
+            output_channels=3,
+            base_channels=48,
+            blocks=24,
+            hidden_channels=128,
+            fourier_channels=30,
+            weight_bytes=6000,
+            checkpoint="gfisrv2.pth",
+        )
+    return None
+
+
 def _fake_info(*, family: str | None, problems: tuple[str, ...] = ()) -> SimpleNamespace:
-    """Build what `umzi_native.peek_model` returns, with a GateRV3 style payload."""
-    payload = SimpleNamespace(
-        scale=1,
-        input_channels=3,
-        output_channels=3,
-        alignment=16,
-        checkpoint="1x_umzi_digital_decompress_gaterv3_1.pth",
+    """Build what `umzi_native.peek_model` returns for that family."""
+    sections = (
+        SimpleNamespace(id=1, name="architecture", offset=0, length=64),
+        SimpleNamespace(id=3, name="weights", offset=64, length=1984),
     )
     return SimpleNamespace(
         path=Path("/models/page.ummodel"),
-        family_name=family,
-        payload=payload,
         size=2048,
+        version=1,
+        family=1,
+        family_name=family,
+        schema=1,
         digest="abc123",
+        sections=sections,
+        payload=_payload(family),
         problems=problems,
     )
 
@@ -196,17 +257,20 @@ def test_reading_a_package_normalizes_the_runtime_dataclasses(monkeypatch: pytes
 
     info = read_ummodel("/models/page.ummodel")
 
-    assert info == UmziPackageInfo(
-        path=Path("/models/page.ummodel"),
-        family="gaterv3",
-        scale=1,
-        in_channels=3,
-        out_channels=3,
-        alignment=16,
-        size=2048,
-        digest="abc123",
-        checkpoint="1x_umzi_digital_decompress_gaterv3_1.pth",
+    assert (info.family, info.schema, info.version, info.family_id) == ("gaterv3", 1, 1, 1)
+    assert (info.scale, info.in_channels, info.out_channels) == (1, 3, 3)
+    assert (info.alignment, info.base_channels) == (16, 32)
+    assert [(section.id, section.name, section.length) for section in info.sections] == [
+        (1, "architecture", 64),
+        (3, "weights", 1984),
+    ]
+    assert info.details == GateRV3Details(
+        tensors=12,
+        operations=9,
+        weight_bytes=1024,
+        op_kinds=(("Conv", 4), ("Silu", 5)),
     )
+    assert info.checkpoint == "1x_umzi_digital_decompress_gaterv3_1.pth"
     assert info.supported
 
 
@@ -218,18 +282,74 @@ def test_an_unsupported_package_reports_why(monkeypatch: pytest.MonkeyPatch):
     lines = describe_package(package)
 
     assert not package.supported
-    assert "unknown family" in lines[0]
+    assert "kernel family 1" in lines[0]
     assert "unsupported" in lines[0]
     assert lines[-1] == "  problem: unknown kernel family 9"
 
 
-def test_a_supported_package_reports_its_alignment(monkeypatch: pytest.MonkeyPatch):
+def test_a_gaterv3_report_covers_the_header_and_the_schedule(monkeypatch: pytest.MonkeyPatch):
     _install_fake_runtime(monkeypatch)
 
     lines = describe_package(read_ummodel("/models/page.ummodel"))
 
-    assert lines[0] == "/models/page.ummodel: gaterv3, x1 scale, supported"
-    assert "3 -> 3 channels, 16-pixel alignment" in lines[2]
+    assert lines[0] == "/models/page.ummodel: gaterv3 schema 1, supported"
+    assert lines[1] == "  2.00 KiB (2,048 bytes), sha256 abc123"
+    assert lines[2] == "  section 1 architecture: 64 bytes"
+    assert lines[3] == "  section 3 weights: 1.94 KiB (1,984 bytes)"
+    assert lines[4] == "  3 -> 3 channels, x1 scale, 16-pixel padding, 32 base channels"
+    assert lines[5] == "  12 tensors, 9 operations, 1.00 KiB (1,024 bytes) of weights"
+    assert lines[6] == "  operations: Conv 4, Silu 5"
+    assert lines[7] == "  checkpoint: 1x_umzi_digital_decompress_gaterv3_1.pth"
+
+
+@pytest.mark.parametrize(
+    ("family", "expected"),
+    [
+        (
+            "gaterv2",
+            [
+                "  3 -> 3 channels, x1 scale, 16-pixel padding, 32 base channels",
+                "  encoder (1, 1), decoder (1, 2), 2 latent attention blocks (eps 1e-05)",
+                "  1000 FP32 parameters, 3.91 KiB (4,000 bytes) of weights",
+            ],
+        ),
+        (
+            "moesr",
+            [
+                "  3 -> 3 channels, x4 scale, 8-pixel padding, 64 base channels",
+                "  3 groups of 3 full-resolution and 1 reduced-resolution blocks",
+                "  full 96 and reduced 64 hidden channels, 4.88 KiB (5,000 bytes) of weights",
+            ],
+        ),
+        (
+            "gfisrv2",
+            [
+                "  3 -> 3 channels, x4 scale, 48 base channels",
+                "  24 blocks, 128 hidden and 30 Fourier channels",
+                "  5.86 KiB (6,000 bytes) of weights",
+            ],
+        ),
+    ],
+)
+def test_every_family_reports_its_architecture(monkeypatch: pytest.MonkeyPatch, family: str, expected: list[str]):
+    _install_fake_runtime(monkeypatch, info=_fake_info(family=family))
+
+    lines = describe_package(read_ummodel("/models/page.ummodel"))
+
+    assert lines[0].startswith(f"/models/page.ummodel: {family} schema 1, ")
+    assert lines[4:-1] == expected
+
+
+def test_an_unreadable_payload_still_reports_the_container(monkeypatch: pytest.MonkeyPatch):
+    """A known family with an unsupported payload schema has no payload to report."""
+    info = _fake_info(family="gaterv3", problems=("Unsupported GateRV3 model payload version",))
+    info.payload = None
+    _install_fake_runtime(monkeypatch, info=info)
+
+    lines = describe_package(read_ummodel("/models/page.ummodel"))
+
+    assert lines[0] == "/models/page.ummodel: gaterv3 schema 1, unsupported"
+    assert lines[-1] == "  problem: Unsupported GateRV3 model payload version"
 
 
 # --------------------------------------------------------------------------------------

@@ -40,8 +40,14 @@ __all__ = (
     "UMZI_CHECKPOINT_SUFFIXES",
     "UMZI_FAMILIES",
     "UMZI_PRECISIONS",
+    "GFISRv2Details",
+    "GateRV2Details",
+    "GateRV3Details",
+    "MoESRDetails",
+    "UmziPackageDetails",
     "UmziPackageInfo",
     "UmziPrecision",
+    "UmziSection",
     "UmziSession",
     "build_kernel_options",
     "create_umzi_session",
@@ -116,26 +122,85 @@ def get_umzi_native() -> ModuleType:
 
 
 @dataclass(frozen=True)
+class UmziSection:
+    """One entry of the package's section table."""
+
+    id: int
+    """The section kind, `1` architecture, `2` schedule, `3` weights and `4` checkpoint."""
+
+    name: str
+    """Its name as the runtime spells it."""
+
+    length: int
+    """Its size in bytes."""
+
+
+@dataclass(frozen=True)
+class GateRV3Details:
+    """The GateRV3 payload: a fixed 1x topology with a declared operation schedule."""
+
+    tensors: int
+    operations: int
+    weight_bytes: int
+    op_kinds: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True)
+class GateRV2Details:
+    """The GateRV2 payload: encoder and decoder depths around latent attention blocks."""
+
+    encoder_depths: tuple[int, ...]
+    decoder_depths: tuple[int, ...]
+    latent_blocks: int
+    attention_eps: float
+    parameters: int
+    weight_bytes: int
+
+
+@dataclass(frozen=True)
+class MoESRDetails:
+    """The MoESR payload: groups of full- and reduced-resolution blocks."""
+
+    groups: int
+    full_blocks: int
+    reduced_blocks: int
+    full_hidden: int
+    reduced_hidden: int
+    weight_bytes: int
+
+
+@dataclass(frozen=True)
+class GFISRv2Details:
+    """The GFISRv2 payload: a 4x Fourier block stack."""
+
+    blocks: int
+    hidden_channels: int
+    fourier_channels: int
+    weight_bytes: int
+
+
+UmziPackageDetails = GateRV3Details | GateRV2Details | MoESRDetails | GFISRv2Details
+"""The family-specific half of a package header."""
+
+
+@dataclass(frozen=True)
 class UmziPackageInfo:
     """What a `.ummodel` package declares, normalized away from the runtime's own dataclasses."""
 
     path: Path
     """The package that was read."""
 
+    version: int
+    """The container format version."""
+
+    family_id: int
+    """The numeric kernel family, reported when this build does not know its name."""
+
     family: str | None
     """The kernel family, `None` when the package declares one this build does not know."""
 
-    scale: int
-    """The upscale factor the package declares, `1` for a denoiser."""
-
-    in_channels: int
-    """The number of channels the package reads."""
-
-    out_channels: int
-    """The number of channels the package returns."""
-
-    alignment: int | None
-    """The tile alignment the package pads to, `None` for a family that does not declare one."""
+    schema: int
+    """The payload schema version."""
 
     size: int
     """The package size in bytes."""
@@ -143,8 +208,29 @@ class UmziPackageInfo:
     digest: str
     """The SHA-256 digest recorded in the package header."""
 
-    checkpoint: str | None
+    sections: tuple[UmziSection, ...] = ()
+    """The section table, in file order."""
+
+    scale: int | None = None
+    """The upscale factor the package declares, `1` for a denoiser."""
+
+    in_channels: int | None = None
+    """The number of channels the package reads."""
+
+    out_channels: int | None = None
+    """The number of channels the package returns."""
+
+    alignment: int | None = None
+    """The tile alignment the package pads to, `None` when it does not declare one."""
+
+    base_channels: int | None = None
+    """The width of the first convolution."""
+
+    checkpoint: str | None = None
     """The checkpoint the package was exported from, when the payload records it."""
+
+    details: UmziPackageDetails | None = None
+    """The family-specific payload, `None` when this build cannot read it."""
 
     problems: tuple[str, ...] = ()
     """Why the installed runtime refuses the package; empty when it can open it."""
@@ -155,20 +241,67 @@ class UmziPackageInfo:
         return not self.problems
 
 
+def _payload_details(family: str | None, payload: Any) -> UmziPackageDetails | None:
+    """Read the family-specific half of a payload, `None` when the runtime could not parse it."""
+    if payload is None:
+        return None
+    if family == "gaterv3":
+        return GateRV3Details(
+            tensors=int(payload.tensors),
+            operations=int(payload.operations),
+            weight_bytes=int(payload.weight_bytes),
+            op_kinds=tuple((str(name), int(count)) for name, count in payload.op_kinds.items()),
+        )
+    if family == "gaterv2":
+        return GateRV2Details(
+            encoder_depths=tuple(int(depth) for depth in payload.encoder_depths),
+            decoder_depths=tuple(int(depth) for depth in payload.decoder_depths),
+            latent_blocks=int(payload.latent_blocks),
+            attention_eps=float(payload.attention_eps),
+            parameters=int(payload.parameters),
+            weight_bytes=int(payload.weight_bytes),
+        )
+    if family == "moesr":
+        return MoESRDetails(
+            groups=int(payload.groups),
+            full_blocks=int(payload.full_blocks),
+            reduced_blocks=int(payload.reduced_blocks),
+            full_hidden=int(payload.full_hidden),
+            reduced_hidden=int(payload.reduced_hidden),
+            weight_bytes=int(payload.weight_bytes),
+        )
+    if family == "gfisrv2":
+        return GFISRv2Details(
+            blocks=int(payload.blocks),
+            hidden_channels=int(payload.hidden_channels),
+            fourier_channels=int(payload.fourier_channels),
+            weight_bytes=int(payload.weight_bytes),
+        )
+    return None
+
+
 def _normalize_package(info: Any) -> UmziPackageInfo:
     """Flatten a `umzi_native.ModelInfo` and its family payload into :class:`UmziPackageInfo`."""
     payload = info.payload
-    alignment = getattr(payload, "alignment", None)
     return UmziPackageInfo(
         path=Path(info.path),
+        version=int(info.version),
+        family_id=int(info.family),
         family=info.family_name,
-        scale=int(getattr(payload, "scale", 0) or 0),
-        in_channels=int(getattr(payload, "input_channels", 0) or 0),
-        out_channels=int(getattr(payload, "output_channels", 0) or 0),
-        alignment=None if alignment is None else int(alignment),
+        schema=int(info.schema),
         size=int(info.size),
         digest=str(info.digest),
+        sections=tuple(
+            UmziSection(id=int(section.id), name=str(section.name), length=int(section.length))
+            for section in info.sections
+        ),
+        scale=getattr(payload, "scale", None),
+        in_channels=getattr(payload, "input_channels", None),
+        out_channels=getattr(payload, "output_channels", None),
+        alignment=getattr(payload, "alignment", None),
+        base_channels=getattr(payload, "base_channels", None),
         checkpoint=getattr(payload, "checkpoint", None),
+        details=_payload_details(info.family_name, payload),
         problems=tuple(info.problems),
     )
 
@@ -187,11 +320,11 @@ def read_ummodel(model_path: str | Path) -> UmziPackageInfo:
 
 
 def _format_size(size: int) -> str:
-    """Render a byte count for the report lines."""
+    """Render a byte count the way the umzi CLI does, with the exact byte count."""
     for unit, scale in (("GiB", 1 << 30), ("MiB", 1 << 20), ("KiB", 1 << 10)):
         if size >= scale:
-            return f"{size / scale:.2f} {unit}"
-    return f"{size} bytes"
+            return f"{size / scale:.2f} {unit} ({size:,} bytes)"
+    return f"{size:,} bytes"
 
 
 def describe_package(info: UmziPackageInfo) -> list[str]:
@@ -201,17 +334,52 @@ def describe_package(info: UmziPackageInfo) -> list[str]:
     :param info: The package to describe
     :return: One line per fact, with the runtime's problems last
     """
-    family = info.family or "unknown family"
-    summary = f"{info.path}: {family}"
-    if info.scale:
-        summary += f", x{info.scale} scale"
-    summary += ", supported" if info.supported else ", unsupported"
-    lines = [summary, f"  {_format_size(info.size)}, sha256 {info.digest}"]
-    if info.in_channels and info.out_channels:
-        channels = f"  {info.in_channels} -> {info.out_channels} channels"
+    family = info.family or f"kernel family {info.family_id}"
+    state = "supported" if info.supported else "unsupported"
+    lines = [
+        f"{info.path}: {family} schema {info.schema}, {state}",
+        f"  {_format_size(info.size)}, sha256 {info.digest}",
+    ]
+    lines.extend(f"  section {section.id} {section.name}: {_format_size(section.length)}" for section in info.sections)
+
+    if info.in_channels is not None and info.out_channels is not None and info.scale is not None:
+        geometry = f"  {info.in_channels} -> {info.out_channels} channels, x{info.scale} scale"
         if info.alignment is not None:
-            channels += f", {info.alignment}-pixel alignment"
-        lines.append(channels)
+            geometry += f", {info.alignment}-pixel padding"
+        if info.base_channels is not None:
+            geometry += f", {info.base_channels} base channels"
+        lines.append(geometry)
+
+    details = info.details
+    if isinstance(details, GateRV3Details):
+        lines.append(
+            f"  {details.tensors} tensors, {details.operations} operations, "
+            f"{_format_size(details.weight_bytes)} of weights"
+        )
+        if details.op_kinds:
+            lines.append("  operations: " + ", ".join(f"{name} {count}" for name, count in details.op_kinds))
+    elif isinstance(details, GateRV2Details):
+        lines.append(
+            f"  encoder {details.encoder_depths}, decoder {details.decoder_depths}, "
+            f"{details.latent_blocks} latent attention blocks (eps {details.attention_eps:g})"
+        )
+        lines.append(f"  {details.parameters} FP32 parameters, {_format_size(details.weight_bytes)} of weights")
+    elif isinstance(details, MoESRDetails):
+        lines.append(
+            f"  {details.groups} groups of {details.full_blocks} full-resolution and "
+            f"{details.reduced_blocks} reduced-resolution blocks"
+        )
+        lines.append(
+            f"  full {details.full_hidden} and reduced {details.reduced_hidden} hidden channels, "
+            f"{_format_size(details.weight_bytes)} of weights"
+        )
+    elif isinstance(details, GFISRv2Details):
+        lines.append(
+            f"  {details.blocks} blocks, {details.hidden_channels} hidden and "
+            f"{details.fourier_channels} Fourier channels"
+        )
+        lines.append(f"  {_format_size(details.weight_bytes)} of weights")
+
     if info.checkpoint:
         lines.append(f"  checkpoint: {info.checkpoint}")
     lines.extend(f"  problem: {problem}" for problem in info.problems)
