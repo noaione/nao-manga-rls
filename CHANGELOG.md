@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Nothing yet!
+
+## [0.32.0] (2026-11-23)
+
 **New Features**
 - `nmanga umzi` - Run `.ummodel` packages on the native Umzi CUDA runtime, without ONNX Runtime or TensorRT
   - `umzi infer` reads the package header first, then opens the session with the switches its family recommends (the GateRV3 fusions and projection timing, and the fused kernel of GateRV2, MoESR or GFISRv2), spelled out so an umzi upgrade cannot change them silently
