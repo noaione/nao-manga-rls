@@ -86,6 +86,7 @@ def _denoise_image(
     background: Literal["white", "black"],
     use_fp32: bool,
     tta: bool,
+    pad_final_batch: bool,
 ) -> Image.Image:
     np = get_numpy()
 
@@ -212,6 +213,10 @@ def _denoise_image(
     # An int on a static input (e.g. a TensorRT-RTX engine): short batches get padded up to it below.
     input_shape = getattr(input_spec, "shape", None)
     fixed_batch = input_shape[0] if input_shape else None
+    if not isinstance(fixed_batch, int) and pad_final_batch:
+        # A native session prepares one padded shape at a time, so a page whose last batch is
+        # short would re-tune it; repeating real tiles keeps every call the same shape.
+        fixed_batch = batch_size
     output_name = model.get_outputs()[0].name
 
     def infer(batch: "np.ndarray") -> "np.ndarray":
@@ -323,6 +328,7 @@ def denoise_single_image(
     background: Literal["white", "black"] = "black",
     use_fp32: bool = False,
     tta: bool = False,
+    pad_final_batch: bool = False,
 ) -> Image.Image:
     """Process an image tile by tile, without blending neighbouring tiles.
 
@@ -336,6 +342,7 @@ def denoise_single_image(
     :param background: The colour the last partial tile row/column is padded with
     :param use_fp32: Fall back to fp32 input when the model declares no precision
     :param tta: Average each batch over its 8 flips/rotations (test-time augmentation)
+    :param pad_final_batch: Repeat tiles so the last batch is full, which keeps one model shape
     :param context: Input pixels the model trims off each tile; defaults to the model's detected context
     :return: The processed page with alpha and palette preserved
     """
@@ -351,6 +358,7 @@ def denoise_single_image(
         background=background,
         use_fp32=use_fp32,
         tta=tta,
+        pad_final_batch=pad_final_batch,
     )
 
 
@@ -366,6 +374,7 @@ def denoise_single_image_with_overlap(
     background: Literal["white", "black"] = "black",
     use_fp32: bool = False,
     tta: bool = False,
+    pad_final_batch: bool = False,
 ) -> Image.Image:
     """Process an image with overlapping tiles and feathered seams.
 
@@ -382,6 +391,7 @@ def denoise_single_image_with_overlap(
     :param background: The colour a non-overlapping run pads the last partial tile with
     :param use_fp32: Fall back to fp32 input when the model declares no precision
     :param tta: Average each batch over its 8 flips/rotations (test-time augmentation)
+    :param pad_final_batch: Repeat tiles so the last batch is full, which keeps one model shape
     :return: The processed page with alpha and palette preserved
     """
 
@@ -396,4 +406,5 @@ def denoise_single_image_with_overlap(
         background=background,
         use_fp32=use_fp32,
         tta=tta,
+        pad_final_batch=pad_final_batch,
     )

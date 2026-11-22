@@ -47,7 +47,7 @@ with one of the `denoiser-*` extras.
 
 | Extra | What it adds |
 | --- | --- |
-| `denoiser` | torch, `onnx`, `onnxscript`, einops, `resselt`, `safetensors`, Triton for `torch infer --compile`, and Windows ML on Windows |
+| `denoiser` | torch, `onnx`, `onnxscript`, einops, `resselt`, `safetensors`, Triton for `torch infer --compile`, Windows ML on Windows, and `umzi-native` on Linux x86_64 and Windows |
 | `denoiser-ort` | The stock `onnxruntime` wheel. CoreML on macOS, the CPU provider everywhere else |
 | `denoiser-nvidia` | `onnxruntime-gpu`, the TensorRT RTX plugin and `tensorrt-cu13`, alongside a CUDA build of torch |
 | `denoiser-intel` | The OpenVINO plugin, for Intel CPU, GPU and NPU |
@@ -60,6 +60,9 @@ Which command needs what:
 - `nmanga ort backends` prints what the installed runtime can actually use
 - `nmanga torch infer` and `nmanga torch to-onnx` need only `denoiser`. They load the checkpoint with
   `resselt` and run it on PyTorch, so no execution provider is involved
+- `nmanga umzi infer`, `umzi peek` and `umzi to-ummodel` run `.ummodel` packages on the native Umzi
+  CUDA runtime (requires CUDA 13.x). `denoiser` installs it on Linux x86_64 and Windows, and there is
+  no macOS build.
 
 Which extras combine:
 

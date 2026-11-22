@@ -61,6 +61,7 @@ from .cli.rescaler import rescale2, rescale_image
 from .cli.spreads_manager import spreads
 from .cli.timewizard import timewizard_modify
 from .cli.torch import torch_group
+from .cli.umzi import umzi_group
 from .term import detect_shell, get_console
 from .term.shell import (
     install_completion_for_bash,
@@ -178,7 +179,7 @@ signal.signal(signal.SIGTERM, exit_143)
 @click.command_panel(
     name="ML Processing",
     help="Commands for processing images using Machine Learning models",
-    commands=["ort", "torch"],
+    commands=["ort", "torch", "umzi"],
 )
 @click.command_panel(
     name="Archive Processing",
@@ -327,6 +328,7 @@ main.add_command(auto_posterize)
 main.add_command(analyze_shades)
 main.add_command(ort_group)
 main.add_command(torch_group)
+main.add_command(umzi_group)
 main.add_command(shift_renamer)
 main.add_command(orchestractor)
 main.add_command(lookup_group)

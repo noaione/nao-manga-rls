@@ -27,7 +27,7 @@ import nmanga.ml.winml
 import nmanga.winml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HEAVY_MODULES = ("torch", "onnxruntime", "tensorrt", "windowsml")
+HEAVY_MODULES = ("torch", "onnxruntime", "tensorrt", "windowsml", "umzi_native")
 
 
 def _run_python(code: str) -> str:
@@ -86,7 +86,9 @@ def test_importing_the_ml_modules_does_not_load_the_heavy_stack():
         "nmanga.ml.onnx_session",
         "nmanga.ml.onnx_cache",
         "nmanga.ml.onnx_backend",
+        "nmanga.ml.umzi",
         "nmanga.cli.torch",
+        "nmanga.cli.umzi",
         "nmanga.ml.ort",
         "nmanga.ml.winml",
         "nmanga.denoiser",

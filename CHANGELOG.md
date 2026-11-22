@@ -3,6 +3,13 @@
 ## Unreleased
 
 **New Features**
+- `nmanga umzi` - Run `.ummodel` packages on the native Umzi CUDA runtime, without ONNX Runtime or TensorRT
+  - `umzi infer` reads the package header first, then opens the session with the switches its family recommends (the GateRV3 fusions and projection timing, and the fused kernel of GateRV2, MoESR or GFISRv2), spelled out so an umzi upgrade cannot change them silently
+    - The last tile batch is filled by repeating real tiles, so a page tail does not make the session prepare a second GPU shape
+  - `umzi peek` reports the family, scale, channels, alignment and every reason the installed runtime refuses a package
+  - `umzi to-ummodel` packs a `.safetensors`, `.pth`, `.pt` or `.ckpt` checkpoint, and `--kernel` makes it fail unless the checkpoint detects as that family
+  - `--precision mixed|fp16|fp32` - only GFISRv2 has the fp32 path, and another family is refused before a session opens
+  - The tuned GPU plans are cached under `$DATA_DIR/umzi`, `--cache-dir` moves the folder and `--no-cache` turns the cache off
 - `autolevel2`, `autolevel3` and the orchestrator `autolevel` action - Level pages without a usable black peak by the peak a strict majority of the book agree on, and pages peaking more than `--book-peak-tolerance` (6) above it by the same peak, since theirs is a dark tone rather than their black; `--no-book-peak-fallback` disables both
 - `nmanga ort infer` - `--tta` averages each batch over 8 flips/rotations (about 8x slower); the orchestrator `denoise`/`upscale` actions expose it as `tta`
 - `nmanga ort to-fp16` - Convert an ONNX model to fp16, running it once to validate the result
@@ -10,6 +17,7 @@
 
 **Changes**
 - **Breaking:** The old `nmanga autolevel` command is gone; use `autolevel2` or `autolevel3`
+- `denoiser` installs `umzi-native` on Linux x86_64 and Windows AMD64, which the `nmanga umzi` commands need; it has no macOS or ARM Linux wheel yet
 - Autolevel peak detection is cheaper and finds the page's black more reliably:
   - Counting shades in Pillow replaces the array pass
   - A 3x3 median runs first, so a JPEG's ringing at black no longer outvotes the real ink and leaves the page unlevelled
