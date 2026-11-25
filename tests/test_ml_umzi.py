@@ -16,7 +16,9 @@ import numpy as np
 import pytest
 
 from nmanga.ml.umzi import (
+    FiGSRDetails,
     GateRV3Details,
+    SMoSRDetails,
     build_kernel_options,
     create_umzi_session,
     describe_package,
@@ -110,6 +112,35 @@ def _payload(family: str | None) -> SimpleNamespace | None:
             weight_bytes=6000,
             checkpoint="gfisrv2.pth",
         )
+    if family == "smosr":
+        return SimpleNamespace(
+            scale=2,
+            input_channels=3,
+            output_channels=3,
+            reflection_padding=2,
+            base_channels=48,
+            first_blocks=2,
+            middle_blocks=3,
+            end_blocks=1,
+            weight_bytes=7000,
+            checkpoint="smosr.safetensors",
+        )
+    if family == "figsr":
+        return SimpleNamespace(
+            scale=2,
+            input_channels=3,
+            output_channels=3,
+            reflection_padding=4,
+            alignment=2,
+            base_channels=32,
+            blocks_per_group=12,
+            hidden_channels=80,
+            fourier_channels=8,
+            square_kernel=13,
+            band_kernel=17,
+            weight_bytes=8000,
+            checkpoint="figsr.safetensors",
+        )
     return None
 
 
@@ -184,16 +215,28 @@ def test_a_missing_runtime_names_the_extra_to_install(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.parametrize(
-    ("family", "switches"),
+    ("family", "precision", "switches"),
     [
-        ("gaterv3", {"fuse_gate_pool": 1, "tune_projections": 1, "fuse_silu": 1}),
-        ("gaterv2", {"tune_plans": 1}),
-        ("moesr", {"fused_gate": 1}),
-        ("gfisrv2", {"fused_conv": 1}),
+        ("gaterv3", "fp16", {"fuse_gate_pool": 1, "tune_projections": 1, "fuse_silu": 1}),
+        ("gaterv3", "mixed", {"fuse_gate_pool": 1, "tune_projections": 1, "fuse_silu": 1}),
+        ("gaterv2", "fp16", {"tune_plans": 1}),
+        ("moesr", "fp16", {"fused_gate": 1}),
+        ("gfisrv2", "fp16", {"fused_conv": 1}),
+        ("smosr", "fp16", {"fuse_silu": 1}),
+        ("smosr", "mixed", {"tune_convolutions": 1, "fuse_silu": 1}),
+        ("smosr", "fp32", {}),
+        ("figsr", "fp16", {"tune_convolutions": 1, "fuse_expand_gate": 1}),
+        ("figsr", "mixed", {"tune_convolutions": 1, "fuse_row_gate": 1, "fuse_expand_gate": 1}),
+        ("figsr", "fp32", {"tune_convolutions": 1, "fp32_nchw": 1}),
     ],
 )
-def test_each_family_pins_its_recommended_switches(family: str, switches: dict[str, int]):
-    assert recommended_kernel_options(family) == switches
+def test_each_family_pins_its_recommended_switches(family: str, precision: str, switches: dict[str, int]):
+    assert recommended_kernel_options(family, precision) == switches
+
+
+def test_recommended_switches_default_to_fp16():
+    assert recommended_kernel_options("smosr") == {"fuse_silu": 1}
+    assert recommended_kernel_options("figsr") == {"tune_convolutions": 1, "fuse_expand_gate": 1}
 
 
 def test_an_unknown_family_adds_no_switches():
@@ -204,6 +247,14 @@ def test_an_explicit_switch_overrides_a_recommended_one():
     options = build_kernel_options("gaterv3", {"fuse_gate_pool": 0})
 
     assert options == {"fuse_gate_pool": 0, "tune_projections": 1, "fuse_silu": 1}
+
+
+def test_precision_scoped_overrides_merge_with_that_precisions_recommendations():
+    assert build_kernel_options("figsr", {"fuse_row_gate": 0}, precision="mixed") == {
+        "tune_convolutions": 1,
+        "fuse_row_gate": 0,
+        "fuse_expand_gate": 1,
+    }
 
 
 def test_kernel_options_parse_name_value_pairs():
@@ -233,13 +284,14 @@ def test_a_malformed_kernel_option_is_rejected(value: str, message: str):
 
 
 @pytest.mark.parametrize("family", ["gaterv3", "gaterv2", "moesr"])
-def test_only_gfisrv2_has_an_fp32_path(family: str):
-    with pytest.raises(ValueError, match="only available for GFISRv2"):
+def test_only_supported_families_have_an_fp32_path(family: str):
+    with pytest.raises(ValueError, match="only available for GFISRv2, SMoSR, and FiGSR"):
         resolve_precision(family, "fp32")
 
 
-def test_gfisrv2_accepts_fp32():
-    assert resolve_precision("gfisrv2", "FP32") == "fp32"
+@pytest.mark.parametrize("family", ["gfisrv2", "smosr", "figsr"])
+def test_fp32_capable_families_accept_fp32(family: str):
+    assert resolve_precision(family, "FP32") == "fp32"
 
 
 def test_an_unknown_precision_is_rejected():
@@ -329,6 +381,23 @@ def test_a_gaterv3_report_covers_the_header_and_the_schedule(monkeypatch: pytest
                 "  5.86 KiB (6,000 bytes) of weights",
             ],
         ),
+        (
+            "smosr",
+            [
+                "  3 -> 3 channels, x2 scale, 48 base channels",
+                "  2 + 3 + 1 blocks, 2-pixel reflection padding",
+                "  6.84 KiB (7,000 bytes) of weights",
+            ],
+        ),
+        (
+            "figsr",
+            [
+                "  3 -> 3 channels, x2 scale, 2-pixel padding, 32 base channels",
+                "  2 groups of 12 blocks, 80 hidden and 8 Fourier channels",
+                "  13x13 and 1x17 spatial kernels, 4-pixel reflection padding",
+                "  7.81 KiB (8,000 bytes) of weights",
+            ],
+        ),
     ],
 )
 def test_every_family_reports_its_architecture(monkeypatch: pytest.MonkeyPatch, family: str, expected: list[str]):
@@ -338,6 +407,30 @@ def test_every_family_reports_its_architecture(monkeypatch: pytest.MonkeyPatch, 
 
     assert lines[0].startswith(f"/models/page.ummodel: {family} schema 1, ")
     assert lines[4:-1] == expected
+
+
+def test_smosr_and_figsr_normalize_their_payload_details(monkeypatch: pytest.MonkeyPatch):
+    _install_fake_runtime(monkeypatch, info=_fake_info(family="smosr"))
+    smosr_info = read_ummodel("/models/page.ummodel")
+    assert smosr_info.details == SMoSRDetails(
+        reflection_padding=2,
+        first_blocks=2,
+        middle_blocks=3,
+        end_blocks=1,
+        weight_bytes=7000,
+    )
+
+    _install_fake_runtime(monkeypatch, info=_fake_info(family="figsr"))
+    figsr_info = read_ummodel("/models/page.ummodel")
+    assert figsr_info.details == FiGSRDetails(
+        reflection_padding=4,
+        blocks_per_group=12,
+        hidden_channels=80,
+        fourier_channels=8,
+        square_kernel=13,
+        band_kernel=17,
+        weight_bytes=8000,
+    )
 
 
 def test_an_unreadable_payload_still_reports_the_container(monkeypatch: pytest.MonkeyPatch):
@@ -397,6 +490,32 @@ def test_a_session_can_disable_the_plan_cache(monkeypatch: pytest.MonkeyPatch):
 
     assert session.options.kwargs["cache_dir"] is None
     assert session.options.kwargs["kernel_options"] == {"fused_gate": 1}
+
+
+@pytest.mark.parametrize(
+    ("family", "precision", "expected_options"),
+    [
+        ("smosr", "fp16", {"fuse_silu": 1}),
+        ("smosr", "mixed", {"tune_convolutions": 1, "fuse_silu": 1}),
+        ("smosr", "fp32", {}),
+        ("figsr", "fp16", {"tune_convolutions": 1, "fuse_expand_gate": 1}),
+        ("figsr", "mixed", {"tune_convolutions": 1, "fuse_row_gate": 1, "fuse_expand_gate": 1}),
+        ("figsr", "fp32", {"tune_convolutions": 1, "fp32_nchw": 1}),
+    ],
+)
+def test_a_session_picks_precision_scoped_recommended_options(
+    monkeypatch: pytest.MonkeyPatch,
+    family: str,
+    precision: str,
+    expected_options: dict[str, int],
+):
+    _install_fake_runtime(monkeypatch, info=_fake_info(family=family))
+    _no_torch(monkeypatch)
+
+    session = create_umzi_session("/models/page.ummodel", family=family, precision=precision)
+
+    assert session.options.kwargs["precision"] == precision
+    assert session.options.kwargs["kernel_options"] == expected_options
 
 
 # --------------------------------------------------------------------------------------

@@ -40,10 +40,12 @@ __all__ = (
     "UMZI_CHECKPOINT_SUFFIXES",
     "UMZI_FAMILIES",
     "UMZI_PRECISIONS",
+    "FiGSRDetails",
     "GFISRv2Details",
     "GateRV2Details",
     "GateRV3Details",
     "MoESRDetails",
+    "SMoSRDetails",
     "UmziPackageDetails",
     "UmziPackageInfo",
     "UmziPrecision",
@@ -66,7 +68,7 @@ UmziPrecision = Literal["mixed", "fp16", "fp32"]
 UMZI_PRECISIONS: tuple[UmziPrecision, ...] = ("mixed", "fp16", "fp32")
 """Every precision mode, in the order help output lists them."""
 
-UMZI_FAMILIES: tuple[str, ...] = ("gaterv3", "gaterv2", "moesr", "gfisrv2")
+UMZI_FAMILIES: tuple[str, ...] = ("gaterv3", "gaterv2", "moesr", "gfisrv2", "smosr", "figsr")
 """The kernel families a `.ummodel` package can declare."""
 
 UMZI_CHECKPOINT_SUFFIXES: tuple[str, ...] = (".safetensors", ".pth", ".pt", ".ckpt")
@@ -83,8 +85,19 @@ _RECOMMENDED_KERNEL_OPTIONS: dict[str, dict[str, int]] = {
     "gfisrv2": {"fused_conv": 1},
 }
 
-_FP32_FAMILIES = frozenset({"gfisrv2"})
-"""The only family with an FP32 path; every other one runs mixed precision or FP16."""
+_PRECISION_KERNEL_OPTIONS: dict[tuple[str, str], dict[str, int]] = {
+    # SMoSR and FiGSR reject switches outside their precision scope at session open; SMoSR's FP16
+    # path already gets its fastest plans from `fuse_silu` without re-timing unfused body convs.
+    ("smosr", "fp16"): {"fuse_silu": 1},
+    ("smosr", "mixed"): {"tune_convolutions": 1, "fuse_silu": 1},
+    ("smosr", "fp32"): {},
+    ("figsr", "fp16"): {"tune_convolutions": 1, "fuse_expand_gate": 1},
+    ("figsr", "mixed"): {"tune_convolutions": 1, "fuse_row_gate": 1, "fuse_expand_gate": 1},
+    ("figsr", "fp32"): {"tune_convolutions": 1, "fp32_nchw": 1},
+}
+
+_FP32_FAMILIES = frozenset({"gfisrv2", "smosr", "figsr"})
+"""Every family with an FP32 path; the others only run mixed precision or FP16."""
 
 
 class UmziSession(Protocol):
@@ -179,7 +192,31 @@ class GFISRv2Details:
     weight_bytes: int
 
 
-UmziPackageDetails = GateRV3Details | GateRV2Details | MoESRDetails | GFISRv2Details
+@dataclass(frozen=True)
+class SMoSRDetails:
+    """The SMoSR payload: a 2x direct pixel-shuffle stack with three block stages."""
+
+    reflection_padding: int
+    first_blocks: int
+    middle_blocks: int
+    end_blocks: int
+    weight_bytes: int
+
+
+@dataclass(frozen=True)
+class FiGSRDetails:
+    """The FiGSR payload: a 2x Fourier and dense spatial block stack."""
+
+    reflection_padding: int
+    blocks_per_group: int
+    hidden_channels: int
+    fourier_channels: int
+    square_kernel: int
+    band_kernel: int
+    weight_bytes: int
+
+
+UmziPackageDetails = GateRV3Details | GateRV2Details | MoESRDetails | GFISRv2Details | SMoSRDetails | FiGSRDetails
 """The family-specific half of a package header."""
 
 
@@ -275,6 +312,24 @@ def _payload_details(family: str | None, payload: Any) -> UmziPackageDetails | N
             blocks=int(payload.blocks),
             hidden_channels=int(payload.hidden_channels),
             fourier_channels=int(payload.fourier_channels),
+            weight_bytes=int(payload.weight_bytes),
+        )
+    if family == "smosr":
+        return SMoSRDetails(
+            reflection_padding=int(payload.reflection_padding),
+            first_blocks=int(payload.first_blocks),
+            middle_blocks=int(payload.middle_blocks),
+            end_blocks=int(payload.end_blocks),
+            weight_bytes=int(payload.weight_bytes),
+        )
+    if family == "figsr":
+        return FiGSRDetails(
+            reflection_padding=int(payload.reflection_padding),
+            blocks_per_group=int(payload.blocks_per_group),
+            hidden_channels=int(payload.hidden_channels),
+            fourier_channels=int(payload.fourier_channels),
+            square_kernel=int(payload.square_kernel),
+            band_kernel=int(payload.band_kernel),
             weight_bytes=int(payload.weight_bytes),
         )
     return None
@@ -379,6 +434,22 @@ def describe_package(info: UmziPackageInfo) -> list[str]:
             f"{details.fourier_channels} Fourier channels"
         )
         lines.append(f"  {_format_size(details.weight_bytes)} of weights")
+    elif isinstance(details, SMoSRDetails):
+        lines.append(
+            f"  {details.first_blocks} + {details.middle_blocks} + {details.end_blocks} blocks, "
+            f"{details.reflection_padding}-pixel reflection padding"
+        )
+        lines.append(f"  {_format_size(details.weight_bytes)} of weights")
+    elif isinstance(details, FiGSRDetails):
+        lines.append(
+            f"  2 groups of {details.blocks_per_group} blocks, {details.hidden_channels} hidden and "
+            f"{details.fourier_channels} Fourier channels"
+        )
+        lines.append(
+            f"  {details.square_kernel}x{details.square_kernel} and 1x{details.band_kernel} spatial kernels, "
+            f"{details.reflection_padding}-pixel reflection padding"
+        )
+        lines.append(f"  {_format_size(details.weight_bytes)} of weights")
 
     if info.checkpoint:
         lines.append(f"  checkpoint: {info.checkpoint}")
@@ -386,19 +457,28 @@ def describe_package(info: UmziPackageInfo) -> list[str]:
     return lines
 
 
-def recommended_kernel_options(family: str | None) -> dict[str, int]:
+def recommended_kernel_options(family: str | None, precision: str = "fp16") -> dict[str, int]:
     """
-    The kernel switches the umzi quickstart recommends for a family.
+    The kernel switches the umzi quickstart recommends for a family and precision.
 
     :param family: The `family_name` a package declares
+    :param precision: The session precision (`mixed`, `fp16`, or `fp32`)
     :return: A fresh mapping; empty for a family that needs none, or is unknown
     """
     if family is None:
         return {}
+    normalized = precision.strip().lower()
+    if (family, normalized) in _PRECISION_KERNEL_OPTIONS:
+        return dict(_PRECISION_KERNEL_OPTIONS[family, normalized])
     return dict(_RECOMMENDED_KERNEL_OPTIONS.get(family, {}))
 
 
-def build_kernel_options(family: str | None, overrides: Mapping[str, int] | None = None) -> dict[str, int]:
+def build_kernel_options(
+    family: str | None,
+    overrides: Mapping[str, int] | None = None,
+    *,
+    precision: str = "fp16",
+) -> dict[str, int]:
     """
     Start from the family's recommended switches and let explicit ones win.
 
@@ -407,9 +487,10 @@ def build_kernel_options(family: str | None, overrides: Mapping[str, int] | None
 
     :param family: The `family_name` a package declares
     :param overrides: The switches the user asked for
+    :param precision: The session precision (`mixed`, `fp16`, or `fp32`)
     :return: The kernel options to open the session with
     """
-    options = recommended_kernel_options(family)
+    options = recommended_kernel_options(family, precision)
     if overrides:
         options.update(overrides)
     return options
@@ -443,15 +524,15 @@ def resolve_precision(family: str | None, precision: str) -> UmziPrecision:
     :param family: The `family_name` a package declares
     :param precision: The requested precision, case insensitive
     :return: The normalized precision
-    :raises ValueError: If the precision is unknown, or only a GFISRv2 model has that path
+    :raises ValueError: If the precision is unknown, or the family has no FP32 path
     """
     normalized = precision.strip().lower()
     if normalized not in UMZI_PRECISIONS:
         raise ValueError(f"Unknown precision {precision!r}, expected one of: {', '.join(UMZI_PRECISIONS)}.")
     if normalized == "fp32" and family not in _FP32_FAMILIES:
         raise ValueError(
-            f"The fp32 path is only available for GFISRv2 models, but this package is {family or 'unknown'}. "
-            "Use `--precision mixed` or `--precision fp16`."
+            f"The fp32 path is only available for GFISRv2, SMoSR, and FiGSR models, "
+            f"but this package is {family or 'unknown'}. Use `--precision mixed` or `--precision fp16`."
         )
     return normalized
 
@@ -495,12 +576,13 @@ def create_umzi_session(
     """
     _load_torch_cuda_libraries()
     umzi = get_umzi_native()
+    normalized_precision = resolve_precision(family, precision)
     options = umzi.SessionOptions(
-        precision=resolve_precision(family, precision),
+        precision=normalized_precision,
         device_id=device_id,
         cache_dir=None if cache_dir is None else Path(cache_dir),
         enable_cuda_graph=enable_cuda_graph,
-        kernel_options=build_kernel_options(family, kernel_options),
+        kernel_options=build_kernel_options(family, kernel_options, precision=normalized_precision),
     )
     return cast("UmziSession", umzi.InferenceSession(Path(model_path).expanduser(), options))
 

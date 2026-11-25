@@ -272,7 +272,7 @@ def to_ummodel(path_or_archive: Path, kernel: str | None, output_dir: Path | Non
     type=click.Choice(list(UMZI_PRECISIONS), case_sensitive=False),
     default="fp16",
     show_default=True,
-    help="The precision the session runs at, the fp32 path only exists for GFISRv2 models",
+    help="The precision the session runs at, the fp32 path only exists for GFISRv2, SMoSR, and FiGSR models",
 )
 @click.option(
     "-cd",
@@ -393,7 +393,7 @@ def infer(
         resolved_cache.mkdir(parents=True, exist_ok=True)
         console.info(f"Plan cache: {resolved_cache}")
 
-    used_options = build_kernel_options(package.family, overrides)
+    used_options = build_kernel_options(package.family, overrides, precision=selected_precision)
     rendered_options = ", ".join(f"{name}={value}" for name, value in sorted(used_options.items()))
     console.info(f"Kernel options: {rendered_options or 'family defaults'}")
 
@@ -416,8 +416,8 @@ def infer(
     except OSError as exc:
         raise click.ClickException(
             f"Could not open {model_path.name}: {exc}\n"
-            "The native runtime links cuBLASLt 13 and cuDNN 9, which a CUDA build of torch (the "
-            "`denoiser-nvidia` extra) loads into the process before the session opens."
+            "The native runtime links cuBLASLt 13, cuDNN 9 (and cuFFT 12 for GFISRv2/FiGSR), which a CUDA build of "
+            "torch (the `denoiser-nvidia` extra) loads into the process before the session opens."
         ) from exc
     except (ImportError, RuntimeError, ValueError) as exc:
         raise click.ClickException(f"Could not open {model_path.name}: {exc}") from exc
