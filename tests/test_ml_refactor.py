@@ -86,6 +86,7 @@ def test_importing_the_ml_modules_does_not_load_the_heavy_stack():
         "nmanga.ml.onnx_session",
         "nmanga.ml.onnx_cache",
         "nmanga.ml.onnx_backend",
+        "nmanga.ml.tiler",
         "nmanga.ml.umzi",
         "nmanga.cli.torch",
         "nmanga.cli.umzi",

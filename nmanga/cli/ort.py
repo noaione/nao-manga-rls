@@ -43,6 +43,7 @@ from ..ml.backends import (
 from ..ml.contracts import MLDataType
 from ..ml.onnx_backend import denoise_single_image_with_overlap
 from ..ml.onnx_session import prepare_model_runtime_builders
+from ..ml.tiler import TilingPolicy, default_expand_tolerance
 from . import options
 from ._deco import check_config_first, time_program
 from .base import NMangaCommandHandler
@@ -270,6 +271,29 @@ def list_backends(show_raw_providers: bool):
     show_default=True,
     help="Disable CPU fallback for execution provider",
 )
+@click.option(
+    "-vt",
+    "--variable-tiling/--no-variable-tiling",
+    "variable_tiling",
+    default=False,
+    show_default=True,
+    help="Shrink or expand edge tiles instead of padding every tile to --tile-size (dynamic backends only)",
+)
+@click.option(
+    "--tile-expand",
+    "tile_expand",
+    type=options.ZERO_POSITIVE_INT,
+    default=None,
+    help="Max extra pixels to absorb a small edge sliver into the previous tile under variable tiling",
+)
+@click.option(
+    "--tile-bucket",
+    "tile_bucket",
+    type=options.ZERO_POSITIVE_INT,
+    default=32,
+    show_default=True,
+    help="Snap variable edge dimensions up to this multiple across pages, 0 disables",
+)
 @options.recursive
 @check_config_first
 @time_program
@@ -290,6 +314,9 @@ def infer(
     enable_cuda_graph: bool,
     strict_ep: bool,
     no_cpu_fallback: bool,
+    variable_tiling: bool,
+    tile_expand: int | None,
+    tile_bucket: int,
     recursive: bool,
 ):
     """Denoise or upscale images by running an ONNX model over them."""
@@ -303,6 +330,12 @@ def infer(
     if tile_overlap < 0 or tile_overlap * 2 >= tile_size:
         raise click.BadParameter(
             "Tile overlap must be non-negative and less than half the tile size.", param_hint="tile_overlap"
+        )
+
+    if variable_tiling and backend in (InferenceBackend.TRT, InferenceBackend.TRT_RTX, InferenceBackend.COREML):
+        raise click.BadParameter(
+            f"Variable tiling cannot be used with the static-shape {backend.label} backend.",
+            param_hint="variable_tiling",
         )
 
     candidates: list[Path] = []
@@ -351,6 +384,22 @@ def infer(
     if scale_factor > 1:
         console.info(f"Detected model scale factor: x{scale_factor}")
 
+    if variable_tiling:
+        active_providers = set(session.get_providers())
+        static_eps = {"TensorrtExecutionProvider", "NvTensorRTRTXExecutionProvider", "CoreMLExecutionProvider"}
+        if active_providers.intersection(static_eps):
+            raise click.ClickException("Variable tiling cannot be used when TensorRT, TRT-RTX, or CoreML is active.")
+        input_shape = getattr(session.get_inputs()[0], "shape", None)
+        if input_shape and len(input_shape) >= 4 and any(isinstance(dim, int) and dim > 0 for dim in input_shape[-2:]):
+            raise click.ClickException(
+                "Variable tiling requires dynamic spatial input dimensions, but this model has a fixed input shape."
+            )
+        expand = default_expand_tolerance(tile_size) if tile_expand is None else tile_expand
+        tiling_policy = TilingPolicy(mode="variable", expand_tolerance=expand, bucket_step=tile_bucket)
+        console.info(f"Variable tiling: expand<={expand}px, bucket={tile_bucket}px")
+    else:
+        tiling_policy = TilingPolicy(mode="fixed")
+
     console.info(f"Model loaded successfully. Starting the {action.lower()} process...")
 
     for candidate in candidates:
@@ -385,6 +434,7 @@ def infer(
                 background=background,
                 tile_overlap=tile_overlap,
                 use_fp32=not session.use_halfp,
+                tiling_policy=tiling_policy,
             )
             try:
                 output_image.save(output_path, format="PNG")

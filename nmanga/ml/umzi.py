@@ -30,6 +30,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import functools
+from collections import OrderedDict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,6 +52,7 @@ __all__ = (
     "UmziPrecision",
     "UmziSection",
     "UmziSession",
+    "UmziSessionPool",
     "build_kernel_options",
     "create_umzi_session",
     "describe_package",
@@ -60,6 +62,7 @@ __all__ = (
     "read_ummodel",
     "recommended_kernel_options",
     "resolve_precision",
+    "umzi_tiling_constraints",
 )
 
 UmziPrecision = Literal["mixed", "fp16", "fp32"]
@@ -98,6 +101,13 @@ _PRECISION_KERNEL_OPTIONS: dict[tuple[str, str], dict[str, int]] = {
 
 _FP32_FAMILIES = frozenset({"gfisrv2", "smosr", "figsr"})
 """Every family with an FP32 path; the others only run mixed precision or FP16."""
+
+_MIN_TILE_SIZES: dict[str, int] = {
+    "moesr": 2,
+    "smosr": 3,
+    "figsr": 6,
+}
+"""Minimum spatial input dimension required by families with internal reflection padding."""
 
 
 class UmziSession(Protocol):
@@ -585,6 +595,158 @@ def create_umzi_session(
         kernel_options=build_kernel_options(family, kernel_options, precision=normalized_precision),
     )
     return cast("UmziSession", umzi.InferenceSession(Path(model_path).expanduser(), options))
+
+
+def umzi_tiling_constraints(package: UmziPackageInfo) -> tuple[int, int]:
+    """
+    Return the ``(alignment, min_tile_size)`` spatial constraints a package requires.
+
+    :param package: The inspected `.ummodel` metadata
+    :return: ``(alignment, min_tile_size)`` in input pixels
+    """
+    alignment = package.alignment if package.alignment and package.alignment > 0 else 1
+    min_tile = _MIN_TILE_SIZES.get(package.family or "", 1)
+    return alignment, min_tile
+
+
+def _is_oom_error(exc: BaseException) -> bool:
+    return isinstance(exc, MemoryError) or (isinstance(exc, RuntimeError) and "out of memory" in str(exc).lower())
+
+
+class UmziSessionPool:
+    """
+    Keep up to `max_sessions` prepared `InferenceSession` instances keyed by batch shape.
+
+    Each native session holds one prepared ``(N, C, H, W)`` shape at a time, so variable edge
+    tiling across a page would otherwise re-prepare and re-capture CUDA Graphs repeatedly.
+    """
+
+    def __init__(
+        self,
+        model_path: str | Path,
+        *,
+        family: str | None,
+        device_id: int = 0,
+        precision: str = "fp16",
+        cache_dir: str | Path | None = None,
+        enable_cuda_graph: bool = True,
+        kernel_options: Mapping[str, int] | None = None,
+        max_sessions: int = 4,
+    ) -> None:
+        if max_sessions < 1:
+            raise ValueError("max_sessions must be at least 1.")
+        self._model_path = model_path
+        self._family = family
+        self._device_id = device_id
+        self._precision = precision
+        self._cache_dir = cache_dir
+        self._enable_cuda_graph = enable_cuda_graph
+        self._kernel_options = dict(kernel_options) if kernel_options is not None else None
+        self._max_sessions = max_sessions
+        self._closed = False
+
+        primary = self._open_session()
+        self.scale_factor: int = primary.scale_factor
+        self.context: int = primary.context
+        self._inputs = primary.get_inputs()
+        self._outputs = primary.get_outputs()
+        self._sessions: OrderedDict[tuple[int, int, int] | None, UmziSession] = OrderedDict([(None, primary)])
+
+    def _open_session(self) -> UmziSession:
+        return create_umzi_session(
+            self._model_path,
+            family=self._family,
+            device_id=self._device_id,
+            precision=self._precision,
+            cache_dir=self._cache_dir,
+            enable_cuda_graph=self._enable_cuda_graph,
+            kernel_options=self._kernel_options,
+        )
+
+    @property
+    def session_count(self) -> int:
+        """Number of open native sessions currently held in the pool."""
+        return len(self._sessions)
+
+    def get_inputs(self) -> list[Any]:
+        return list(self._inputs)
+
+    def get_outputs(self) -> list[Any]:
+        return list(self._outputs)
+
+    def _evict_oldest(self, *, keep: UmziSession | None = None) -> bool:
+        for key in list(self._sessions):
+            candidate = self._sessions[key]
+            if candidate is keep:
+                continue
+            self._sessions.pop(key)
+            candidate.close()
+            return True
+        return False
+
+    def run(self, output_names: Sequence[str] | None, input_feed: Mapping[str, Any]) -> list[Any]:
+        if self._closed:
+            raise RuntimeError("The Umzi session pool is closed.")
+        input_name = self._inputs[0].name if self._inputs else next(iter(input_feed))
+        sample = input_feed[input_name]
+        shape_key = (int(sample.shape[0]), int(sample.shape[2]), int(sample.shape[3]))
+
+        if shape_key in self._sessions:
+            session = self._sessions[shape_key]
+            self._sessions.move_to_end(shape_key)
+            return session.run(output_names, input_feed)
+
+        if None in self._sessions:
+            session = self._sessions.pop(None)
+            self._sessions[shape_key] = session
+            return session.run(output_names, input_feed)
+
+        if len(self._sessions) < self._max_sessions:
+            try:
+                session = self._open_session()
+            except Exception as exc:
+                if not _is_oom_error(exc) or not self._evict_oldest():
+                    raise
+                # Opening an extra session hit VRAM limits; fall back to reusing the LRU slot.
+                _, session = self._sessions.popitem(last=False)
+            try:
+                result = session.run(output_names, input_feed)
+            except Exception as exc:
+                if not _is_oom_error(exc):
+                    session.close()
+                    raise
+                # Free cached sessions and retry once on this session before giving up.
+                while self._evict_oldest(keep=session):
+                    pass
+                self._sessions[shape_key] = session
+                return session.run(output_names, input_feed)
+            self._sessions[shape_key] = session
+            return result
+
+        _, session = self._sessions.popitem(last=False)
+        self._sessions[shape_key] = session
+        try:
+            return session.run(output_names, input_feed)
+        except Exception as exc:
+            if not _is_oom_error(exc) or len(self._sessions) <= 1:
+                raise
+            while self._evict_oldest(keep=session):
+                pass
+            return session.run(output_names, input_feed)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        while self._sessions:
+            _, session = self._sessions.popitem(last=False)
+            session.close()
+
+    def __enter__(self) -> UmziSessionPool:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
 
 def export_ummodel(

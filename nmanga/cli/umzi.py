@@ -35,11 +35,14 @@ from PIL import Image
 from .. import file_handler, term
 from ..ml.onnx_backend import denoise_single_image_with_overlap
 from ..ml.onnx_cache import get_data_dir
+from ..ml.tiler import TilingPolicy, default_expand_tolerance
 from ..ml.umzi import (
     UMZI_CHECKPOINT_SUFFIXES,
     UMZI_FAMILIES,
     UMZI_PRECISIONS,
     UmziPackageInfo,
+    UmziSession,
+    UmziSessionPool,
     build_kernel_options,
     create_umzi_session,
     describe_package,
@@ -47,6 +50,7 @@ from ..ml.umzi import (
     parse_kernel_options,
     read_ummodel,
     resolve_precision,
+    umzi_tiling_constraints,
 )
 from . import options
 from ._deco import check_config_first, time_program
@@ -306,6 +310,29 @@ def to_ummodel(path_or_archive: Path, kernel: str | None, output_dir: Path | Non
     metavar="NAME=VALUE",
     help="Per-family kernel switch that overrides the recommended one, repeatable",
 )
+@click.option(
+    "-vt",
+    "--variable-tiling/--no-variable-tiling",
+    "variable_tiling",
+    default=False,
+    show_default=True,
+    help="Shrink or expand partial edge tiles instead of padding every tile to --tile-size",
+)
+@click.option(
+    "--tile-expand",
+    "tile_expand",
+    type=options.ZERO_POSITIVE_INT,
+    default=None,
+    help="Max extra pixels to absorb a small edge sliver into the previous tile under variable tiling",
+)
+@click.option(
+    "--tile-bucket",
+    "tile_bucket",
+    type=options.ZERO_POSITIVE_INT,
+    default=32,
+    show_default=True,
+    help="Snap variable edge dimensions up to this multiple across pages, 0 disables",
+)
 @options.recursive
 @check_config_first
 @time_program
@@ -325,6 +352,9 @@ def infer(
     no_cache: bool,
     enable_cuda_graph: bool,
     kernel_options: tuple[str, ...],
+    variable_tiling: bool,
+    tile_expand: int | None,
+    tile_bucket: int,
     recursive: bool,
 ):
     """Denoise or upscale images by running a `.ummodel` package over them."""
@@ -397,17 +427,45 @@ def infer(
     rendered_options = ", ".join(f"{name}={value}" for name, value in sorted(used_options.items()))
     console.info(f"Kernel options: {rendered_options or 'family defaults'}")
 
-    console.info(f"Opening the {package.family} session, the first run also tunes it...")
-    try:
-        session = create_umzi_session(
-            model_path,
-            family=package.family,
-            device_id=device_id,
-            precision=selected_precision,
-            cache_dir=resolved_cache,
-            enable_cuda_graph=enable_cuda_graph,
-            kernel_options=overrides,
+    if variable_tiling:
+        alignment, min_tile = umzi_tiling_constraints(package)
+        expand = default_expand_tolerance(tile_size) if tile_expand is None else tile_expand
+        tiling_policy = TilingPolicy(
+            mode="variable",
+            expand_tolerance=expand,
+            bucket_step=tile_bucket,
+            alignment=alignment,
+            min_tile_size=min_tile,
         )
+        console.info(
+            f"Variable tiling: expand<={expand}px, bucket={tile_bucket}px, align={alignment}px, min={min_tile}px"
+        )
+    else:
+        tiling_policy = TilingPolicy(mode="fixed")
+
+    console.info(f"Opening the {package.family} session, the first run also tunes it...")
+    session: UmziSession | UmziSessionPool
+    try:
+        if variable_tiling:
+            session = UmziSessionPool(
+                model_path,
+                family=package.family,
+                device_id=device_id,
+                precision=selected_precision,
+                cache_dir=resolved_cache,
+                enable_cuda_graph=enable_cuda_graph,
+                kernel_options=overrides,
+            )
+        else:
+            session = create_umzi_session(
+                model_path,
+                family=package.family,
+                device_id=device_id,
+                precision=selected_precision,
+                cache_dir=resolved_cache,
+                enable_cuda_graph=enable_cuda_graph,
+                kernel_options=overrides,
+            )
     except MemoryError as exc:
         raise click.ClickException(
             f"The GPU ran out of memory while preparing {model_path.name}. "
@@ -463,6 +521,7 @@ def infer(
                         # The native session prepares one padded shape at a time, so a short last
                         # batch would make it re-tune for every page.
                         pad_final_batch=True,
+                        tiling_policy=tiling_policy,
                     )
 
                 try:

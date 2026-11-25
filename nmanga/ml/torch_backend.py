@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 
 from ..lazy import get_torch
 from .contracts import TilingConfig
+from .tiler import feather_ramp_values, plan_tiles
 
 if TYPE_CHECKING:
     import torch
@@ -110,11 +111,11 @@ def infer_tensor(
 
     tile = config.tile_size
     overlap = config.tile_overlap
-    step = config.stride
 
     source = tensor.detach().cpu()
     height, width = source.shape[-2:]
     scaled_height, scaled_width = height * scale, width * scale
+    planned = plan_tiles(width, height, tile_size=tile, tile_overlap=overlap)
 
     with torch_module.no_grad():
         # Host accumulators: the division happens once, at the very end.
@@ -126,53 +127,64 @@ def infer_tensor(
         )
 
         # A regular grid keeps the model's window/unshuffle phase identical for every tile.
-        for y in range(0, height, step):
-            for x in range(0, width, step):
-                patch = source[:, :, y : min(y + tile, height), x : min(x + tile, width)]
-                ph, pw = patch.shape[-2:]
+        for tile_box in planned:
+            patch = source[
+                :,
+                :,
+                tile_box.src_y : tile_box.src_y + tile_box.src_h,
+                tile_box.src_x : tile_box.src_x + tile_box.src_w,
+            ]
 
-                fixed = getattr(runner, "input_size", None)
-                if fixed is not None and tuple(fixed) != (tile, tile):
-                    raise ValueError(
-                        f"Runner requires a fixed {tuple(fixed)} input, but the tile grid pads every tile "
-                        f"to {tile}x{tile}."
-                    )
+            fixed = getattr(runner, "input_size", None)
+            if fixed is not None and tuple(fixed) != (tile_box.run_h, tile_box.run_w):
+                raise ValueError(
+                    f"Runner requires a fixed {tuple(fixed)} input, but the tile grid pads every tile "
+                    f"to {tile_box.run_h}x{tile_box.run_w}."
+                )
 
-                # Match the model contract at the image edges instead of leaving a short tile.
-                padded = torch_module.nn.functional.pad(patch, (0, tile - pw, 0, tile - ph), mode="replicate")
-                prediction = runner(padded).detach().cpu()
-                expected = (1, _CHANNELS, tile * scale, tile * scale)
-                if tuple(prediction.shape) != expected:
-                    raise ValueError(
-                        f"Runner returned unexpected output shape {tuple(prediction.shape)}; expected {expected}."
-                    )
-                prediction = prediction[:, :, : ph * scale, : pw * scale]
-                if prediction.dtype != torch_module.float32:
-                    prediction = prediction.float()
+            # Match the model contract at the image edges instead of leaving a short tile.
+            if tile_box.pad_left or tile_box.pad_top or tile_box.pad_right or tile_box.pad_bottom:
+                padded = torch_module.nn.functional.pad(
+                    patch,
+                    (tile_box.pad_left, tile_box.pad_right, tile_box.pad_top, tile_box.pad_bottom),
+                    mode="replicate",
+                )
+            else:
+                padded = patch
+            prediction = runner(padded).detach().cpu()
+            expected = (1, _CHANNELS, tile_box.run_h * scale, tile_box.run_w * scale)
+            if tuple(prediction.shape) != expected:
+                raise ValueError(
+                    f"Runner returned unexpected output shape {tuple(prediction.shape)}; expected {expected}."
+                )
+            eh, ew = tile_box.valid_h * scale, tile_box.valid_w * scale
+            prediction = prediction[:, :, :eh, :ew]
+            if prediction.dtype != torch_module.float32:
+                prediction = prediction.float()
 
-                sy, sx = y * scale, x * scale
-                eh, ew = ph * scale, pw * scale
-                target = (slice(None), slice(None), slice(sy, sy + eh), slice(sx, sx + ew))
-                if weights is None:
-                    out[target] = prediction
-                    continue
+            sy, sx = tile_box.dst_y * scale, tile_box.dst_x * scale
+            target = (slice(None), slice(None), slice(sy, sy + eh), slice(sx, sx + ew))
+            if weights is None:
+                out[target] = prediction
+                continue
 
-                wy = torch_module.ones(eh, dtype=torch_module.float32, device="cpu")
-                wx = torch_module.ones(ew, dtype=torch_module.float32, device="cpu")
-                n = min(overlap * scale, eh)
-                if y:
-                    wy[:n] *= torch_module.arange(1, n + 1, dtype=torch_module.float32, device="cpu") / (n + 1)
-                if y + ph < height:
-                    wy[-n:] *= torch_module.arange(n, 0, -1, dtype=torch_module.float32, device="cpu") / (n + 1)
-                n = min(overlap * scale, ew)
-                if x:
-                    wx[:n] *= torch_module.arange(1, n + 1, dtype=torch_module.float32, device="cpu") / (n + 1)
-                if x + pw < width:
-                    wx[-n:] *= torch_module.arange(n, 0, -1, dtype=torch_module.float32, device="cpu") / (n + 1)
-
-                blend = wy[:, None] * wx[None, :]
-                out[target] += prediction * blend
-                weights[:, :, sy : sy + eh, sx : sx + ew] += blend
+            wy = torch_module.tensor(
+                feather_ramp_values(
+                    eh, overlap=overlap * scale, has_prev=tile_box.has_top, has_next=tile_box.has_bottom
+                ),
+                dtype=torch_module.float32,
+                device="cpu",
+            )
+            wx = torch_module.tensor(
+                feather_ramp_values(
+                    ew, overlap=overlap * scale, has_prev=tile_box.has_left, has_next=tile_box.has_right
+                ),
+                dtype=torch_module.float32,
+                device="cpu",
+            )
+            blend = wy[:, None] * wx[None, :]
+            out[target] += prediction * blend
+            weights[:, :, sy : sy + eh, sx : sx + ew] += blend
 
         if weights is not None:
             out.div_(weights)
