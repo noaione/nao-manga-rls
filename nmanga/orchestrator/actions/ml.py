@@ -35,7 +35,7 @@ from pydantic_core import PydanticCustomError
 from typing_extensions import Self
 
 from ... import file_handler
-from ...common import RegexCollection
+from ...common import AsyncImageWriter, RegexCollection, default_cpu_threads
 from ...ml.backends import InferenceBackend
 from ...ml.contracts import MLDataType
 from ...ml.onnx_backend import denoise_single_image_with_overlap
@@ -101,6 +101,8 @@ class ActionML(BaseAction):
     """Whether to enable CUDA graph replay for the TRT-RTX engine"""
     strict_ep: bool = Field(False, title="Fail if the execution provider is unavailable")
     """Whether to fail instead of falling back when the requested execution provider is unavailable"""
+    threads: int = Field(default_factory=default_cpu_threads, ge=1, title="Image Write Threads")
+    """Number of worker threads used to encode and write output PNG pages"""
     base_path: str = Field("output", title="Output Base Path")
     """The base path to save the resulting images to"""
 
@@ -222,6 +224,7 @@ class ActionML(BaseAction):
             context.terminal.info(f"- Data Type: {self.data_type.value}")
             context.terminal.info(f"- Workspace Size: {self.workspace_size or 'auto'} MiB")
             context.terminal.info(f"- CUDA Graph: {'Yes' if self.enable_cuda_graph else 'No'}")
+            context.terminal.info(f"- Write Threads: {self.threads}")
             context.update_cwd(output_dir)
             return
 
@@ -249,35 +252,35 @@ class ActionML(BaseAction):
             finished_text=f"{self.action_name.finish} images",
             total=None,
         )
-        for file_path, _, total_image, _ in file_handler.collect_image_from_folder(context.current_dir):
-            progress.update(task, total=total_image, completed=current_index - 1)
+        with AsyncImageWriter(workers=self.threads) as writer:
+            for file_path, _, total_image, _ in file_handler.collect_image_from_folder(context.current_dir):
+                progress.update(task, total=total_image, completed=current_index - 1)
 
-            if title_match := page_re.match(file_path.stem):
-                first_part = int(title_match.group("a"))  # We only care about this
-                if context.skip_action is not None and first_part in context.skip_action.pages:
-                    perform_skip_action(file_path, output_dir, context.skip_action.action, context.terminal)
-                    current_index += 1
-                    continue
+                if title_match := page_re.match(file_path.stem):
+                    first_part = int(title_match.group("a"))  # We only care about this
+                    if context.skip_action is not None and first_part in context.skip_action.pages:
+                        perform_skip_action(file_path, output_dir, context.skip_action.action, context.terminal)
+                        current_index += 1
+                        continue
 
-            img_file = Image.open(file_path)
-            output_image = denoise_single_image_with_overlap(
-                img_file,
-                session,
-                batch_size=self.batch_size,
-                tile_size=self.tile_size,
-                contrast_stretch=self.contrast_strectch,
-                tta=self.tta,
-                background=self.background,
-                tile_overlap=self.tile_overlap,
-                use_fp32=not session.use_halfp,
-            )
-            output_image = self.post_process(context, volume, orchestrator, output_image)
+                with Image.open(file_path) as img_file:
+                    img_file.load()
+                    output_image = denoise_single_image_with_overlap(
+                        img_file,
+                        session,
+                        batch_size=self.batch_size,
+                        tile_size=self.tile_size,
+                        contrast_stretch=self.contrast_strectch,
+                        tta=self.tta,
+                        background=self.background,
+                        tile_overlap=self.tile_overlap,
+                        use_fp32=not session.use_halfp,
+                    )
+                    output_image = self.post_process(context, volume, orchestrator, output_image)
 
-            output_path = output_dir / f"{file_path.stem}.png"
-            output_image.save(output_path, format="PNG")
-            img_file.close()
-            output_image.close()
-            current_index += 1
+                output_path = output_dir / f"{file_path.stem}.png"
+                writer.submit(output_image, output_path)
+                current_index += 1
         progress.update(task, advance=1)
         context.terminal.stop_progress(progress, f"{self.action_name.finish} {total_image} images.")
 

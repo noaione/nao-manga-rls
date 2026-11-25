@@ -29,6 +29,7 @@ from typing import Any, ClassVar, Dict, List, cast
 import pytest
 
 from nmanga.common import (
+    AsyncImageWriter,
     ChapterRange,
     PseudoChapterMatch,
     actual_or_fallback,
@@ -976,3 +977,48 @@ class TestDefaultCpuThreads:
     def test_threads_follow_the_machine_size(self, monkeypatch: pytest.MonkeyPatch, total: int, expected: int):
         monkeypatch.setattr("nmanga.common.mp.cpu_count", lambda: total)
         assert default_cpu_threads() == expected
+
+
+class TestAsyncImageWriter:
+    def test_writes_all_images_closes_them_and_fires_callbacks(self, tmp_path: Path):
+        from PIL import Image
+
+        closed: list[int] = []
+        written_callbacks: list[int] = []
+
+        class _TrackingImage:
+            def __init__(self, idx: int) -> None:
+                self._idx = idx
+                self._inner = Image.new("RGB", (8, 8), (idx, idx, idx))
+
+            def save(self, path: Path, format: str = "PNG") -> None:
+                self._inner.save(path, format=format)
+
+            def close(self) -> None:
+                closed.append(self._idx)
+                self._inner.close()
+
+        with AsyncImageWriter(workers=2, on_written=lambda: written_callbacks.append(1)) as writer:
+            for i in range(4):
+                writer.submit(_TrackingImage(i), tmp_path / f"page-{i}.png")  # type: ignore[arg-type]
+
+        assert len(written_callbacks) == 4
+        assert sorted(closed) == [0, 1, 2, 3]
+        for i in range(4):
+            assert (tmp_path / f"page-{i}.png").is_file()
+
+    def test_propagates_write_errors_and_still_closes_image(self, tmp_path: Path):
+        closed: list[bool] = []
+
+        class _BrokenImage:
+            def save(self, path: Path, format: str = "PNG") -> None:
+                raise OSError("disk full")
+
+            def close(self) -> None:
+                closed.append(True)
+
+        with pytest.raises(OSError, match="disk full"):
+            with AsyncImageWriter(workers=2) as writer:
+                writer.submit(_BrokenImage(), tmp_path / "broken.png")  # type: ignore[arg-type]
+
+        assert closed == [True]

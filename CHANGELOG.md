@@ -10,6 +10,7 @@
 
 **Changes**
 - Extracted shared tile-grid planning and directional feather-ramp calculation into `nmanga.ml.tiler` for both `onnx_backend` and `torch_backend`
+- Reworked `nmanga.ml.onnx_backend` to keep its output canvas in `CHW` (quantizing non-overlapping outputs straight to `uint8` instead of allocating a full-page `float32` buffer) and moved PNG saving in `umzi infer`, `ort infer`, `torch infer`, and the orchestrator ML actions onto a bounded background writer (`AsyncImageWriter`) configurable via `-th`/`--threads` (`threads` on `denoise`/`upscale`) so disk encoding overlaps with GPU inference
 
 ## [0.32.0] (2026-11-23)
 

@@ -36,15 +36,19 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from multiprocessing.pool import Pool as MpPool
 from pathlib import Path
-from typing import IO, Any, Generator, Iterable, Match, Pattern, cast, overload
+from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Match, Pattern, cast, overload
 
 from . import config, term, utils
 from ._ntypes import STOP_SIGNAL, VolumeNumberT
 from .constants import TARGET_FORMAT, TARGET_FORMAT_ALT, TARGET_TITLE, MangaPublication
 
+if TYPE_CHECKING:
+    from PIL import Image
+
 __all__ = (
     "ALLOWED_TAG_EXTENSIONS",
     "BRACKET_MAPPINGS",
+    "AsyncImageWriter",
     "BoundedWritePool",
     "ChapterRange",
     "PseudoChapterMatch",
@@ -1180,4 +1184,62 @@ class BoundedWritePool:
                 future.cancel()
             self._pending.clear()
         self._pool.shutdown(wait=exc_type is None)
+        return False
+
+
+def _save_and_close_image(image: Image.Image, destination: Path, image_format: str) -> None:
+    """Save a PIL image to `destination` and always close it."""
+    try:
+        image.save(destination, format=image_format)
+    finally:
+        image.close()
+
+
+class AsyncImageWriter:
+    """
+    Write output PIL images on a bounded thread pool so encoding overlaps with inference.
+
+    Ownership of each submitted image transfers to the writer, which closes it after saving.
+    """
+
+    def __init__(
+        self,
+        workers: int = 2,
+        *,
+        image_format: str = "PNG",
+        on_written: Callable[[], None] | None = None,
+    ) -> None:
+        self._pool = BoundedWritePool(workers)
+        self._image_format = image_format
+        self._on_written = on_written
+
+    def submit(self, image: Image.Image, destination: Path) -> None:
+        """Queue `image` to be saved at `destination`, draining the oldest write when full."""
+        try:
+            oldest = self._pool.submit(_save_and_close_image, image, destination, self._image_format)
+        except Exception:
+            image.close()
+            raise
+        if oldest is not None:
+            oldest.result()
+            if self._on_written is not None:
+                self._on_written()
+
+    def flush(self) -> None:
+        """Wait for every queued image write to finish and surface any failure."""
+        for future in self._pool.pending():
+            future.result()
+            if self._on_written is not None:
+                self._on_written()
+
+    def __enter__(self) -> AsyncImageWriter:
+        self._pool.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        try:
+            if exc_type is None:
+                self.flush()
+        finally:
+            self._pool.__exit__(exc_type, exc, tb)
         return False

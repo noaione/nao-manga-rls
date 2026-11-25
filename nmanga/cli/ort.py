@@ -26,6 +26,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +35,7 @@ from PIL import Image
 from rich.table import Table
 
 from .. import file_handler, term
+from ..common import AsyncImageWriter
 from ..ml.backends import (
     AUTO_BACKEND_PRIORITY,
     InferenceBackend,
@@ -294,6 +296,7 @@ def list_backends(show_raw_providers: bool):
     show_default=True,
     help="Snap variable edge dimensions up to this multiple across pages, 0 disables",
 )
+@options.threads_alt
 @options.recursive
 @check_config_first
 @time_program
@@ -317,6 +320,7 @@ def infer(
     variable_tiling: bool,
     tile_expand: int | None,
     tile_bucket: int,
+    threads: int,
     recursive: bool,
 ):
     """Denoise or upscale images by running an ONNX model over them."""
@@ -420,29 +424,26 @@ def infer(
         progress = console.make_progress()
         task = console.make_task(progress, f"{action} images...", total=total_files)
 
-        for image_file in all_files:
-            output_path = real_output / f"{image_file.stem}.png"
+        with AsyncImageWriter(workers=threads, on_written=partial(progress.advance, task)) as writer:
+            for image_file in all_files:
+                output_path = real_output / f"{image_file.stem}.png"
 
-            img_file = Image.open(image_file)
-            output_image = denoise_single_image_with_overlap(
-                img_file,
-                session,
-                batch_size=batch_size,
-                tile_size=tile_size,
-                contrast_stretch=contrast_stretch,
-                tta=tta,
-                background=background,
-                tile_overlap=tile_overlap,
-                use_fp32=not session.use_halfp,
-                tiling_policy=tiling_policy,
-            )
-            try:
-                output_image.save(output_path, format="PNG")
-            finally:
-                img_file.close()
-                output_image.close()
+                with Image.open(image_file) as img_file:
+                    img_file.load()
+                    output_image = denoise_single_image_with_overlap(
+                        img_file,
+                        session,
+                        batch_size=batch_size,
+                        tile_size=tile_size,
+                        contrast_stretch=contrast_stretch,
+                        tta=tta,
+                        background=background,
+                        tile_overlap=tile_overlap,
+                        use_fp32=not session.use_halfp,
+                        tiling_policy=tiling_policy,
+                    )
 
-            progress.advance(task)
+                writer.submit(output_image, output_path)
 
         console.stop_progress(progress, f"{action} finished for all {total_files} images to {real_output}")
 

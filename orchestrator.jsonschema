@@ -476,6 +476,11 @@
                     "title": "Fail if the execution provider is unavailable",
                     "type": "boolean"
                 },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Image Write Threads",
+                    "type": "integer"
+                },
                 "base_path": {
                     "default": "denoised",
                     "title": "Output Base Path",
@@ -1613,6 +1618,11 @@
                     "default": false,
                     "title": "Fail if the execution provider is unavailable",
                     "type": "boolean"
+                },
+                "threads": {
+                    "minimum": 1,
+                    "title": "Image Write Threads",
+                    "type": "integer"
                 },
                 "base_path": {
                     "default": "upscaled",

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import importlib.util
 import time
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -35,7 +36,7 @@ import rich_click as click
 from PIL import Image
 
 from .. import file_handler, term
-from ..common import format_elapsed_time
+from ..common import AsyncImageWriter, format_elapsed_time
 from ..ml.contracts import DEFAULT_TILE_OVERLAP, DEFAULT_TILE_SIZE, TilingConfig, TorchRuntimeConfig
 from ..ml.model import CHECKPOINT_SUFFIXES
 from . import options
@@ -183,6 +184,7 @@ def torch_group():
     show_default=True,
     help="Total overlap between two neighbouring tiles (stride is tile-size minus this), must be below the tile size",
 )
+@options.threads_alt
 @options.recursive
 @time_program
 @check_config_first
@@ -195,6 +197,7 @@ def infer(
     enable_compile: bool,
     tile_size: int,
     tile_overlap: int,
+    threads: int,
     recursive: bool,
 ):
     """Upscale images with a PyTorch checkpoint model."""
@@ -306,21 +309,17 @@ def infer(
             progress = console.make_progress()
             task = console.make_task(progress, "Upscaling images...", total=total_files)
 
-            for image_file in all_files:
-                output_path = real_output / f"{image_file.stem}.png"
+            with AsyncImageWriter(workers=threads, on_written=partial(progress.advance, task)) as writer:
+                for image_file in all_files:
+                    output_path = real_output / f"{image_file.stem}.png"
 
-                with Image.open(image_file) as img_file:
-                    img_file.load()
-                    input_tensor = image_to_tensor(img_file)
-                    prediction = infer_tensor(input_tensor, runtime.predict, scale=info.scale, config=tiling)
-                    output_image = tensor_to_image(prediction, img_file)
+                    with Image.open(image_file) as img_file:
+                        img_file.load()
+                        input_tensor = image_to_tensor(img_file)
+                        prediction = infer_tensor(input_tensor, runtime.predict, scale=info.scale, config=tiling)
+                        output_image = tensor_to_image(prediction, img_file)
 
-                try:
-                    output_image.save(output_path, format="PNG")
-                finally:
-                    output_image.close()
-
-                progress.advance(task)
+                    writer.submit(output_image, output_path)
 
             console.stop_progress(progress, f"Upscaled all {total_files} images to {real_output}")
     except RuntimeError as exc:
