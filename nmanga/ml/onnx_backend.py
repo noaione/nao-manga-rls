@@ -27,6 +27,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Any, Literal
 
 from PIL import Image
@@ -73,6 +74,47 @@ def _run_tta(infer: "Callable[[np.ndarray], np.ndarray]", batch: "np.ndarray") -
         y = y[..., ::-1] if k >= 4 else y
         output = output + np.rot90(y, -(k % 4), axes=(2, 3))
     return output / 8
+
+
+@functools.lru_cache(maxsize=1)
+def _get_fp16_to_uint8_lut() -> "np.ndarray":
+    """64 KiB lookup table mapping every FP16 bit pattern to clipped uint8 [0, 255]."""
+    np = get_numpy()
+    with np.errstate(invalid="ignore"):
+        values = np.arange(65536, dtype=np.uint16).view(np.float16).astype(np.float32)
+        values = np.nan_to_num(values, nan=0.0, posinf=1.0, neginf=0.0)
+        return np.rint(np.clip(values, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+
+def _quantize_tile_to_uint8(tile_chw: "np.ndarray") -> "np.ndarray":
+    """Quantize a ``(C, H, W)`` model output tile in ``[0, 1]`` to ``uint8``."""
+    np = get_numpy()
+    if tile_chw.dtype == np.float16:
+        return _get_fp16_to_uint8_lut()[tile_chw.view(np.uint16)]
+    scaled = np.clip(tile_chw, 0.0, 1.0).astype(np.float32, copy=False)
+    if scaled is tile_chw:
+        scaled = scaled.copy()
+    scaled *= 255.0
+    np.round(scaled, out=scaled)
+    return scaled.astype(np.uint8)
+
+
+def _chw_uint8_to_image(chw: "np.ndarray") -> Image.Image:
+    """Build a PIL Image from a contiguous ``(C, H, W)`` uint8 array without a NumPy transpose."""
+    np = get_numpy()
+    channels = chw.shape[0]
+    if channels == 1:
+        return Image.fromarray(chw[0], mode="L")
+    if channels == 3:
+        return Image.merge(
+            "RGB",
+            (
+                Image.fromarray(chw[0], mode="L"),
+                Image.fromarray(chw[1], mode="L"),
+                Image.fromarray(chw[2], mode="L"),
+            ),
+        )
+    return Image.fromarray(np.ascontiguousarray(chw.transpose(1, 2, 0)))
 
 
 def _build_tile_batch(
@@ -235,8 +277,12 @@ def _denoise_image(
     out_width = image_width * scale_factor
     output_overlap = tile_overlap * scale_factor
 
+    # Without overlap or post-hoc contrast stretch, quantize each tile straight into a CHW uint8
+    # canvas to skip allocating and scanning a 4x larger float32 buffer.
+    direct_uint8 = tile_overlap == 0 and not contrast_stretch
+    canvas_u8: "np.ndarray | None" = None
     reconstructed_image: "np.ndarray | None" = None
-    weight_sum = np.zeros((out_height, out_width, 1), np.float32) if tile_overlap else None
+    weight_sum = np.zeros((1, out_height, out_width), np.float32) if tile_overlap else None
     blend_cache: dict[tuple[int, int, bool, bool, bool, bool], "np.ndarray"] = {}
 
     def _blend_mask(tile: TileBox, eh: int, ew: int) -> "np.ndarray":
@@ -252,27 +298,39 @@ def _denoise_image(
             feather_ramp_values(ew, overlap=output_overlap, has_prev=tile.has_left, has_next=tile.has_right),
             dtype=np.float32,
         )
-        mask = np.outer(wy, wx)[..., None]
+        mask = np.outer(wy, wx)[None, ...]
         blend_cache[key] = mask
         return mask
 
     def place(batch_tiles: "Sequence[TileBox]", outputs: "np.ndarray") -> None:
-        nonlocal reconstructed_image
+        nonlocal canvas_u8, reconstructed_image
+        if direct_uint8:
+            if canvas_u8 is None:
+                canvas_u8 = np.empty((outputs.shape[1], out_height, out_width), np.uint8)
+            for tile, output in zip(batch_tiles, outputs, strict=True):
+                eh = tile.valid_h * scale_factor
+                ew = tile.valid_w * scale_factor
+                sy = tile.dst_y * scale_factor
+                sx = tile.dst_x * scale_factor
+                canvas_u8[:, sy : sy + eh, sx : sx + ew] = _quantize_tile_to_uint8(output[:, :eh, :ew])
+            return
+
         if reconstructed_image is None:
-            reconstructed_image = np.zeros((out_height, out_width, outputs.shape[1]), np.float32)
+            alloc = np.zeros if weight_sum is not None else np.empty
+            reconstructed_image = alloc((outputs.shape[1], out_height, out_width), np.float32)
         for tile, output in zip(batch_tiles, outputs, strict=True):
             eh = tile.valid_h * scale_factor
             ew = tile.valid_w * scale_factor
             sy = tile.dst_y * scale_factor
             sx = tile.dst_x * scale_factor
-            region = (slice(sy, sy + eh), slice(sx, sx + ew))
-            output_image = output[:, :eh, :ew].transpose(1, 2, 0)
+            region = (slice(None), slice(sy, sy + eh), slice(sx, sx + ew))
+            tile_view = output[:, :eh, :ew]
             if weight_sum is not None:
                 weight = _blend_mask(tile, eh, ew)
-                reconstructed_image[region] += output_image * weight
+                reconstructed_image[region] += tile_view * weight
                 weight_sum[region] += weight
             else:
-                reconstructed_image[region] = output_image
+                reconstructed_image[region] = tile_view
 
     for (run_h, run_w), group in grouped_tiles:
         # In variable mode, avoid padding a tiny minority edge group (e.g. 1 corner tile) up to
@@ -304,31 +362,32 @@ def _denoise_image(
             model_output = _run_tta(infer, batch_of_tiles) if tta else infer(batch_of_tiles)
             place(chunk, model_output[:real_tiles])
 
-    if reconstructed_image is None:
-        raise RuntimeError("The image produced no tiles.")
-    if weight_sum is not None:
-        reconstructed_image /= np.maximum(weight_sum, np.finfo(np.float32).eps)
-
-    # Post-processing
-    # See an explanation for image-specific normalization in the pre-processing section.
-    if contrast_stretch:
-        postprocessed_array = reconstructed_image.astype(np.float32)
-        span = np.ptp(postprocessed_array)
-        postprocessed_array = (
-            (postprocessed_array - np.min(postprocessed_array)) / span
-            if span
-            else np.clip(postprocessed_array, 0.0, 1.0)
-        )
+    if direct_uint8:
+        if canvas_u8 is None:
+            raise RuntimeError("The image produced no tiles.")
+        postprocessed_array = canvas_u8
     else:
-        postprocessed_array = np.clip(reconstructed_image, 0.0, 1.0, out=reconstructed_image)
-    # Scaling back to [0,255] from [0.0, 1.0], then rounding for a clean cast to uint8.
-    postprocessed_array *= 255.0
-    np.round(postprocessed_array, out=postprocessed_array)
-    postprocessed_array = postprocessed_array.astype(np.uint8)
-    if is_grayscale:
-        postprocessed_array = np.squeeze(postprocessed_array, axis=-1)
+        if reconstructed_image is None:
+            raise RuntimeError("The image produced no tiles.")
+        if weight_sum is not None:
+            reconstructed_image /= np.maximum(weight_sum, np.finfo(np.float32).eps)
 
-    output_image = Image.fromarray(postprocessed_array)
+        # Post-processing
+        # See an explanation for image-specific normalization in the pre-processing section.
+        if contrast_stretch:
+            postprocessed_f32 = reconstructed_image.astype(np.float32)
+            span = np.ptp(postprocessed_f32)
+            postprocessed_f32 = (
+                (postprocessed_f32 - np.min(postprocessed_f32)) / span if span else np.clip(postprocessed_f32, 0.0, 1.0)
+            )
+        else:
+            postprocessed_f32 = np.clip(reconstructed_image, 0.0, 1.0, out=reconstructed_image)
+        # Scaling back to [0,255] from [0.0, 1.0], then rounding for a clean cast to uint8.
+        postprocessed_f32 *= 255.0
+        np.round(postprocessed_f32, out=postprocessed_f32)
+        postprocessed_array = postprocessed_f32.astype(np.uint8)
+
+    output_image = _chw_uint8_to_image(postprocessed_array)
     if alpha is not None:
         alpha_mode = "LA" if is_grayscale or orig_img_mode == "LA" else "RGBA"
         output_image = output_image.convert(mode="L" if alpha_mode == "LA" else "RGB")

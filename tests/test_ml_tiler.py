@@ -10,7 +10,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from nmanga.ml.onnx_backend import denoise_single_image_with_overlap
+from nmanga.ml.onnx_backend import (
+    _get_fp16_to_uint8_lut,
+    _quantize_tile_to_uint8,
+    denoise_single_image_with_overlap,
+)
 from nmanga.ml.tiler import (
     TilingPolicy,
     default_expand_tolerance,
@@ -308,3 +312,76 @@ def test_umzi_session_pool_reuses_shapes_and_evicts_lru(monkeypatch: pytest.Monk
         assert all(s.closed for s in created)  # type: ignore[attr-defined]
     finally:
         get_umzi_native.cache_clear()
+
+
+# --------------------------------------------------------------------------------------
+# Direct uint8 quantization & CHW reconstruction parity
+# --------------------------------------------------------------------------------------
+
+
+def test_fp16_to_uint8_lut_matches_float32_rounding_for_all_finite_half_values():
+    lut = _get_fp16_to_uint8_lut()
+    raw = np.arange(65536, dtype=np.uint16).view(np.float16)
+    finite_mask = np.isfinite(raw)
+
+    f32 = np.clip(raw[finite_mask].astype(np.float32), 0.0, 1.0) * 255.0
+    np.round(f32, out=f32)
+    expected = f32.astype(np.uint8)
+
+    np.testing.assert_array_equal(lut[finite_mask], expected)
+    # NaN maps to 0, +/-inf clamp to [0, 255].
+    nan_idx = np.uint16(0x7E00)
+    assert lut[nan_idx] == 0
+    assert lut[np.uint16(0x7C00)] == 255
+    assert lut[np.uint16(0xFC00)] == 0
+
+
+def test_quantize_tile_handles_fp16_and_fp32_without_mutating_input():
+    f32_tile = np.array([[[-0.2, 0.5], [1.2, 0.0]]], dtype=np.float32)
+    f32_before = f32_tile.copy()
+    f16_tile = f32_tile.astype(np.float16)
+
+    np.testing.assert_array_equal(_quantize_tile_to_uint8(f32_tile), np.array([[[0, 128], [255, 0]]], dtype=np.uint8))
+    np.testing.assert_array_equal(_quantize_tile_to_uint8(f16_tile), np.array([[[0, 128], [255, 0]]], dtype=np.uint8))
+    np.testing.assert_array_equal(f32_tile, f32_before)
+
+
+def test_grayscale_and_contrast_stretch_roundtrip_through_chw_canvas():
+    class _GrayscaleSession:
+        scale_factor = 1
+        context = 0
+
+        def get_inputs(self):
+            return [SimpleNamespace(name="input", shape=("batch", 1, "height", "width"), type="tensor(float16)")]
+
+        def get_outputs(self):
+            return [SimpleNamespace(name="output", shape=("batch", 1, "height", "width"), type="tensor(float16)")]
+
+        def run(self, names, feeds):
+            return [np.ascontiguousarray(feeds["input"])]
+
+    pixels = np.linspace(40, 200, 48 * 32, dtype=np.uint8).reshape(32, 48)
+    page = Image.fromarray(pixels, mode="L")
+    try:
+        plain = denoise_single_image_with_overlap(
+            page,
+            _GrayscaleSession(),  # type: ignore[arg-type]
+            tile_size=16,
+            tile_overlap=0,
+            tiling_policy=TilingPolicy(mode="variable"),
+        )
+        stretched = denoise_single_image_with_overlap(
+            page,
+            _GrayscaleSession(),  # type: ignore[arg-type]
+            tile_size=16,
+            tile_overlap=4,
+            contrast_stretch=True,
+            tiling_policy=TilingPolicy(mode="variable"),
+        )
+        assert plain.mode == "L"
+        np.testing.assert_array_equal(np.asarray(plain), pixels)
+        assert stretched.mode == "L"
+        assert np.asarray(stretched).min() == 0
+        assert np.asarray(stretched).max() == 255
+    finally:
+        page.close()
