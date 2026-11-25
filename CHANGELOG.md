@@ -7,6 +7,7 @@
   - Both join `gfisrv2` in supporting `--precision fp32` alongside `mixed` and `fp16`
   - `infer` pins each family's precision-scoped speedup switches (`fuse_silu`/`tune_convolutions` for `smosr`; `tune_convolutions`, `fp32_nchw`, `fuse_row_gate`, and `fuse_expand_gate` for `figsr`) while keeping lower-precision accumulation switches opt-in via `--kernel-option`
 - `nmanga umzi infer` and `nmanga ort infer` - Add `-vt`/`--variable-tiling` to shrink edge tiles to the image remainder (or expand via `--tile-expand` to absorb small slivers and drop extra rows/columns) instead of padding every tile to `--tile-size`, with `--tile-bucket` snapping edge dimensions so similar pages share cached plans and `UmziSessionPool` keeping active shapes resident across a folder
+- Orchestrator `denoise` / `upscale` actions - Support Umzi `.ummodel` packages (`precision`, `kernel_options`, `use_plan_cache`, and `umzi_native` tool detection), PyTorch `.safetensors`/`.pth` checkpoints (`device_id` accepting `auto`/`cpu`/`cuda`/`cuda:N`, `preset`, `enable_compile`, `use_channels_last`), and variable tiling (`variable_tiling`, `tile_expand`, `tile_bucket`)
 
 **Changes**
 - Extracted shared tile-grid planning and directional feather-ramp calculation into `nmanga.ml.tiler` for both `onnx_backend` and `torch_backend`

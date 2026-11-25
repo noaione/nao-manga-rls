@@ -397,14 +397,20 @@
                 },
                 "model": {
                     "format": "file-path",
-                    "title": "The ONNX Model Path",
+                    "title": "The ONNX, Umzi, or PyTorch Model Path",
                     "type": "string"
                 },
                 "device_id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "string"
+                        }
+                    ],
                     "default": 0,
-                    "minimum": 0,
-                    "title": "Device ID",
-                    "type": "integer"
+                    "title": "Device ID"
                 },
                 "batch_size": {
                     "default": 64,
@@ -422,6 +428,30 @@
                     "default": 0,
                     "minimum": 0,
                     "title": "Tile Overlap",
+                    "type": "integer"
+                },
+                "variable_tiling": {
+                    "default": false,
+                    "title": "Variable Edge Tiling",
+                    "type": "boolean"
+                },
+                "tile_expand": {
+                    "anyOf": [
+                        {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Variable Tile Expand Tolerance"
+                },
+                "tile_bucket": {
+                    "default": 32,
+                    "minimum": 0,
+                    "title": "Variable Tile Bucket Step",
                     "type": "integer"
                 },
                 "background": {
@@ -452,6 +482,61 @@
                     "$ref": "#/$defs/MLDataType",
                     "default": "fp16",
                     "title": "The data type to use for TensorRT model"
+                },
+                "precision": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "mixed",
+                                "fp16",
+                                "fp32"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Umzi Precision"
+                },
+                "kernel_options": {
+                    "additionalProperties": {
+                        "type": "integer"
+                    },
+                    "title": "Umzi Kernel Options",
+                    "type": "object"
+                },
+                "use_plan_cache": {
+                    "default": true,
+                    "title": "Use Umzi Plan Cache",
+                    "type": "boolean"
+                },
+                "preset": {
+                    "default": "fast",
+                    "enum": [
+                        "fast",
+                        "original"
+                    ],
+                    "title": "PyTorch Recipe",
+                    "type": "string"
+                },
+                "enable_compile": {
+                    "default": false,
+                    "title": "Enable torch.compile",
+                    "type": "boolean"
+                },
+                "use_channels_last": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "PyTorch Channels Last Override"
                 },
                 "workspace_size": {
                     "anyOf": [
@@ -1540,14 +1625,20 @@
                 },
                 "model": {
                     "format": "file-path",
-                    "title": "The ONNX Model Path",
+                    "title": "The ONNX, Umzi, or PyTorch Model Path",
                     "type": "string"
                 },
                 "device_id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "string"
+                        }
+                    ],
                     "default": 0,
-                    "minimum": 0,
-                    "title": "Device ID",
-                    "type": "integer"
+                    "title": "Device ID"
                 },
                 "batch_size": {
                     "default": 64,
@@ -1565,6 +1656,30 @@
                     "default": 0,
                     "minimum": 0,
                     "title": "Tile Overlap",
+                    "type": "integer"
+                },
+                "variable_tiling": {
+                    "default": false,
+                    "title": "Variable Edge Tiling",
+                    "type": "boolean"
+                },
+                "tile_expand": {
+                    "anyOf": [
+                        {
+                            "minimum": 0,
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Variable Tile Expand Tolerance"
+                },
+                "tile_bucket": {
+                    "default": 32,
+                    "minimum": 0,
+                    "title": "Variable Tile Bucket Step",
                     "type": "integer"
                 },
                 "background": {
@@ -1595,6 +1710,61 @@
                     "$ref": "#/$defs/MLDataType",
                     "default": "fp16",
                     "title": "The data type to use for TensorRT model"
+                },
+                "precision": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "mixed",
+                                "fp16",
+                                "fp32"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "Umzi Precision"
+                },
+                "kernel_options": {
+                    "additionalProperties": {
+                        "type": "integer"
+                    },
+                    "title": "Umzi Kernel Options",
+                    "type": "object"
+                },
+                "use_plan_cache": {
+                    "default": true,
+                    "title": "Use Umzi Plan Cache",
+                    "type": "boolean"
+                },
+                "preset": {
+                    "default": "fast",
+                    "enum": [
+                        "fast",
+                        "original"
+                    ],
+                    "title": "PyTorch Recipe",
+                    "type": "string"
+                },
+                "enable_compile": {
+                    "default": false,
+                    "title": "Enable torch.compile",
+                    "type": "boolean"
+                },
+                "use_channels_last": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "PyTorch Channels Last Override"
                 },
                 "workspace_size": {
                     "anyOf": [

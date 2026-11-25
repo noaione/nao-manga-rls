@@ -39,6 +39,8 @@ from ..rules import RuleModel
 
 if TYPE_CHECKING:
     from ...ml.onnx_session import InferenceSessionWithScale
+    from ...ml.torch_session import TorchRuntime
+    from ...ml.umzi import UmziSession, UmziSessionPool
     from ...term import Console
     from ..models import OrchestratorConfig, SkipActionConfig, VolumeConfig
 
@@ -84,7 +86,9 @@ class WorkerContext(Context):
     """The skip action configuration, if any."""
     dry_run: bool = False
     """Run the action in dry run mode."""
-    ml_model_session: ClassVar[dict[str, "InferenceSessionWithScale"]] = {}
+    ml_model_session: ClassVar[
+        dict[str, "InferenceSessionWithScale | TorchRuntime | UmziSession | UmziSessionPool"]
+    ] = {}
     """The current running ML model sessions, stored as a class variable"""
     detected_colors: list[int] | None = None
     """The detected color pages in the volume, used for passing from color detection to other actions
