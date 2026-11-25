@@ -50,6 +50,7 @@ dev = [
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "ruff==0.17.6",
+    "pyrefly==1.5.0",
     "scipy-stubs==1.18.1.1",
     "types-defusedxml==0.7.0.20260504"
 ]
@@ -69,7 +70,7 @@ denoiser = [
     "triton-windows==3.9.0.post30; sys_platform == 'win32'",
     "windowsml==2.5.96; sys_platform == 'win32'",
     # Umzi native, used on some of the model
-    "umzi-native>=0.0.4; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')"
+    "umzi-native>=0.0.5; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')"
 ]
 denoiser-ort = [
     # The stock ONNX Runtime wheel: CoreML on macOS, a CPU provider everywhere else. This is the
