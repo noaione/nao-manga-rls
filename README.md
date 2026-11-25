@@ -47,7 +47,7 @@ with one of the `denoiser-*` extras.
 
 | Extra | What it adds |
 | --- | --- |
-| `denoiser` | torch, `onnx`, `onnxscript`, einops, `resselt`, `safetensors`, Triton for `torch infer --compile`, Windows ML on Windows, and `umzi-native` on Linux x86_64 and Windows |
+| `denoiser` | torch, `onnx`, `onnxscript`, `resselt`, `safetensors`, Triton for `torch infer --compile`, Windows ML on Windows, and `umzi-native` on Linux x86_64 and Windows |
 | `denoiser-ort` | The stock `onnxruntime` wheel. CoreML on macOS, the CPU provider everywhere else |
 | `denoiser-nvidia` | `onnxruntime-gpu`, the TensorRT RTX plugin and `tensorrt-cu13`, alongside a CUDA build of torch |
 | `denoiser-intel` | The OpenVINO plugin, for Intel CPU, GPU and NPU |

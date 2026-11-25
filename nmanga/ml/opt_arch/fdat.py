@@ -472,7 +472,7 @@ def cross_check(model: nn.Module, info: ModelInfo, path: Path) -> None:
     upsampler = cast(Any, model.upsampler)
     internal_scale = int(upsampler.MetaUpsample[2].item())
     upscale = int(cast(Any, model.upscale))
-    pads = int(getattr(model, "pad", 0))
+    pads = int(cast(Any, getattr(model, "pad", 0)))
     expected_pad = info.unshuffle if info.unshuffle > 1 else 0
     conv_in = _conv_first_in_channels(model, info.unshuffle, path)
     expected_conv_in = info.in_channels * info.unshuffle**2

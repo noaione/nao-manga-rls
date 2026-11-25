@@ -74,7 +74,10 @@ def get_model_scale_factor(
     import numpy as np
 
     if scale_factor := getattr(session, "scale_factor", None):
-        return scale_factor
+        use_halfp = getattr(session, "use_halfp", None)
+        if not isinstance(use_halfp, bool):
+            use_halfp = "float16" in str(session.get_inputs()[0].type)
+        return scale_factor, use_halfp
 
     # Detect scale using small input and output shapes
     inp = session.get_inputs()[0]

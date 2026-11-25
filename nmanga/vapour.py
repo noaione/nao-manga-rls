@@ -126,7 +126,7 @@ def vs_attach_logger(console: "Console"):
         return
 
     vs = get_vapoursynth()
-    type_to_str = {
+    type_to_str: dict["MessageType", str] = {
         vs.MESSAGE_TYPE_DEBUG: "DEBUG",
         vs.MESSAGE_TYPE_INFORMATION: "INFO",
         vs.MESSAGE_TYPE_WARNING: "WARNING",

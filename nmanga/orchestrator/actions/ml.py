@@ -294,7 +294,6 @@ class ActionML(BaseAction):
 
         return {
             "onnxruntime": ToolsKind.PACKAGE,
-            "einops": ToolsKind.PACKAGE,
             "numpy": ToolsKind.PACKAGE,
         }
 

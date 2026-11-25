@@ -43,13 +43,11 @@ __all__ = (
 
 
 _SRGB_TO_LINEAR_LUT = tuple(
-    value / 255 / 12.92 if value / 255 <= 0.04045 else ((value / 255 + 0.055) / 1.055) ** 2.4
-    for value in range(256)
+    value / 255 / 12.92 if value / 255 <= 0.04045 else ((value / 255 + 0.055) / 1.055) ** 2.4 for value in range(256)
 )
 _LINEAR_TO_SRGB_16_LUT = tuple(
     round(
-        (value / 65535 * 12.92 if value / 65535 <= 0.0031308 else (1.055 * (value / 65535) ** (1 / 2.4) - 0.055))
-        * 255
+        (value / 65535 * 12.92 if value / 65535 <= 0.0031308 else (1.055 * (value / 65535) ** (1 / 2.4) - 0.055)) * 255
     )
     for value in range(65536)
 )

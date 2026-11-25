@@ -27,7 +27,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..contracts import ModelInfo
 from ._conv3xc import check_preserved, conv3xc_paths, outside_conv3xc, replace_conv3xc
@@ -722,11 +722,11 @@ def unshuffle_of(model: nn.Module, path: Path) -> int:
     """
     import torch
 
-    encoder = getattr(model, "gater_encode", ())
+    encoder = cast(Any, getattr(model, "gater_encode", ()))
     internal = {
         f"gater_encode.{index}.scale.{offset}"
         for index, block in enumerate(encoder)
-        for offset, layer in enumerate(getattr(block, "scale", ()))
+        for offset, layer in enumerate(cast(Any, getattr(block, "scale", ())))
         if isinstance(layer, torch.nn.PixelUnshuffle)
     }
     external = [

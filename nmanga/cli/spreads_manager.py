@@ -380,10 +380,7 @@ def spreads_split(
         with threaded_worker(console, lowest_or(threads, image_list)) as (pool, _):
             for _ in pool.imap_unordered(
                 _runner_spreads_split_star,
-                (
-                    (split_spread, path_or_archive, quality, image_fmt, direction, gap)
-                    for split_spread in image_list
-                ),
+                ((split_spread, path_or_archive, quality, image_fmt, direction, gap) for split_spread in image_list),
             ):
                 progress.update(task, advance=1)
         console.stop_progress(progress, f"Split {len(image_list)} spreads")

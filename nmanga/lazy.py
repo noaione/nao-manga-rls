@@ -37,7 +37,6 @@ from .ml import ort as _ort
 from .ml.ort import get_onnxruntime
 
 __all__ = (
-    "get_einops_rearrange",
     "get_numpy",
     "get_onnxruntime",
     "get_scipy_ndimage",
@@ -107,16 +106,6 @@ def get_scipy_ndimage():
         return ndimage
     except ImportError as exc:
         raise ImportError("scipy is required to do the following action. Please install scipy.") from exc
-
-
-@functools.lru_cache(maxsize=1)
-def get_einops_rearrange() -> RearrangeCallable:
-    try:
-        from einops import rearrange
-
-        return rearrange
-    except ImportError as exc:
-        raise ImportError("einops is required to do the following action. Please install einops.") from exc
 
 
 @functools.lru_cache(maxsize=1)
