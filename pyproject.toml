@@ -36,7 +36,7 @@ dependencies = [
     "defusedxml==0.7.1",
     "rich-click==1.9.9",
     "cykooz.resizer==4.0.1",
-    "wand==0.7.2",
+    "wand==0.7.3",
     "click-pwsh==0.9.7",
     "beautifulsoup4>=4.15.0",
     "pikepdf==10.18.2",
@@ -69,7 +69,7 @@ denoiser = [
     "triton-windows==3.9.0.post30; sys_platform == 'win32'",
     "windowsml==2.5.96; sys_platform == 'win32'",
     # Umzi native, used on some of the model
-    "umzi-native>=0.0.5; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')"
+    "umzi-native>=0.0.7; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')"
 ]
 denoiser-ort = [
     # The stock ONNX Runtime wheel: CoreML on macOS, a CPU provider everywhere else. This is the

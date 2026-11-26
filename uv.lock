@@ -945,13 +945,13 @@ requires-dist = [
     { name = "triton-windows", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = "==3.9.0.post30" },
     { name = "types-defusedxml", marker = "extra == 'dev'", specifier = "==0.7.0.20260504" },
     { name = "typing-extensions", specifier = "==4.16.0" },
-    { name = "umzi-native", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'denoiser') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'denoiser')", specifier = ">=0.0.5", index = "https://pypi.serik.at/simple/" },
+    { name = "umzi-native", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'denoiser') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'denoiser')", specifier = ">=0.0.7", index = "https://pypi.serik.at/simple/" },
     { name = "unrar2-cffi", specifier = "==0.5.0" },
     { name = "vapoursynth", marker = "extra == 'vapoursynth'", specifier = "==82" },
     { name = "vapoursynth-imageseqs", marker = "extra == 'vapoursynth'", specifier = "==0.4.2" },
     { name = "vapoursynth-nimages", marker = "extra == 'vapoursynth'", specifier = "==0.4.0", index = "https://pypi.serik.at/simple/" },
     { name = "vsrepo", marker = "extra == 'vapoursynth'" },
-    { name = "wand", specifier = "==0.7.2" },
+    { name = "wand", specifier = "==0.7.3" },
     { name = "windowsml", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = "==2.5.96" },
 ]
 provides-extras = ["dev", "gui", "denoiser", "denoiser-ort", "denoiser-nvidia", "denoiser-intel", "denoiser-wgpu", "denoiser-mlx", "vapoursynth", "epub-render"]
@@ -2187,14 +2187,14 @@ wheels = [
 
 [[package]]
 name = "umzi-native"
-version = "0.0.5"
+version = "0.0.7"
 source = { registry = "https://pypi.serik.at/simple/" }
 dependencies = [
     { name = "numpy" },
 ]
 wheels = [
-    { url = "https://pypi.serik.at/files/76742b838f069b863a05e13836982639a688e62d4f8a40db45e31a0a32557b73/umzi_native-0.0.5-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:76742b838f069b863a05e13836982639a688e62d4f8a40db45e31a0a32557b73", size = 3804895 },
-    { url = "https://pypi.serik.at/files/b809038c5cddc4874c75ade054522671d3440c415ec0c05ca4fee3c88e104671/umzi_native-0.0.5-py3-none-win_amd64.whl", hash = "sha256:b809038c5cddc4874c75ade054522671d3440c415ec0c05ca4fee3c88e104671", size = 3743392 },
+    { url = "https://pypi.serik.at/files/9c3e40485e1004c1cf88a8a0e22b654ca1b70c87540bd82751b37f033d42152c/umzi_native-0.0.7-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:9c3e40485e1004c1cf88a8a0e22b654ca1b70c87540bd82751b37f033d42152c", size = 4110542 },
+    { url = "https://pypi.serik.at/files/5bc0ba9d2a31790dcfad87f83ad67df0cbb96dac259d33d895b82d55ed408900/umzi_native-0.0.7-py3-none-win_amd64.whl", hash = "sha256:5bc0ba9d2a31790dcfad87f83ad67df0cbb96dac259d33d895b82d55ed408900", size = 4033453 },
 ]
 
 [[package]]
@@ -2321,11 +2321,11 @@ wheels = [
 
 [[package]]
 name = "wand"
-version = "0.7.2"
+version = "0.7.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/85/27/98de4383d028df318b9dd56e7ac2a8437684db18c2da7204c084f37e8f95/wand-0.7.2.tar.gz", hash = "sha256:0387fd08848d00cadd1d885fcb19a17dd4250df2029e5338b6b668b7fed64b5b", size = 11889993, upload-time = "2026-06-25T13:48:31.512Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/42/42fa8f911d1d5c305b1bceed90901daea03f702a9e03e1cc11264714043c/wand-0.7.3.tar.gz", hash = "sha256:0ecec0f972cb82128a0d2918b9fcc1d1bce04d5b54f590839943df31e55e5274", size = 11893511, upload-time = "2026-11-24T14:29:17.441Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fb/11/764bee6e793c01d6ce7b99f4872f9fd5ef89904b172cb9d8a0a1dae02f21/wand-0.7.2-py3-none-any.whl", hash = "sha256:7db97c5e51862fdd5e58866dbf34e2dcae295245511147367690a3e17f459984", size = 145045, upload-time = "2026-06-25T13:48:38.348Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/f1/fd524385af8a5f65c27a5b8b765321558feb014b213a22e30ae6c3ec8bc2/wand-0.7.3-py3-none-any.whl", hash = "sha256:c5a9550a2ff2bfc91fd854454fb7080d9ace05a21770865555e61dbbeec1753e", size = 145338, upload-time = "2026-11-24T14:29:26.662Z" },
 ]
 
 [[package]]

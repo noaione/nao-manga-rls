@@ -62,6 +62,7 @@ __all__ = (
     "read_ummodel",
     "recommended_kernel_options",
     "resolve_precision",
+    "run_umzi_tiled_image",
     "umzi_tiling_constraints",
 )
 
@@ -121,6 +122,17 @@ class UmziSession(Protocol):
     def get_outputs(self) -> list[Any]: ...
 
     def run(self, output_names: Sequence[str] | None, input_feed: Mapping[str, Any]) -> list[Any]: ...
+
+    def run_tiled(
+        self,
+        image: Any,
+        *,
+        tile_size: int,
+        batch_size: int,
+        overlap: int = 0,
+        tiling: Literal["fixed", "variable"] = "fixed",
+        background: Literal["white", "black"] = "white",
+    ) -> Any: ...
 
     def close(self) -> None: ...
 
@@ -607,6 +619,62 @@ def umzi_tiling_constraints(package: UmziPackageInfo) -> tuple[int, int]:
     alignment = package.alignment if package.alignment and package.alignment > 0 else 1
     min_tile = _MIN_TILE_SIZES.get(package.family or "", 1)
     return alignment, min_tile
+
+
+def run_umzi_tiled_image(
+    image: Any,
+    session: UmziSession,
+    *,
+    batch_size: int,
+    tile_size: int,
+    tile_overlap: int,
+    tiling: Literal["fixed", "variable"],
+    background: Literal["white", "black"],
+    contrast_stretch: bool,
+) -> Any:
+    """Run native GPU tiling and retain the input image's alpha and output mode."""
+    from PIL import Image
+
+    from ..lazy import get_numpy
+
+    np = get_numpy()
+    has_alpha = "A" in image.getbands() or (image.mode == "P" and image.info.get("transparency") is not None)
+    alpha = image.getchannel("A") if "A" in image.getbands() else None
+    if has_alpha and alpha is None:
+        with image.convert("RGBA") as rgba:
+            alpha = rgba.getchannel("A")
+
+    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    if contrast_stretch:
+        low = int(rgb.min())
+        high = int(rgb.max())
+        if high > low:
+            rgb = np.rint((rgb.astype(np.float32) - low) * (255.0 / (high - low))).astype(np.uint8)
+    rgb = np.ascontiguousarray(rgb)
+    output = session.run_tiled(
+        rgb,
+        tile_size=tile_size,
+        batch_size=batch_size,
+        overlap=tile_overlap,
+        tiling=tiling,
+        background=background,
+    )
+    result = Image.fromarray(output, mode="RGB")
+
+    if alpha is not None:
+        result = result.convert("L" if image.mode == "LA" else "RGB")
+        result = result.convert("LA" if image.mode == "LA" else "RGBA")
+        resized_alpha = alpha.resize(result.size, Image.Resampling.BICUBIC)
+        result.putalpha(resized_alpha)
+        resized_alpha.close()
+        alpha.close()
+    elif image.palette:
+        palette_image = Image.new("P", (1, 1))
+        palette_image.putpalette(image.palette)
+        result = result.quantize(palette=palette_image, dither=Image.Dither.NONE)
+    elif image.mode not in ("RGB", "RGBA"):
+        result = result.convert(image.mode)
+    return result
 
 
 def _is_oom_error(exc: BaseException) -> bool:

@@ -3,6 +3,7 @@
 ## Unreleased
 
 **New Features**
+- `nmanga umzi infer` - Use umzi-native's GPU page tiler for fixed-tile inference, batching, overlap blending and stitching
 - `nmanga umzi` - Support the `smosr` and `figsr` 2x kernel families across `peek`, `to-ummodel`, and `infer`:
   - Both join `gfisrv2` in supporting `--precision fp32` alongside `mixed` and `fp16`
   - `infer` pins each family's precision-scoped speedup switches (`fuse_silu`/`tune_convolutions` for `smosr`; `tune_convolutions`, `fp32_nchw`, `fuse_row_gate`, and `fuse_expand_gate` for `figsr`) while keeping lower-precision accumulation switches opt-in via `--kernel-option`

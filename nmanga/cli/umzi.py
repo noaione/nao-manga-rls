@@ -52,6 +52,7 @@ from ..ml.umzi import (
     parse_kernel_options,
     read_ummodel,
     resolve_precision,
+    run_umzi_tiled_image,
     umzi_tiling_constraints,
 )
 from . import options
@@ -486,6 +487,8 @@ def infer(
 
     scale_factor = session.scale_factor or 1
     action = "Upscaling" if scale_factor > 1 else "Denoising"
+    if not tta and not variable_tiling:
+        console.info(f"GPU tiling: {tile_size}px tiles, batch {batch_size}, overlap {tile_overlap}px")
     console.info(f"Model opened successfully. Starting the {action.lower()} process...")
 
     try:
@@ -513,21 +516,31 @@ def infer(
 
                     with Image.open(image_file) as img_file:
                         img_file.load()
-                        output_image = denoise_single_image_with_overlap(
-                            img_file,
-                            session,  # type: ignore[arg-type]  # the native session offers the ONNX tiler's contract
-                            batch_size=batch_size,
-                            tile_size=tile_size,
-                            tile_overlap=tile_overlap,
-                            contrast_stretch=contrast_stretch,
-                            tta=tta,
-                            background=background,
-                            use_fp32=selected_precision == "fp32",
-                            # The native session prepares one padded shape at a time, so a short last
-                            # batch would make it re-tune for every page.
-                            pad_final_batch=True,
-                            tiling_policy=tiling_policy,
-                        )
+                        if tta or variable_tiling:
+                            output_image = denoise_single_image_with_overlap(
+                                img_file,
+                                session,  # type: ignore[arg-type]  # TTA uses the shared CPU tiler.
+                                batch_size=batch_size,
+                                tile_size=tile_size,
+                                tile_overlap=tile_overlap,
+                                contrast_stretch=contrast_stretch,
+                                tta=tta,
+                                background=background,
+                                use_fp32=selected_precision == "fp32",
+                                pad_final_batch=True,
+                                tiling_policy=tiling_policy,
+                            )
+                        else:
+                            output_image = run_umzi_tiled_image(
+                                img_file,
+                                session,  # type: ignore[arg-type]  # The native session owns tiled inference.
+                                batch_size=batch_size,
+                                tile_size=tile_size,
+                                tile_overlap=tile_overlap,
+                                tiling="variable" if variable_tiling else "fixed",
+                                background=background,
+                                contrast_stretch=contrast_stretch,
+                            )
 
                     writer.submit(output_image, output_path)
 
