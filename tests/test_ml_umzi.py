@@ -11,6 +11,7 @@ import sys
 import types
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import numpy as np
 import pytest
@@ -18,11 +19,14 @@ import pytest
 from nmanga.ml.umzi import (
     FiGSRDetails,
     GateRV3Details,
+    MoSRDetails,
     SMoSRDetails,
+    UmziSessionPool,
     build_kernel_options,
     create_umzi_session,
     describe_package,
     export_ummodel,
+    fit_native_tile_size,
     get_umzi_native,
     parse_kernel_options,
     read_ummodel,
@@ -31,6 +35,7 @@ from nmanga.ml.umzi import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PAGE_MODEL = Path("/models/page.ummodel")
 
 
 class FakeSessionOptions:
@@ -50,6 +55,15 @@ class FakeSession:
         self.model_path = model_path
         self.options = options
         self.closed = False
+
+    def get_inputs(self) -> list[SimpleNamespace]:
+        return [SimpleNamespace(name="input", shape=("batch", 3, "height", "width"), type="tensor(float16)")]
+
+    def get_outputs(self) -> list[SimpleNamespace]:
+        return [SimpleNamespace(name="output", shape=("batch", 3, "height", "width"), type="tensor(float16)")]
+
+    def fit_tile_size(self, height: int, width: int, **options: object) -> int:
+        return int(cast("int", options["default_tile"])) // 2
 
     def close(self) -> None:
         self.closed = True
@@ -141,6 +155,22 @@ def _payload(family: str | None) -> SimpleNamespace | None:
             weight_bytes=8000,
             checkpoint="figsr.safetensors",
         )
+    if family == "mosr":
+        return SimpleNamespace(
+            scale=4,
+            input_channels=3,
+            output_channels=3,
+            alignment=4,
+            base_channels=64,
+            blocks=6,
+            dim=64,
+            hidden=128,
+            kernel_size=3,
+            upsampler="dys",
+            dysample_groups=4,
+            weight_bytes=9000,
+            checkpoint="mosr.safetensors",
+        )
     return None
 
 
@@ -151,7 +181,7 @@ def _fake_info(*, family: str | None, problems: tuple[str, ...] = ()) -> SimpleN
         SimpleNamespace(id=3, name="weights", offset=64, length=1984),
     )
     return SimpleNamespace(
-        path=Path("/models/page.ummodel"),
+        path=PAGE_MODEL,
         size=2048,
         version=1,
         family=1,
@@ -228,6 +258,10 @@ def test_a_missing_runtime_names_the_extra_to_install(monkeypatch: pytest.Monkey
         ("figsr", "fp16", {"tune_convolutions": 1, "fuse_expand_gate": 1}),
         ("figsr", "mixed", {"tune_convolutions": 1, "fuse_row_gate": 1, "fuse_expand_gate": 1}),
         ("figsr", "fp32", {"tune_convolutions": 1, "fp32_nchw": 1}),
+        ("mosr", "fp16", {"fused_gate": 1, "dw_fp16": 1}),
+        ("mosr", "mixed", {"fused_gate": 1}),
+        ("mosr", "fp32", {}),
+        ("gfisrv2", "fp32", {}),
     ],
 )
 def test_each_family_pins_its_recommended_switches(family: str, precision: str, switches: dict[str, int]):
@@ -237,6 +271,7 @@ def test_each_family_pins_its_recommended_switches(family: str, precision: str, 
 def test_recommended_switches_default_to_fp16():
     assert recommended_kernel_options("smosr") == {"fuse_silu": 1}
     assert recommended_kernel_options("figsr") == {"tune_convolutions": 1, "fuse_expand_gate": 1}
+    assert recommended_kernel_options("mosr") == {"fused_gate": 1, "dw_fp16": 1}
 
 
 def test_an_unknown_family_adds_no_switches():
@@ -285,11 +320,11 @@ def test_a_malformed_kernel_option_is_rejected(value: str, message: str):
 
 @pytest.mark.parametrize("family", ["gaterv3", "gaterv2", "moesr"])
 def test_only_supported_families_have_an_fp32_path(family: str):
-    with pytest.raises(ValueError, match="only available for GFISRv2, SMoSR, and FiGSR"):
+    with pytest.raises(ValueError, match="only available for GFISRv2, SMoSR, FiGSR and MoSR"):
         resolve_precision(family, "fp32")
 
 
-@pytest.mark.parametrize("family", ["gfisrv2", "smosr", "figsr"])
+@pytest.mark.parametrize("family", ["gfisrv2", "smosr", "figsr", "mosr"])
 def test_fp32_capable_families_accept_fp32(family: str):
     assert resolve_precision(family, "FP32") == "fp32"
 
@@ -344,7 +379,7 @@ def test_a_gaterv3_report_covers_the_header_and_the_schedule(monkeypatch: pytest
 
     lines = describe_package(read_ummodel("/models/page.ummodel"))
 
-    assert lines[0] == "/models/page.ummodel: gaterv3 schema 1, supported"
+    assert lines[0] == f"{PAGE_MODEL}: gaterv3 schema 1, supported"
     assert lines[1] == "  2.00 KiB (2,048 bytes), sha256 abc123"
     assert lines[2] == "  section 1 architecture: 64 bytes"
     assert lines[3] == "  section 3 weights: 1.94 KiB (1,984 bytes)"
@@ -398,6 +433,14 @@ def test_a_gaterv3_report_covers_the_header_and_the_schedule(monkeypatch: pytest
                 "  7.81 KiB (8,000 bytes) of weights",
             ],
         ),
+        (
+            "mosr",
+            [
+                "  3 -> 3 channels, x4 scale, 4-pixel padding, 64 base channels",
+                "  6 blocks, 64 dim and 128 hidden channels, 3x3 depthwise kernels",
+                "  dys upsampler using 4 DySample groups per axis, 8.79 KiB (9,000 bytes) of weights",
+            ],
+        ),
     ],
 )
 def test_every_family_reports_its_architecture(monkeypatch: pytest.MonkeyPatch, family: str, expected: list[str]):
@@ -405,7 +448,7 @@ def test_every_family_reports_its_architecture(monkeypatch: pytest.MonkeyPatch, 
 
     lines = describe_package(read_ummodel("/models/page.ummodel"))
 
-    assert lines[0].startswith(f"/models/page.ummodel: {family} schema 1, ")
+    assert lines[0].startswith(f"{PAGE_MODEL}: {family} schema 1, ")
     assert lines[4:-1] == expected
 
 
@@ -433,6 +476,22 @@ def test_smosr_and_figsr_normalize_their_payload_details(monkeypatch: pytest.Mon
     )
 
 
+def test_mosr_normalizes_its_payload_details(monkeypatch: pytest.MonkeyPatch):
+    _install_fake_runtime(monkeypatch, info=_fake_info(family="mosr"))
+
+    info = read_ummodel("/models/page.ummodel")
+
+    assert info.details == MoSRDetails(
+        blocks=6,
+        dim=64,
+        hidden=128,
+        kernel_size=3,
+        upsampler="dys",
+        dysample_groups=4,
+        weight_bytes=9000,
+    )
+
+
 def test_an_unreadable_payload_still_reports_the_container(monkeypatch: pytest.MonkeyPatch):
     """A known family with an unsupported payload schema has no payload to report."""
     info = _fake_info(family="gaterv3", problems=("Unsupported GateRV3 model payload version",))
@@ -441,7 +500,7 @@ def test_an_unreadable_payload_still_reports_the_container(monkeypatch: pytest.M
 
     lines = describe_package(read_ummodel("/models/page.ummodel"))
 
-    assert lines[0] == "/models/page.ummodel: gaterv3 schema 1, unsupported"
+    assert lines[0] == f"{PAGE_MODEL}: gaterv3 schema 1, unsupported"
     assert lines[-1] == "  problem: Unsupported GateRV3 model payload version"
 
 
@@ -519,6 +578,87 @@ def test_a_session_picks_precision_scoped_recommended_options(
 
 
 # --------------------------------------------------------------------------------------
+# VRAM fitting
+# --------------------------------------------------------------------------------------
+
+
+class _EstimatorSession:
+    """Records what the runtime's VRAM estimator was asked, and answers a smaller cap."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def fit_tile_size(self, height: int, width: int, **options: object) -> int:
+        self.calls.append({"height": height, "width": width, **options})
+        return 768
+
+
+def test_fitting_a_tile_size_asks_the_runtime_with_the_run_shape():
+    session = _EstimatorSession()
+
+    fitted = fit_native_tile_size(
+        session,  # type: ignore[arg-type]
+        2480,
+        3508,
+        tile_size=1024,
+        batch_size=8,
+        tile_overlap=64,
+        tiling="fewest-even",
+        overlap_method="linear",
+    )
+
+    assert fitted == 768
+    assert session.calls == [
+        {
+            "height": 2480,
+            "width": 3508,
+            "default_tile": 1024,
+            "batch_size": 8,
+            "overlap": 64,
+            "tiling": "fewest-even",
+            "overlap_method": "linear",
+        }
+    ]
+
+
+def test_fitting_a_tile_size_keeps_the_cap_on_a_runtime_without_an_estimator():
+    class _OlderSession:
+        pass
+
+    fitted = fit_native_tile_size(
+        _OlderSession(),  # type: ignore[arg-type]
+        2480,
+        3508,
+        tile_size=1024,
+        batch_size=8,
+        tile_overlap=64,
+        tiling="even",
+        overlap_method="centered",
+    )
+
+    assert fitted == 1024
+
+
+def test_the_session_pool_estimates_through_a_pooled_session(monkeypatch: pytest.MonkeyPatch):
+    _install_fake_runtime(monkeypatch)
+    _no_torch(monkeypatch)
+
+    with UmziSessionPool("/models/page.ummodel", family="mosr") as pool:
+        fitted = fit_native_tile_size(
+            pool,
+            2480,
+            3508,
+            tile_size=1024,
+            batch_size=8,
+            tile_overlap=64,
+            tiling="even",
+            overlap_method="centered",
+        )
+
+    assert fitted == 512
+
+
+# --------------------------------------------------------------------------------------
 # Export
 # --------------------------------------------------------------------------------------
 
@@ -589,6 +729,26 @@ def test_infer_rejects_a_model_that_is_not_a_ummodel(tmp_path: Path):
 
     assert result.exit_code == 2
     assert "nmanga umzi to-ummodel" in result.output
+
+
+def test_infer_refuses_a_layout_or_flag_its_tiler_cannot_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from click.testing import CliRunner
+
+    from nmanga.cli.umzi import umzi_group
+
+    (tmp_path / "in").mkdir()
+    model = tmp_path / "page.ummodel"
+    model.write_bytes(b"package")
+    _install_fake_runtime(monkeypatch)
+    common = ["infer", str(tmp_path / "in"), "-o", str(tmp_path / "out"), "-m", str(model)]
+
+    default_layout = CliRunner().invoke(umzi_group, [*common, "--tta"])
+    fitted_tta = CliRunner().invoke(umzi_group, [*common, "--tta", "-tm", "fixed", "--fit-vram"])
+
+    assert default_layout.exit_code == 2
+    assert "shared CPU tiler" in default_layout.output
+    assert fitted_tta.exit_code == 2
+    assert "does not use" in fitted_tta.output
 
 
 # --------------------------------------------------------------------------------------

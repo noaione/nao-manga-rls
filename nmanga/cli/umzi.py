@@ -37,18 +37,23 @@ from .. import file_handler, term
 from ..common import AsyncImageWriter
 from ..ml.onnx_backend import denoise_single_image_with_overlap
 from ..ml.onnx_cache import get_data_dir
-from ..ml.tiler import TilingPolicy, default_expand_tolerance
+from ..ml.tiler import TilingPolicy
 from ..ml.umzi import (
     UMZI_CHECKPOINT_SUFFIXES,
     UMZI_FAMILIES,
+    UMZI_OVERLAP_METHODS,
     UMZI_PRECISIONS,
+    UMZI_TILINGS,
+    UmziOverlapMethod,
     UmziPackageInfo,
     UmziSession,
     UmziSessionPool,
+    UmziTiling,
     build_kernel_options,
     create_umzi_session,
     describe_package,
     export_ummodel,
+    fit_native_tile_size,
     parse_kernel_options,
     read_ummodel,
     resolve_precision,
@@ -224,7 +229,7 @@ def to_ummodel(path_or_archive: Path, kernel: str | None, output_dir: Path | Non
     "--batch-size",
     "batch_size",
     type=options.POSITIVE_INT,
-    default=64,
+    default=1,
     show_default=True,
     help="How many tiles to run per inference call, higher values use more VRAM",
 )
@@ -233,9 +238,9 @@ def to_ummodel(path_or_archive: Path, kernel: str | None, output_dir: Path | Non
     "--tile-size",
     "tile_size",
     type=options.POSITIVE_INT,
-    default=128,
+    default=512,
     show_default=True,
-    help="The tile size to feed the model, the runtime pads it to the model's alignment",
+    help="The largest tile edge to feed the model, the runtime keeps it aligned to the model and fits larger pages",
 )
 @click.option(
     "-to",
@@ -279,7 +284,7 @@ def to_ummodel(path_or_archive: Path, kernel: str | None, output_dir: Path | Non
     type=click.Choice(list(UMZI_PRECISIONS), case_sensitive=False),
     default="fp16",
     show_default=True,
-    help="The precision the session runs at, the fp32 path only exists for GFISRv2, SMoSR, and FiGSR models",
+    help="The precision the session runs at, the fp32 path only exists for GFISRv2, SMoSR, FiGSR, and MoSR models",
 )
 @click.option(
     "-cd",
@@ -314,27 +319,32 @@ def to_ummodel(path_or_archive: Path, kernel: str | None, output_dir: Path | Non
     help="Per-family kernel switch that overrides the recommended one, repeatable",
 )
 @click.option(
-    "-vt",
-    "--variable-tiling/--no-variable-tiling",
-    "variable_tiling",
+    "-tm",
+    "--tiling",
+    "tiling",
+    type=click.Choice(list(UMZI_TILINGS), case_sensitive=False),
+    default="even",
+    show_default=True,
+    help=(
+        "The page layout: `fixed` pads every tile, `variable` shrinks or expands the edges, "
+        "`even` and `fewest-even` round every tile to a similar shape"
+    ),
+)
+@click.option(
+    "--overlap-method",
+    "overlap_method",
+    type=click.Choice(list(UMZI_OVERLAP_METHODS), case_sensitive=False),
+    default="centered",
+    show_default=True,
+    help="How neighbouring tiles blend, `centered` caps the blend at half the tile's body",
+)
+@click.option(
+    "--fit-vram",
+    "fit_vram",
+    is_flag=True,
     default=False,
     show_default=True,
-    help="Shrink or expand partial edge tiles instead of padding every tile to --tile-size",
-)
-@click.option(
-    "--tile-expand",
-    "tile_expand",
-    type=options.ZERO_POSITIVE_INT,
-    default=None,
-    help="Max extra pixels to absorb a small edge sliver into the previous tile under variable tiling",
-)
-@click.option(
-    "--tile-bucket",
-    "tile_bucket",
-    type=options.ZERO_POSITIVE_INT,
-    default=32,
-    show_default=True,
-    help="Snap variable edge dimensions up to this multiple across pages, 0 disables",
+    help="Let the runtime pick the largest tile size each page fits in the free VRAM",
 )
 @options.threads_alt
 @options.recursive
@@ -356,9 +366,9 @@ def infer(
     no_cache: bool,
     enable_cuda_graph: bool,
     kernel_options: tuple[str, ...],
-    variable_tiling: bool,
-    tile_expand: int | None,
-    tile_bucket: int,
+    tiling: UmziTiling,
+    overlap_method: UmziOverlapMethod,
+    fit_vram: bool,
     threads: int,
     recursive: bool,
 ):
@@ -380,6 +390,18 @@ def infer(
         raise click.BadParameter(
             "Tile overlap must be less than half the tile size.",
             param_hint="tile_overlap",
+        )
+
+    if tta and tiling not in ("fixed", "variable"):
+        raise click.BadParameter(
+            "`--tta` runs the shared CPU tiler, which only lays out `fixed` and `variable` pages.",
+            param_hint="tiling",
+        )
+
+    if fit_vram and tta:
+        raise click.BadParameter(
+            "`--fit-vram` sizes the native GPU tiler, which a `--tta` run does not use.",
+            param_hint="fit_vram",
         )
 
     try:
@@ -432,26 +454,24 @@ def infer(
     rendered_options = ", ".join(f"{name}={value}" for name, value in sorted(used_options.items()))
     console.info(f"Kernel options: {rendered_options or 'family defaults'}")
 
-    if variable_tiling:
+    # TTA averages 8 flips per tile on the CPU tiler, which cannot lay out `even` pages.
+    tiling_policy = TilingPolicy(mode="fixed")
+    if tta and tiling == "variable":
         alignment, min_tile = umzi_tiling_constraints(package)
-        expand = default_expand_tolerance(tile_size) if tile_expand is None else tile_expand
-        tiling_policy = TilingPolicy(
-            mode="variable",
-            expand_tolerance=expand,
-            bucket_step=tile_bucket,
-            alignment=alignment,
-            min_tile_size=min_tile,
-        )
-        console.info(
-            f"Variable tiling: expand<={expand}px, bucket={tile_bucket}px, align={alignment}px, min={min_tile}px"
-        )
-    else:
-        tiling_policy = TilingPolicy(mode="fixed")
+        tiling_policy = TilingPolicy(mode="variable", alignment=alignment, min_tile_size=min_tile)
+
+    fitted = ", fitted to the free VRAM" if fit_vram else ""
+    console.info(
+        f"GPU tiling: {tiling} layout, {tile_size}px base tiles{fitted}, batch {batch_size}, "
+        f"overlap {tile_overlap}px ({overlap_method} blend)"
+    )
 
     console.info(f"Opening the {package.family} session, the first run also tunes it...")
     session: UmziSession | UmziSessionPool
     try:
-        if variable_tiling:
+        # The CPU tiler feeds `run` one tile shape at a time, so a pool keeps each shape's session warm.
+        # Every native layout goes through `run_tiled` on one session instead.
+        if tta:
             session = UmziSessionPool(
                 model_path,
                 family=package.family,
@@ -487,10 +507,9 @@ def infer(
 
     scale_factor = session.scale_factor or 1
     action = "Upscaling" if scale_factor > 1 else "Denoising"
-    if not tta and not variable_tiling:
-        console.info(f"GPU tiling: {tile_size}px tiles, batch {batch_size}, overlap {tile_overlap}px")
     console.info(f"Model opened successfully. Starting the {action.lower()} process...")
 
+    fitted_tile: int | None = None
     try:
         for candidate in candidates:
             if recursive:
@@ -516,7 +535,7 @@ def infer(
 
                     with Image.open(image_file) as img_file:
                         img_file.load()
-                        if tta or variable_tiling:
+                        if tta:
                             output_image = denoise_single_image_with_overlap(
                                 img_file,
                                 session,  # type: ignore[arg-type]  # TTA uses the shared CPU tiler.
@@ -524,20 +543,38 @@ def infer(
                                 tile_size=tile_size,
                                 tile_overlap=tile_overlap,
                                 contrast_stretch=contrast_stretch,
-                                tta=tta,
+                                tta=True,
                                 background=background,
                                 use_fp32=selected_precision == "fp32",
                                 pad_final_batch=True,
                                 tiling_policy=tiling_policy,
                             )
                         else:
+                            page_tile = tile_size
+                            if fit_vram:
+                                page_tile = fit_native_tile_size(
+                                    session,
+                                    img_file.height,
+                                    img_file.width,
+                                    tile_size=tile_size,
+                                    batch_size=batch_size,
+                                    tile_overlap=tile_overlap,
+                                    tiling=tiling,
+                                    overlap_method=overlap_method,
+                                )
+                                if page_tile != fitted_tile:
+                                    console.info(
+                                        f"Fitting a {img_file.width}x{img_file.height} page into {page_tile}px tiles"
+                                    )
+                                    fitted_tile = page_tile
                             output_image = run_umzi_tiled_image(
                                 img_file,
                                 session,  # type: ignore[arg-type]  # The native session owns tiled inference.
                                 batch_size=batch_size,
-                                tile_size=tile_size,
+                                tile_size=page_tile,
                                 tile_overlap=tile_overlap,
-                                tiling="variable" if variable_tiling else "fixed",
+                                tiling=tiling,
+                                overlap_method=overlap_method,
                                 background=background,
                                 contrast_stretch=contrast_stretch,
                             )

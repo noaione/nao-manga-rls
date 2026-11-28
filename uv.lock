@@ -945,7 +945,7 @@ requires-dist = [
     { name = "triton-windows", marker = "sys_platform == 'win32' and extra == 'denoiser'", specifier = "==3.9.0.post30" },
     { name = "types-defusedxml", marker = "extra == 'dev'", specifier = "==0.7.0.20260504" },
     { name = "typing-extensions", specifier = "==4.16.0" },
-    { name = "umzi-native", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'denoiser') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'denoiser')", specifier = ">=0.0.7", index = "https://pypi.serik.at/simple/" },
+    { name = "umzi-native", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'denoiser') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'denoiser')", specifier = ">=0.0.9", index = "https://pypi.serik.at/simple/" },
     { name = "unrar2-cffi", specifier = "==0.5.0" },
     { name = "vapoursynth", marker = "extra == 'vapoursynth'", specifier = "==82" },
     { name = "vapoursynth-imageseqs", marker = "extra == 'vapoursynth'", specifier = "==0.4.2" },
@@ -2187,14 +2187,14 @@ wheels = [
 
 [[package]]
 name = "umzi-native"
-version = "0.0.7"
+version = "0.0.9"
 source = { registry = "https://pypi.serik.at/simple/" }
 dependencies = [
     { name = "numpy" },
 ]
 wheels = [
-    { url = "https://pypi.serik.at/files/9c3e40485e1004c1cf88a8a0e22b654ca1b70c87540bd82751b37f033d42152c/umzi_native-0.0.7-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:9c3e40485e1004c1cf88a8a0e22b654ca1b70c87540bd82751b37f033d42152c", size = 4110542 },
-    { url = "https://pypi.serik.at/files/5bc0ba9d2a31790dcfad87f83ad67df0cbb96dac259d33d895b82d55ed408900/umzi_native-0.0.7-py3-none-win_amd64.whl", hash = "sha256:5bc0ba9d2a31790dcfad87f83ad67df0cbb96dac259d33d895b82d55ed408900", size = 4033453 },
+    { url = "https://pypi.serik.at/files/f2682e06521d8a51dd6fb24c59543a74318ad43a9041b1e8c531b0ea1a1c1ce8/umzi_native-0.0.9-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:f2682e06521d8a51dd6fb24c59543a74318ad43a9041b1e8c531b0ea1a1c1ce8", size = 5507946 },
+    { url = "https://pypi.serik.at/files/c18495532936c026fa5d772d7399d925f3c041d5f85fa652b822893fdd2f1b33/umzi_native-0.0.9-py3-none-win_amd64.whl", hash = "sha256:c18495532936c026fa5d772d7399d925f3c041d5f85fa652b822893fdd2f1b33", size = 5380634 },
 ]
 
 [[package]]

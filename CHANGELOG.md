@@ -7,7 +7,9 @@
 - `nmanga umzi` - Support the `smosr` and `figsr` 2x kernel families across `peek`, `to-ummodel`, and `infer`:
   - Both join `gfisrv2` in supporting `--precision fp32` alongside `mixed` and `fp16`
   - `infer` pins each family's precision-scoped speedup switches (`fuse_silu`/`tune_convolutions` for `smosr`; `tune_convolutions`, `fp32_nchw`, `fuse_row_gate`, and `fuse_expand_gate` for `figsr`) while keeping lower-precision accumulation switches opt-in via `--kernel-option`
-- `nmanga umzi infer` and `nmanga ort infer` - Add `-vt`/`--variable-tiling` to shrink edge tiles to the image remainder (or expand via `--tile-expand` to absorb small slivers and drop extra rows/columns) instead of padding every tile to `--tile-size`, with `--tile-bucket` snapping edge dimensions so similar pages share cached plans and `UmziSessionPool` keeping active shapes resident across a folder
+- `nmanga umzi` - Support the `mosr` 4x kernel family across `peek`, `to-ummodel`, and `infer`, with its `fp32` path and the `fused_gate`/`dw_fp16` switches `infer` pins for each precision
+- `nmanga umzi infer` and `nmanga ort infer` - Add `-vt`/`--variable-tiling` to shrink edge tiles to the image remainder (or expand via `--tile-expand` to absorb small slivers and drop extra rows/columns) instead of padding every tile to `--tile-size`, with `--tile-bucket` snapping edge dimensions so similar pages share cached plans
+- `nmanga umzi infer` - Pick how the native GPU tiler lays a page out with `-tm`/`--tiling` (`fixed`, `variable`, `even`, `fewest-even`), blend neighbours with `--overlap-method`, and let the runtime size each page's tiles from the free VRAM with `--fit-vram`; the defaults are now an `even` layout with batch `1` and `512`-pixel tiles instead of `64` and `128`
 - Orchestrator `denoise` / `upscale` actions - Support Umzi `.ummodel` packages (`precision`, `kernel_options`, `use_plan_cache`, and `umzi_native` tool detection), PyTorch `.safetensors`/`.pth` checkpoints (`device_id` accepting `auto`/`cpu`/`cuda`/`cuda:N`, `preset`, `enable_compile`, `use_channels_last`), and variable tiling (`variable_tiling`, `tile_expand`, `tile_bucket`)
 
 **Changes**

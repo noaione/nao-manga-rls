@@ -40,23 +40,29 @@ from typing import Any, Literal, Protocol, cast
 __all__ = (
     "UMZI_CHECKPOINT_SUFFIXES",
     "UMZI_FAMILIES",
+    "UMZI_OVERLAP_METHODS",
     "UMZI_PRECISIONS",
+    "UMZI_TILINGS",
     "FiGSRDetails",
     "GFISRv2Details",
     "GateRV2Details",
     "GateRV3Details",
     "MoESRDetails",
+    "MoSRDetails",
     "SMoSRDetails",
+    "UmziOverlapMethod",
     "UmziPackageDetails",
     "UmziPackageInfo",
     "UmziPrecision",
     "UmziSection",
     "UmziSession",
     "UmziSessionPool",
+    "UmziTiling",
     "build_kernel_options",
     "create_umzi_session",
     "describe_package",
     "export_ummodel",
+    "fit_native_tile_size",
     "get_umzi_native",
     "parse_kernel_options",
     "read_ummodel",
@@ -72,7 +78,19 @@ UmziPrecision = Literal["mixed", "fp16", "fp32"]
 UMZI_PRECISIONS: tuple[UmziPrecision, ...] = ("mixed", "fp16", "fp32")
 """Every precision mode, in the order help output lists them."""
 
-UMZI_FAMILIES: tuple[str, ...] = ("gaterv3", "gaterv2", "moesr", "gfisrv2", "smosr", "figsr")
+UmziTiling = Literal["fixed", "variable", "even", "fewest-even"]
+"""The page layouts `umzi_native.InferenceSession.run_tiled` accepts."""
+
+UMZI_TILINGS: tuple[UmziTiling, ...] = ("fixed", "variable", "even", "fewest-even")
+"""Every page layout, in the order help output lists them."""
+
+UmziOverlapMethod = Literal["centered", "linear"]
+"""How two overlapping tiles blend; `centered` caps the blend at half the tile's body."""
+
+UMZI_OVERLAP_METHODS: tuple[UmziOverlapMethod, ...] = ("centered", "linear")
+"""Every overlap blend, in the order help output lists them."""
+
+UMZI_FAMILIES: tuple[str, ...] = ("gaterv3", "gaterv2", "moesr", "gfisrv2", "smosr", "figsr", "mosr")
 """The kernel families a `.ummodel` package can declare."""
 
 UMZI_CHECKPOINT_SUFFIXES: tuple[str, ...] = (".safetensors", ".pth", ".pt", ".ckpt")
@@ -89,18 +107,23 @@ _RECOMMENDED_KERNEL_OPTIONS: dict[str, dict[str, int]] = {
     "gfisrv2": {"fused_conv": 1},
 }
 
+# This is our kernel adjustment for default that it's awesome
 _PRECISION_KERNEL_OPTIONS: dict[tuple[str, str], dict[str, int]] = {
-    # SMoSR and FiGSR reject switches outside their precision scope at session open; SMoSR's FP16
-    # path already gets its fastest plans from `fuse_silu` without re-timing unfused body convs.
-    ("smosr", "fp16"): {"fuse_silu": 1},
+    ("smosr", "fp16"): {"tune_convolutions": 1, "fuse_silu": 1},
     ("smosr", "mixed"): {"tune_convolutions": 1, "fuse_silu": 1},
     ("smosr", "fp32"): {},
     ("figsr", "fp16"): {"tune_convolutions": 1, "fuse_expand_gate": 1},
     ("figsr", "mixed"): {"tune_convolutions": 1, "fuse_row_gate": 1, "fuse_expand_gate": 1},
     ("figsr", "fp32"): {"tune_convolutions": 1, "fp32_nchw": 1},
+    # MoSR runs its fused gate on every path, and only FP16 has the depthwise convolutions it speeds up.
+    ("mosr", "fp16"): {"fused_gate": 1, "dw_fp16": 1},
+    ("mosr", "mixed"): {"fused_gate": 1},
+    ("mosr", "fp32"): {},
+    # GFISRv2 only fuses its convolution for mixed precision and FP16.
+    ("gfisrv2", "fp32"): {"fused_conv": 1},
 }
 
-_FP32_FAMILIES = frozenset({"gfisrv2", "smosr", "figsr"})
+_FP32_FAMILIES = frozenset({"gfisrv2", "smosr", "figsr", "mosr"})
 """Every family with an FP32 path; the others only run mixed precision or FP16."""
 
 _MIN_TILE_SIZES: dict[str, int] = {
@@ -130,7 +153,8 @@ class UmziSession(Protocol):
         tile_size: int,
         batch_size: int,
         overlap: int = 0,
-        tiling: Literal["fixed", "variable"] = "fixed",
+        tiling: UmziTiling = "fixed",
+        overlap_method: UmziOverlapMethod = "centered",
         background: Literal["white", "black"] = "white",
     ) -> Any: ...
 
@@ -238,7 +262,22 @@ class FiGSRDetails:
     weight_bytes: int
 
 
-UmziPackageDetails = GateRV3Details | GateRV2Details | MoESRDetails | GFISRv2Details | SMoSRDetails | FiGSRDetails
+@dataclass(frozen=True)
+class MoSRDetails:
+    """The MoSR payload: a 4x pixel-shuffle block stack with a GPS or DySample tail."""
+
+    blocks: int
+    dim: int
+    hidden: int
+    kernel_size: int
+    upsampler: str
+    dysample_groups: int
+    weight_bytes: int
+
+
+UmziPackageDetails = (
+    GateRV3Details | GateRV2Details | MoESRDetails | GFISRv2Details | SMoSRDetails | FiGSRDetails | MoSRDetails
+)
 """The family-specific half of a package header."""
 
 
@@ -352,6 +391,16 @@ def _payload_details(family: str | None, payload: Any) -> UmziPackageDetails | N
             fourier_channels=int(payload.fourier_channels),
             square_kernel=int(payload.square_kernel),
             band_kernel=int(payload.band_kernel),
+            weight_bytes=int(payload.weight_bytes),
+        )
+    if family == "mosr":
+        return MoSRDetails(
+            blocks=int(payload.blocks),
+            dim=int(payload.dim),
+            hidden=int(payload.hidden),
+            kernel_size=int(payload.kernel_size),
+            upsampler=str(payload.upsampler),
+            dysample_groups=int(payload.dysample_groups),
             weight_bytes=int(payload.weight_bytes),
         )
     return None
@@ -472,6 +521,15 @@ def describe_package(info: UmziPackageInfo) -> list[str]:
             f"{details.reflection_padding}-pixel reflection padding"
         )
         lines.append(f"  {_format_size(details.weight_bytes)} of weights")
+    elif isinstance(details, MoSRDetails):
+        lines.append(
+            f"  {details.blocks} blocks, {details.dim} dim and {details.hidden} hidden channels, "
+            f"{details.kernel_size}x{details.kernel_size} depthwise kernels"
+        )
+        upsampler = f"  {details.upsampler} upsampler"
+        if details.dysample_groups:
+            upsampler += f" using {details.dysample_groups} DySample groups per axis"
+        lines.append(f"{upsampler}, {_format_size(details.weight_bytes)} of weights")
 
     if info.checkpoint:
         lines.append(f"  checkpoint: {info.checkpoint}")
@@ -553,7 +611,7 @@ def resolve_precision(family: str | None, precision: str) -> UmziPrecision:
         raise ValueError(f"Unknown precision {precision!r}, expected one of: {', '.join(UMZI_PRECISIONS)}.")
     if normalized == "fp32" and family not in _FP32_FAMILIES:
         raise ValueError(
-            f"The fp32 path is only available for GFISRv2, SMoSR, and FiGSR models, "
+            f"The fp32 path is only available for GFISRv2, SMoSR, FiGSR and MoSR models, "
             f"but this package is {family or 'unknown'}. Use `--precision mixed` or `--precision fp16`."
         )
     return normalized
@@ -621,6 +679,48 @@ def umzi_tiling_constraints(package: UmziPackageInfo) -> tuple[int, int]:
     return alignment, min_tile
 
 
+def fit_native_tile_size(
+    session: UmziSession | UmziSessionPool,
+    height: int,
+    width: int,
+    *,
+    tile_size: int,
+    batch_size: int,
+    tile_overlap: int,
+    tiling: UmziTiling,
+    overlap_method: UmziOverlapMethod,
+) -> int:
+    """
+    Ask the runtime for the largest tile cap that still fits the free VRAM.
+
+    umzi-native before format 4 has no estimator, so the requested cap is kept then.
+
+    :param session: The open native session or pool
+    :param height: The page height in pixels
+    :param width: The page width in pixels
+    :param tile_size: The cap to keep when a larger tile would not fit
+    :param batch_size: How many tiles one inference call runs
+    :param tile_overlap: Total overlap between two neighbouring tiles
+    :param tiling: The page layout the run will use
+    :param overlap_method: The blend the run will use
+    :return: The tile cap to run the page with
+    """
+    fit = getattr(session, "fit_tile_size", None)
+    if fit is None:
+        return tile_size
+    return int(
+        fit(
+            height,
+            width,
+            default_tile=tile_size,
+            batch_size=batch_size,
+            overlap=tile_overlap,
+            tiling=tiling,
+            overlap_method=overlap_method,
+        )
+    )
+
+
 def run_umzi_tiled_image(
     image: Any,
     session: UmziSession,
@@ -628,9 +728,10 @@ def run_umzi_tiled_image(
     batch_size: int,
     tile_size: int,
     tile_overlap: int,
-    tiling: Literal["fixed", "variable"],
+    tiling: UmziTiling,
     background: Literal["white", "black"],
     contrast_stretch: bool,
+    overlap_method: UmziOverlapMethod = "centered",
 ) -> Any:
     """Run native GPU tiling and retain the input image's alpha and output mode."""
     from PIL import Image
@@ -657,6 +758,7 @@ def run_umzi_tiled_image(
         batch_size=batch_size,
         overlap=tile_overlap,
         tiling=tiling,
+        overlap_method=overlap_method,
         background=background,
     )
     result = Image.fromarray(output, mode="RGB")
@@ -741,6 +843,37 @@ class UmziSessionPool:
 
     def get_outputs(self) -> list[Any]:
         return list(self._outputs)
+
+    def fit_tile_size(
+        self,
+        height: int,
+        width: int,
+        *,
+        default_tile: int,
+        batch_size: int = 1,
+        overlap: int = 0,
+        tiling: UmziTiling = "even",
+        overlap_method: UmziOverlapMethod = "centered",
+    ) -> int:
+        """Borrow the VRAM estimator of the first pooled session that has one."""
+        if self._closed:
+            raise RuntimeError("The Umzi session pool is closed.")
+        for session in self._sessions.values():
+            fit = getattr(session, "fit_tile_size", None)
+            if fit is None:
+                continue
+            return int(
+                fit(
+                    height,
+                    width,
+                    default_tile=default_tile,
+                    batch_size=batch_size,
+                    overlap=overlap,
+                    tiling=tiling,
+                    overlap_method=overlap_method,
+                )
+            )
+        return default_tile
 
     def _evict_oldest(self, *, keep: UmziSession | None = None) -> bool:
         for key in list(self._sessions):
