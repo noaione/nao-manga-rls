@@ -49,7 +49,6 @@ from ..ml.umzi import (
     UmziSession,
     UmziSessionPool,
     UmziTiling,
-    build_kernel_options,
     create_umzi_session,
     describe_package,
     export_ummodel,
@@ -409,7 +408,6 @@ def infer(
     except ValueError as exc:
         raise click.BadParameter(str(exc), param_hint="kernel_option") from exc
 
-    console.info(f"Reading model: {model_path.name}...")
     try:
         package = read_ummodel(model_path)
     except ImportError as exc:
@@ -426,8 +424,6 @@ def infer(
     except ValueError as exc:
         raise click.BadParameter(str(exc), param_hint="precision") from exc
 
-    _print_package(package)
-
     candidates: list[Path] = []
     if not recursive:
         candidates.append(path_or_archive)
@@ -441,18 +437,10 @@ def infer(
         console.warning("No valid folders found to process.")
         return 1
 
-    console.info(f"Output folder: {dest_output.resolve()} (recursive? {recursive!r})")
-    console.info(f"Using GPU {device_id} at {selected_precision} precision")
-
     resolved_cache: Path | None = None
     if not no_cache:
         resolved_cache = cache_dir if cache_dir is not None else get_data_dir() / "umzi"
         resolved_cache.mkdir(parents=True, exist_ok=True)
-        console.info(f"Plan cache: {resolved_cache}")
-
-    used_options = build_kernel_options(package.family, overrides, precision=selected_precision)
-    rendered_options = ", ".join(f"{name}={value}" for name, value in sorted(used_options.items()))
-    console.info(f"Kernel options: {rendered_options or 'family defaults'}")
 
     # TTA averages 8 flips per tile on the CPU tiler, which cannot lay out `even` pages.
     tiling_policy = TilingPolicy(mode="fixed")
@@ -460,13 +448,15 @@ def infer(
         alignment, min_tile = umzi_tiling_constraints(package)
         tiling_policy = TilingPolicy(mode="variable", alignment=alignment, min_tile_size=min_tile)
 
+    scale = package.scale or 1
+    job = f"{package.family} x{scale}" if scale > 1 else f"{package.family} denoise"
     fitted = ", fitted to the free VRAM" if fit_vram else ""
     console.info(
-        f"GPU tiling: {tiling} layout, {tile_size}px base tiles{fitted}, batch {batch_size}, "
-        f"overlap {tile_overlap}px ({overlap_method} blend)"
+        f"{job} on GPU {device_id} at {selected_precision} | "
+        f"{tiling} tiles at {tile_size}px{fitted}, batch {batch_size}, overlap {tile_overlap}px "
+        f"({overlap_method} blend)"
     )
-
-    console.info(f"Opening the {package.family} session, the first run also tunes it...")
+    console.info("Opening the session, the first run also tunes it...")
     session: UmziSession | UmziSessionPool
     try:
         # The CPU tiler feeds `run` one tile shape at a time, so a pool keeps each shape's session warm.
@@ -507,7 +497,6 @@ def infer(
 
     scale_factor = session.scale_factor or 1
     action = "Upscaling" if scale_factor > 1 else "Denoising"
-    console.info(f"Model opened successfully. Starting the {action.lower()} process...")
 
     fitted_tile: int | None = None
     try:

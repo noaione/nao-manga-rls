@@ -252,7 +252,7 @@ def test_a_missing_runtime_names_the_extra_to_install(monkeypatch: pytest.Monkey
         ("gaterv2", "fp16", {"tune_plans": 1}),
         ("moesr", "fp16", {"fused_gate": 1}),
         ("gfisrv2", "fp16", {"fused_conv": 1}),
-        ("smosr", "fp16", {"fuse_silu": 1}),
+        ("smosr", "fp16", {"tune_convolutions": 1, "fuse_silu": 1}),
         ("smosr", "mixed", {"tune_convolutions": 1, "fuse_silu": 1}),
         ("smosr", "fp32", {}),
         ("figsr", "fp16", {"tune_convolutions": 1, "fuse_expand_gate": 1}),
@@ -261,7 +261,7 @@ def test_a_missing_runtime_names_the_extra_to_install(monkeypatch: pytest.Monkey
         ("mosr", "fp16", {"fused_gate": 1, "dw_fp16": 1}),
         ("mosr", "mixed", {"fused_gate": 1}),
         ("mosr", "fp32", {}),
-        ("gfisrv2", "fp32", {}),
+        ("gfisrv2", "fp32", {"fused_conv": 1}),
     ],
 )
 def test_each_family_pins_its_recommended_switches(family: str, precision: str, switches: dict[str, int]):
@@ -269,7 +269,7 @@ def test_each_family_pins_its_recommended_switches(family: str, precision: str, 
 
 
 def test_recommended_switches_default_to_fp16():
-    assert recommended_kernel_options("smosr") == {"fuse_silu": 1}
+    assert recommended_kernel_options("smosr") == {"tune_convolutions": 1, "fuse_silu": 1}
     assert recommended_kernel_options("figsr") == {"tune_convolutions": 1, "fuse_expand_gate": 1}
     assert recommended_kernel_options("mosr") == {"fused_gate": 1, "dw_fp16": 1}
 
@@ -554,7 +554,7 @@ def test_a_session_can_disable_the_plan_cache(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.parametrize(
     ("family", "precision", "expected_options"),
     [
-        ("smosr", "fp16", {"fuse_silu": 1}),
+        ("smosr", "fp16", {"tune_convolutions": 1, "fuse_silu": 1}),
         ("smosr", "mixed", {"tune_convolutions": 1, "fuse_silu": 1}),
         ("smosr", "fp32", {}),
         ("figsr", "fp16", {"tune_convolutions": 1, "fuse_expand_gate": 1}),
