@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## [0.33.0] (2026-11-28)
+
 **New Features**
 - `nmanga umzi infer` - Use umzi-native's GPU page tiler for fixed-tile inference, batching, overlap blending and stitching
 - `nmanga umzi` - Support the `smosr` and `figsr` 2x kernel families across `peek`, `to-ummodel`, and `infer`:
@@ -13,6 +17,7 @@
 - Orchestrator `denoise` / `upscale` actions - Support Umzi `.ummodel` packages (`precision`, `kernel_options`, `use_plan_cache`, and `umzi_native` tool detection), PyTorch `.safetensors`/`.pth` checkpoints (`device_id` accepting `auto`/`cpu`/`cuda`/`cuda:N`, `preset`, `enable_compile`, `use_channels_last`), and variable tiling (`variable_tiling`, `tile_expand`, `tile_bucket`)
 
 **Changes**
+- The `denoiser` extras now require `umzi-native` 0.0.9, which brings the native GPU page tiler and the `smosr`, `figsr`, and `mosr` families
 - Extracted shared tile-grid planning and directional feather-ramp calculation into `nmanga.ml.tiler` for both `onnx_backend` and `torch_backend`
 - Reworked `nmanga.ml.onnx_backend` to keep its output canvas in `CHW` (quantizing non-overlapping outputs straight to `uint8` instead of allocating a full-page `float32` buffer) and moved PNG saving in `umzi infer`, `ort infer`, `torch infer`, and the orchestrator ML actions onto a bounded background writer (`AsyncImageWriter`) configurable via `-th`/`--threads` (`threads` on `denoise`/`upscale`) so disk encoding overlaps with GPU inference
 
